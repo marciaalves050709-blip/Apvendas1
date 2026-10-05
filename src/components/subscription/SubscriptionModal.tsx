@@ -82,7 +82,7 @@ export const SubscriptionModal: React.FC = () => {
       const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const pixResult = generatePixPayload({
         pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
-        merchantName: paymentSettings.merchantName || 'DESCARTCLEAN SISTEMAS',
+        merchantName: paymentSettings.merchantName || 'APP DE VENDAS SISTEMAS',
         merchantCity: paymentSettings.merchantCity || 'SAO PAULO',
         amount: planPrice,
         txId: generatedTxId,
@@ -195,18 +195,18 @@ export const SubscriptionModal: React.FC = () => {
     const rawPhone = paymentSettings.merchantWhatsapp || '5511999998888';
     const cleanPhone = rawPhone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Olá! Realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName} para assinatura do sistema DescartClean. Segue meu comprovante para liberação!`
+      `Olá! Realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName} para assinatura do sistema App de vendas. Segue meu comprovante para liberação!`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
   const features = [
-    'Controle ilimitado de estoque (copos, pratos, marmitex, sacolas, etc.)',
+    'Controle ilimitado de estoque e produtos',
     'Frente de Caixa & PDV ágil com cupom não fiscal e atacado automático',
     'Catálogo para Celular com pedidos formatados direto no WhatsApp',
     'Alertas inteligentes de estoque mínimo e bloqueio de produtos zerados',
     'Identificação de Pix no banco em tempo real com alertas sonoros',
-    'Relatórios financeiros de lucro, vendas por descartável e curva ABC',
+    'Relatórios financeiros de lucro, vendas por produto e curva ABC',
     'Suporte prioritário e atualizações automáticas inclusas',
   ];
 
@@ -228,10 +228,10 @@ export const SubscriptionModal: React.FC = () => {
               )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              DescartClean Pro
+              appvendas Pro
             </h2>
             <p className="text-xs text-slate-300 mt-1 max-w-lg">
-              Sistema completo de controle de estoque de descartáveis, vendas no balcão e pedidos pelo WhatsApp.
+              Sistema completo de controle de estoque, vendas no balcão e pedidos pelo WhatsApp.
             </p>
           </div>
 
@@ -402,7 +402,7 @@ export const SubscriptionModal: React.FC = () => {
                       Pague via Pix e libere o acesso na mesma hora
                     </h3>
                     <p className="text-xs text-emerald-800 mt-0.5">
-                      Chave: <strong className="text-emerald-950">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong> • Beneficiário: <strong className="text-emerald-950">{paymentSettings.merchantName || 'DESCARTCLEAN'}</strong>
+                      Chave: <strong className="text-emerald-950">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong> • Beneficiário: <strong className="text-emerald-950">{paymentSettings.merchantName || 'appvendas'}</strong>
                     </p>
                   </div>
 
@@ -516,7 +516,7 @@ export const SubscriptionModal: React.FC = () => {
                 <span>Sua licença está 100% ativa e regularizada!</span>
               </div>
               <p className="text-xs text-emerald-800 leading-relaxed">
-                Você possui acesso ilimitado a todas as ferramentas do DescartClean, incluindo controle de fardos, vendas PDV, alertas de estoque e catálogo no WhatsApp.
+                Você possui acesso ilimitado a todas as ferramentas do App vendas, incluindo controle de estoque, vendas PDV, alertas e catálogo no WhatsApp.
               </p>
               {subscription.subscriptionExpiresAt && (
                 <p className="text-[11px] text-emerald-700 font-semibold pt-1">
@@ -530,7 +530,7 @@ export const SubscriptionModal: React.FC = () => {
 
         {/* Modal Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <span>Garantia de satisfação • Suporte via WhatsApp</span>
+          <span>Garantia de satisfação • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
           <button
             type="button"
             onClick={() => setIsSubscriptionModalOpen(false)}

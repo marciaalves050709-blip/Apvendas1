@@ -1,6 +1,6 @@
 {
-  "name": "DescartClean - Vendas e Estoque de Descartáveis",
-  "description": "Sistema completo de PDV, catálogo e controle de estoque especializado para comércio e distribuidora de descartáveis e embalagens.",
+  "name": "appvendas",
+  "description": "Sistema completo de PDV, catálogo e controle de estoque para appvendas.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

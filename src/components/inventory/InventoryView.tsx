@@ -198,7 +198,7 @@ export const InventoryView: React.FC = () => {
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-xs flex items-center gap-2 transition-all shadow-xs cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Cadastrar Descartável</span>
+              <span>Cadastrar Produto</span>
             </button>
           </div>
         </div>
@@ -245,7 +245,7 @@ export const InventoryView: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex-1 flex flex-col">
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Mostrando {filteredProducts.length} de {products.length} descartáveis
+            Mostrando {filteredProducts.length} de {products.length} produtos
           </span>
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span>Ordenar por:</span>
@@ -283,7 +283,7 @@ export const InventoryView: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100">
               <tr>
-                <th className="px-6 py-3.5">Descartável / Detalhes</th>
+                <th className="px-6 py-3.5">Produto / Detalhes</th>
                 <th className="px-4 py-3.5">SKU & Barras</th>
                 <th className="px-4 py-3.5">Categoria & Unidade</th>
                 <th className="px-4 py-3.5">Preço Custo</th>
@@ -416,7 +416,7 @@ export const InventoryView: React.FC = () => {
                         <Boxes className="w-7 h-7" />
                       </div>
                       <h3 className="text-base font-black text-slate-800">
-                        {products.length === 0 ? 'Nenhum descartável cadastrado ainda' : 'Nenhum descartável encontrado'}
+                        {products.length === 0 ? 'Nenhum produto cadastrado ainda' : 'Nenhum produto encontrado'}
                       </h3>
                       <p className="text-xs text-slate-500 max-w-sm">
                         {products.length === 0

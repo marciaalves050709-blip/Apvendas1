@@ -52,7 +52,7 @@ export const StockMovementModal: React.FC = () => {
         {/* Header */}
         <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-base">Movimentar Estoque de Descartável</h3>
+            <h3 className="font-bold text-base">Movimentar Estoque</h3>
             <p className="text-xs text-slate-300 truncate max-w-xs">{product.name}</p>
           </div>
           <button

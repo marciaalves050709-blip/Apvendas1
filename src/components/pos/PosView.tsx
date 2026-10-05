@@ -90,7 +90,7 @@ export const PosView: React.FC = () => {
       addToCart(matched, 1);
       setSearch('');
     } else {
-      showToast('warning', 'Não Encontrado', `Nenhum descartável com código "${search}".`);
+      showToast('warning', 'Não Encontrado', `Nenhum produto com código "${search}".`);
     }
   };
 
@@ -127,7 +127,7 @@ export const PosView: React.FC = () => {
               <input
                 ref={barcodeInputRef}
                 type="text"
-                placeholder="Escanear código de barras, SKU ou digitar nome do descartável..."
+                placeholder="Escanear código de barras, SKU ou digitar nome do produto..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition-colors"
@@ -155,7 +155,7 @@ export const PosView: React.FC = () => {
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                   }`}
                 >
-                  {cat === 'ALL' ? 'Todos os Descartáveis' : cat}
+                  {cat === 'ALL' ? 'Todos os Produtos' : cat}
                 </button>
               );
             })}
@@ -230,7 +230,7 @@ export const PosView: React.FC = () => {
 
           {filteredProducts.length === 0 && (
             <div className="col-span-full py-16 text-center text-slate-400 text-sm">
-              Nenhum descartável encontrado para "{search}".
+              Nenhum produto encontrado para "{search}".
             </div>
           )}
         </div>
@@ -339,7 +339,7 @@ export const PosView: React.FC = () => {
               <ShoppingCart className="w-12 h-12 text-slate-300 stroke-1 mb-2" />
               <p className="font-semibold text-sm text-slate-600">Carrinho Vazio</p>
               <p className="text-xs text-slate-400 mt-1 max-w-[200px]">
-                Clique nos descartáveis ou escaneie o código de barras para adicionar.
+                Clique nos produtos ou escaneie o código de barras para adicionar.
               </p>
             </div>
           )}

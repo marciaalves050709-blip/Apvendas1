@@ -78,7 +78,7 @@ export const AccessPaywall: React.FC = () => {
       const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const pixResult = generatePixPayload({
         pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
-        merchantName: paymentSettings.merchantName || 'DESCARTCLEAN SISTEMAS',
+        merchantName: paymentSettings.merchantName || 'APP DE VENDAS SISTEMAS',
         merchantCity: paymentSettings.merchantCity || 'SAO PAULO',
         amount: planPrice,
         txId: generatedTxId,
@@ -216,7 +216,7 @@ export const AccessPaywall: React.FC = () => {
     const rawPhone = paymentSettings.merchantWhatsapp || '5511999998888';
     const cleanPhone = rawPhone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Olá! Meu período de teste de 5 dias do DescartClean acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
+      `Olá! Meu período de teste de 5 dias do App de vendas acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
@@ -252,7 +252,7 @@ export const AccessPaywall: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                  Plano Mensal DescartClean Pro
+                  Plano Mensal App vendas Pro
                 </span>
                 <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
                   <Calendar className="w-3 h-3 text-indigo-600" />
@@ -335,7 +335,7 @@ export const AccessPaywall: React.FC = () => {
                 🎉 Transferência Pix de {formatCurrency(bankAlert.amount)} Recebida no {bankAlert.bankTag}!
               </p>
               <p className="text-xs text-emerald-100">
-                O pagamento foi identificado com sucesso. Código E2E: <strong className="font-mono text-[10px]">{bankAlert.e2eId}</strong>. Liberando acesso ao DescartClean...
+                O pagamento foi identificado com sucesso. Código E2E: <strong className="font-mono text-[10px]">{bankAlert.e2eId}</strong>. Liberando acesso ao appvendas...
               </p>
             </div>
           )}
@@ -353,7 +353,7 @@ export const AccessPaywall: React.FC = () => {
                 Pague R$ 58,94 via Pix para Desbloquear
               </h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Chave Pix: <strong className="text-slate-800">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong> • Beneficiário: <strong className="text-slate-800">{paymentSettings.merchantName || 'DESCARTCLEAN'}</strong>
+                Chave Pix: <strong className="text-slate-800">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong> • Beneficiário: <strong className="text-slate-800">{paymentSettings.merchantName || 'appvendas'}</strong>
               </p>
             </div>
 
@@ -460,7 +460,7 @@ export const AccessPaywall: React.FC = () => {
 
         {/* Paywall Footer */}
         <div className="p-3.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <span className="font-bold text-slate-600">DescartClean Vendas & Estoque Pro</span>
+          <span>appvendas • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
           
           {/* Master Owner Security Access */}
           <button

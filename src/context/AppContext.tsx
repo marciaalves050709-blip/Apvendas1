@@ -147,13 +147,13 @@ export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
   trialStartDate: new Date().toISOString(),
   trialDurationDays: 5,
   planPrice: 58.94,
-  planName: 'Plano Pro DescartClean (Estoque + PDV + Loja WhatsApp)',
+  planName: 'Plano Pro appvendas (Estoque + PDV + Loja WhatsApp)',
 };
 
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   pixKey: '12.345.678/0001-90',
   pixKeyType: 'CNPJ',
-  merchantName: 'DESCARTCLEAN DISTRIBUIDORA',
+  merchantName: 'appvendas',
   merchantCity: 'SAO PAULO',
   merchantWhatsapp: '5511999998888',
   receivingBank: 'NUBANK',
@@ -168,11 +168,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'ALL'>('ALL');
 
-  // Persistence loader
+  // Persistence loader with auto-migration from legacy name
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
-      return saved ? { ...DEFAULT_PAYMENT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_PAYMENT_SETTINGS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          !parsed.merchantName ||
+          parsed.merchantName.toUpperCase().includes('DESCART') ||
+          parsed.merchantName.toUpperCase().includes('DISTRIBUIDORA')
+        ) {
+          parsed.merchantName = 'appvendas';
+          try {
+            localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify({ ...DEFAULT_PAYMENT_SETTINGS, ...parsed, merchantName: 'appvendas' }));
+          } catch {
+            // ignore
+          }
+        }
+        return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed, merchantName: parsed.merchantName || 'appvendas' };
+      }
+      return DEFAULT_PAYMENT_SETTINGS;
     } catch {
       return DEFAULT_PAYMENT_SETTINGS;
     }
@@ -355,7 +371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(
         'success',
         '🎉 Licença Ativada com Sucesso!',
-        `Acesso completo ao DescartClean liberado! Plano de ${formatCurrency(subscription.planPrice)}/mês confirmado.`
+        `Acesso completo ao appvendas liberado! Plano de ${formatCurrency(subscription.planPrice)}/mês confirmado.`
       );
     }
     return true;
@@ -1048,13 +1064,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(
       'success',
       '🧹 Sistema Zerado para Novo Cliente!',
-      'Todos os produtos, estoque e vendas foram limpos. Pronto para o cliente cadastrar seus descartáveis.'
+      'Todos os produtos, estoque e vendas foram limpos. Pronto para cadastrar novos produtos no appvendas.'
     );
   };
 
   const loadDemoData = () => {
     setProducts(DEMO_PRODUCTS);
-    showToast('info', '📦 Modelos de Exemplo Carregados', '5 descartáveis de demonstração foram adicionados para teste.');
+    showToast('info', '📦 Modelos de Exemplo Carregados', '5 produtos de demonstração foram adicionados para teste.');
   };
 
   return (

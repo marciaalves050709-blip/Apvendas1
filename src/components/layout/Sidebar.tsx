@@ -97,12 +97,12 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div className="p-6 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-600 rounded-sm flex items-center justify-center text-white font-bold text-lg shadow-sm">
-            D
+          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm">
+            A
           </div>
           <div>
-            <span className="font-bold text-base tracking-tight uppercase text-slate-900 block leading-tight">
-              DescartClean
+            <span className="font-black text-base tracking-tight uppercase text-slate-900 block leading-tight">
+              appvendas
             </span>
             <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">
               Vendas & Estoque
@@ -250,14 +250,14 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Bottom User Bar */}
-      <div className="p-4 border-t border-slate-100 bg-white">
+      <div className="p-4 border-t border-slate-100 bg-white space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0">
-              JS
+            <div className="w-9 h-9 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-black text-xs shrink-0">
+              MA
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate">João Silva</p>
+              <p className="text-xs font-bold text-slate-900 truncate">Marcia Alves</p>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider truncate">
@@ -278,6 +278,12 @@ export const Sidebar: React.FC = () => {
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        {/* Creator signature */}
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+          <span>Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
+          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">v1.0</span>
         </div>
       </div>
     </aside>

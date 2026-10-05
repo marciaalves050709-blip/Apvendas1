@@ -239,7 +239,7 @@ export const ClientStoreView: React.FC = () => {
       notes: 'Cliente cadastrado via Catálogo Mobile',
     });
 
-    showToast('success', `Bem-vindo(a), ${newUser.name}!`, 'Selecione os produtos descartáveis e faça seu pedido.');
+    showToast('success', `Bem-vindo(a), ${newUser.name}!`, 'Selecione os produtos e faça seu pedido.');
   };
 
   // Handle click on out-of-stock product
@@ -393,7 +393,7 @@ export const ClientStoreView: React.FC = () => {
     if (paymentMethod === 'PIX' && cartTotal > 0) {
       const pixObj = generatePixPayload({
         pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
-        merchantName: paymentSettings.merchantName || 'DESCARTCLEAN',
+        merchantName: paymentSettings.merchantName || 'APP DE VENDAS',
         merchantCity: paymentSettings.merchantCity || 'SAO PAULO',
         amount: cartTotal,
         txId: 'PED' + Math.floor(1000 + Math.random() * 9000),
@@ -520,8 +520,11 @@ export const ClientStoreView: React.FC = () => {
             <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl shadow-inner">
               🛍️
             </div>
-            <h1 className="text-2xl font-black tracking-tight">{paymentSettings.merchantName || 'DescartClean'}</h1>
-            <p className="text-emerald-100 text-xs font-medium mt-1">Catálogo de Descartáveis & Embalagens</p>
+            <h1 className="text-2xl font-black tracking-tight">
+              {paymentSettings.merchantName && !paymentSettings.merchantName.toUpperCase().includes('DESCART') && !paymentSettings.merchantName.toUpperCase().includes('DISTRIBUIDORA') 
+                ? paymentSettings.merchantName 
+                : 'appvendas'}
+            </h1>
 
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 rounded-full text-[11px] font-semibold mt-3 text-emerald-50">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -609,12 +612,17 @@ export const ClientStoreView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
-                className="hover:text-slate-700 transition-colors text-[11px]"
+                className="hover:text-emerald-700 font-bold transition-colors text-[11px] flex items-center gap-1 cursor-pointer"
               >
-                Voltar ao Painel
+                Entrar no appvendas →
               </button>
             </div>
           </form>
+
+          {/* Footer signature */}
+          <div className="text-center py-3 text-[11px] text-slate-400 font-medium border-t border-slate-100 bg-slate-50">
+            Criado por <strong className="text-slate-600 font-bold">Marcia Alves</strong>
+          </div>
         </div>
       </div>
     );
@@ -651,6 +659,16 @@ export const ClientStoreView: React.FC = () => {
 
         {/* Action icons */}
         <div className="flex items-center gap-2">
+          {/* Back to appvendas button */}
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+            title="Entrar no sistema appvendas"
+          >
+            <span>Entrar no appvendas</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+
           {/* WhatsApp Destination Config */}
           <button
             onClick={() => setIsSettingWhatsappOpen(true)}
@@ -684,7 +702,7 @@ export const ClientStoreView: React.FC = () => {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar copos, pratos, marmitex, guardanapos..."
+            placeholder="Buscar produtos pelo nome..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-8 py-2.5 bg-slate-100 border border-slate-200 focus:bg-white focus:border-emerald-500 rounded-xl text-xs font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400"
@@ -741,7 +759,7 @@ export const ClientStoreView: React.FC = () => {
               <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
                 🔍
               </div>
-              <h3 className="font-bold text-slate-800 text-sm">Nenhum descartável encontrado</h3>
+              <h3 className="font-bold text-slate-800 text-sm">Nenhum produto encontrado</h3>
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
                 Tente buscar por outro termo ou selecione a categoria "Todos".
               </p>
@@ -937,6 +955,14 @@ export const ClientStoreView: React.FC = () => {
               })}
             </div>
           )}
+
+          {/* Footer Signature */}
+          <div className="mt-10 pt-6 pb-4 text-center border-t border-slate-200">
+            <p className="text-xs font-bold text-slate-700">App vendas</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Criado por <strong className="text-slate-600 font-bold">Marcia Alves</strong>
+            </p>
+          </div>
         </div>
       </div>
 
@@ -973,7 +999,7 @@ export const ClientStoreView: React.FC = () => {
             <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <ShoppingCart className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-black text-sm uppercase tracking-wide">Minha Sacola de Descartáveis</h3>
+                <h3 className="font-black text-sm uppercase tracking-wide">Minha Sacola de Compras</h3>
               </div>
               <button
                 onClick={() => setIsCartOpen(false)}

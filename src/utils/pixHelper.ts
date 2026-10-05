@@ -43,10 +43,10 @@ export function generatePixPayload(params: {
 }): { payload: string; txId: string } {
   const {
     pixKey,
-    merchantName = 'DESCARTCLEAN',
+    merchantName = 'APP VENDAS',
     merchantCity = 'SAO PAULO',
     amount,
-    txId = 'DESC' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+    txId = 'VEN' + Math.random().toString(36).substring(2, 8).toUpperCase(),
   } = params;
 
   // Clean strings

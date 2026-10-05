@@ -237,7 +237,7 @@ export const DashboardView: React.FC = () => {
             <div className="p-3 bg-amber-50/60 border-t border-amber-100 flex items-center justify-between px-6 text-xs text-amber-800">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Existem <strong>{criticalCount} descartáveis</strong> com estoque abaixo do limite de segurança.</span>
+                <span>Existem <strong>{criticalCount} produtos</strong> com estoque abaixo do limite de segurança.</span>
               </div>
               <button
                 onClick={() => setActiveTab('inventory')}

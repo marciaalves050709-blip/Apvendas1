@@ -146,7 +146,7 @@ export const SalesHistoryView: React.FC = () => {
               <tr>
                 <th className="px-6 py-3.5">Código & Data</th>
                 <th className="px-4 py-3.5">Cliente</th>
-                <th className="px-4 py-3.5">Itens Descartáveis</th>
+                <th className="px-4 py-3.5">Itens da Venda</th>
                 <th className="px-4 py-3.5">Forma de Pagamento</th>
                 <th className="px-4 py-3.5">Valor Total</th>
                 <th className="px-4 py-3.5">Lucro Bruto</th>
@@ -288,7 +288,7 @@ export const SalesHistoryView: React.FC = () => {
               </div>
 
               <div>
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Descartáveis Comprados</h4>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Produtos Comprados</h4>
                 <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
                   {selectedSaleDetail.items.map((item, idx) => (
                     <div key={idx} className="p-3 flex justify-between items-center text-xs">
@@ -356,7 +356,7 @@ export const SalesHistoryView: React.FC = () => {
             <div className="p-6 flex flex-col gap-4">
               <p className="text-xs text-slate-600 leading-relaxed">
                 Tem certeza que deseja estornar esta venda de <strong>{formatCurrency(cancelModalSale.total)}</strong>?
-                Os itens descartáveis serão <strong>restituídos ao estoque automaticamente</strong> e o valor será subtraído do caixa do dia.
+                Os itens da venda serão <strong>restituídos ao estoque automaticamente</strong> e o valor será subtraído do caixa do dia.
               </p>
 
               <div>

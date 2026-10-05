@@ -86,7 +86,7 @@ export function buildWhatsAppOrderMessage(
   const dateStr = new Date(order.createdAt).toLocaleDateString('pt-BR');
   const timeStr = new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   
-  let msg = `🛒 *NOVO PEDIDO - ${settings.merchantName || 'DESCARTCLEAN'}*\n`;
+  let msg = `🛒 *NOVO PEDIDO - ${(settings.merchantName || 'APPVENDAS').toUpperCase()}*\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
   msg += `📋 *Pedido:* \`#${order.orderCode}\`\n`;
   msg += `📅 *Data:* ${dateStr} às ${timeStr}\n\n`;

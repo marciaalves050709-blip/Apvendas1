@@ -160,11 +160,11 @@ export const ReportsView: React.FC = () => {
                 Curva ABC de Vendas (Produtos Mais Vendidos)
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Descartáveis que geram o maior volume de faturamento e lucro
+                Produtos que geram o maior volume de faturamento e lucro
               </p>
             </div>
             <span className="text-xs font-bold font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">
-              Top Descartáveis
+              Top Produtos
             </span>
           </div>
 
@@ -172,7 +172,7 @@ export const ReportsView: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100">
                 <tr>
-                  <th className="px-6 py-3">Posição / Descartável</th>
+                  <th className="px-6 py-3">Posição / Produto</th>
                   <th className="px-4 py-3">Qtd Vendida</th>
                   <th className="px-4 py-3">Receita Bruta</th>
                   <th className="px-4 py-3">Lucro Estimado</th>
@@ -279,7 +279,7 @@ export const ReportsView: React.FC = () => {
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
               <h3 className="font-bold uppercase text-sm tracking-widest text-slate-900">
-                Sugestão Automática de Compra / Reposição de Descartáveis
+                Sugestão Automática de Compra / Reposição de Produtos
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -303,7 +303,7 @@ export const ReportsView: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100">
                 <tr>
-                  <th className="px-6 py-3">Descartável</th>
+                  <th className="px-6 py-3">Produto</th>
                   <th className="px-4 py-3">Estoque Atual</th>
                   <th className="px-4 py-3">Estoque Mínimo</th>
                   <th className="px-4 py-3">Qtd Sugerida Compra</th>
@@ -345,7 +345,7 @@ export const ReportsView: React.FC = () => {
         ) : (
           <div className="p-6 bg-emerald-50/60 border border-emerald-100 rounded-xl flex items-center gap-3 text-emerald-800 text-xs">
             <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>Todos os descartáveis estão com níveis de estoque saudáveis e acima do limite mínimo!</span>
+            <span>Todos os produtos estão com níveis de estoque saudáveis e acima do limite mínimo!</span>
           </div>
         )}
       </div>

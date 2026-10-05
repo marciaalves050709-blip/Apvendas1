@@ -42,7 +42,7 @@ export const CustomersView: React.FC = () => {
   const [supplierContact, setSupplierContact] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
-  const [supplierCategory, setSupplierCategory] = useState('Descartáveis Plásticos');
+  const [supplierCategory, setSupplierCategory] = useState('Embalagens e Produtos');
   const [supplierLeadDays, setSupplierLeadDays] = useState('3');
 
   const formatCurrency = (val: number) => {
@@ -500,7 +500,7 @@ export const CustomersView: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">Segmento de Descartáveis</label>
+                <label className="text-xs font-bold text-slate-600 block mb-1">Segmento de Produtos</label>
                 <input
                   type="text"
                   placeholder="Ex: Copos e Tampas Plásticas"

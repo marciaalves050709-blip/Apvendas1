@@ -84,7 +84,7 @@ export const ProductFormModal: React.FC = () => {
     e.preventDefault();
 
     if (!name.trim()) {
-      showToast('error', 'Nome Obrigatório', 'Preencha o nome do descartável.');
+      showToast('error', 'Nome Obrigatório', 'Preencha o nome do produto.');
       return;
     }
 
@@ -134,7 +134,7 @@ export const ProductFormModal: React.FC = () => {
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-indigo-400" />
             <h3 className="font-bold text-base">
-              {isEditing ? `Editar "${editingProduct?.name}"` : 'Cadastrar Novo Descartável'}
+              {isEditing ? `Editar "${editingProduct?.name}"` : 'Cadastrar Novo Produto'}
             </h3>
           </div>
           <button
@@ -151,7 +151,7 @@ export const ProductFormModal: React.FC = () => {
           {/* Name */}
           <div className="md:col-span-3">
             <label className="text-xs font-bold text-slate-600 block mb-1">
-              Nome do Descartável / Embalagem *
+              Nome do Produto *
             </label>
             <input
               type="text"
@@ -358,7 +358,7 @@ export const ProductFormModal: React.FC = () => {
             type="submit"
             className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
           >
-            {isEditing ? 'Salvar Alterações' : 'Cadastrar Descartável'}
+            {isEditing ? 'Salvar Alterações' : 'Cadastrar Produto'}
           </button>
         </div>
       </form>

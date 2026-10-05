@@ -45,7 +45,7 @@ export const Header: React.FC = () => {
       case 'client-store': return '📱 Loja & Catálogo do Cliente';
       case 'quick-add-product': return '➕ Adicionar & Gerenciar Produtos';
       case 'dashboard': return 'Visão Geral';
-      case 'inventory': return 'Controle de Estoque de Descartáveis';
+      case 'inventory': return 'Controle de Estoque';
       case 'pos': return 'Ponto de Venda & Frente de Caixa';
       case 'sales': return 'Histórico de Vendas & Comprovantes';
       case 'cashier': return 'Fechamento & Movimento de Caixa';
@@ -58,14 +58,14 @@ export const Header: React.FC = () => {
   const getSubtitle = () => {
     switch (activeTab) {
       case 'client-store': return 'Área simplificada para o cliente digitar nome e WhatsApp, comprar e mandar o pedido no seu Zap';
-      case 'quick-add-product': return 'Cadastre descartáveis rapidamente com preço de varejo, atacado, custo e foto';
+      case 'quick-add-product': return 'Cadastre produtos rapidamente com preço de varejo, atacado, custo e foto';
       case 'dashboard': return 'Resumo operacional de vendas, estoque e movimentações em tempo real';
-      case 'inventory': return 'Catálogo de descartáveis, controle de fardos, caixas e alertas de reposição';
+      case 'inventory': return 'Catálogo de produtos, controle de estoque e alertas de reposição';
       case 'pos': return 'Registre vendas ágeis com cálculo automático de atacado e cupom não fiscal';
       case 'sales': return 'Consulte vendas anteriores, estorne transações e reimprima comprovantes';
       case 'cashier': return 'Abertura, conferência de sangrias, suprimentos e balanço diário';
-      case 'customers': return 'Base de restaurantes, lanchonetes e distribuidores de matéria-prima';
-      case 'reports': return 'Margens de lucro por descartável, curva ABC e projeção de compra';
+      case 'customers': return 'Base de clientes e fornecedores';
+      case 'reports': return 'Margens de lucro por produto, curva ABC e projeção de compra';
       default: return '';
     }
   };

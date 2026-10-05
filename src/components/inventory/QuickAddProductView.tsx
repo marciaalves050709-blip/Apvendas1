@@ -91,7 +91,7 @@ export const QuickAddProductView: React.FC = () => {
     e.preventDefault();
 
     if (!name.trim()) {
-      showToast('error', 'Nome Obrigatório', 'Informe o nome do descartável.');
+      showToast('error', 'Nome Obrigatório', 'Informe o nome do produto.');
       return;
     }
 
@@ -154,7 +154,7 @@ export const QuickAddProductView: React.FC = () => {
             <span>Adicionar & Gerenciar Produtos</span>
           </h2>
           <p className="text-xs text-slate-500 hidden sm:block">
-            Cadastre novos descartáveis e controle preços e estoque facilmente pelo celular.
+            Cadastre novos produtos e controle preços e estoque facilmente pelo celular no appvendas.
           </p>
         </div>
 
@@ -216,7 +216,7 @@ export const QuickAddProductView: React.FC = () => {
               <form onSubmit={handleSubmit} className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="font-black text-sm uppercase tracking-wide text-slate-800">
-                    Dados do Novo Produto Descartável
+                    Dados do Novo Produto
                   </h3>
                   <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                     Lucro Estimado: +{profitMargin}%
@@ -243,7 +243,7 @@ export const QuickAddProductView: React.FC = () => {
                   {/* Categoria */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Categoria do Descartável
+                      Categoria do Produto
                     </label>
                     <select
                       value={category}
@@ -449,7 +449,7 @@ export const QuickAddProductView: React.FC = () => {
                 <Search className="w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Buscar descartável cadastrado..."
+                  placeholder="Buscar produto cadastrado..."
                   value={searchList}
                   onChange={e => setSearchList(e.target.value)}
                   className="w-full text-xs font-medium outline-none bg-transparent"

@@ -21,9 +21,9 @@ export const ReceiptModal: React.FC = () => {
     const details = sale.paymentDetails;
     const lines = [
       '========================================',
-      '     DESCARTCLEAN - DESCARTÁVEIS & EMBALAGENS',
-      '      CNPJ: 12.345.678/0001-90',
-      '   Av. dos Descartáveis, 500 - SP',
+      '             APP DE VENDAS',
+      '       CNPJ: 12.345.678/0001-90',
+      '            São Paulo - SP',
       '========================================',
       `CUPOM NÃO FISCAL: ${sale.code}`,
       `DATA: ${new Date(sale.createdAt).toLocaleDateString('pt-BR')} ${new Date(sale.createdAt).toLocaleTimeString('pt-BR')}`,
@@ -45,6 +45,7 @@ export const ReceiptModal: React.FC = () => {
       sale.change ? `TROCO: ${formatCurrency(sale.change)}` : '',
       '========================================',
       '   Obrigado pela preferência! Volte sempre.',
+      '          Criado por Marcia Alves',
       '========================================',
     ].filter(Boolean).join('\n');
 
@@ -77,10 +78,9 @@ export const ReceiptModal: React.FC = () => {
           >
             {/* Store Banner */}
             <div className="text-center border-b border-dashed border-slate-400 pb-3 mb-3">
-              <h4 className="font-black text-sm uppercase tracking-tight">DescartClean</h4>
-              <p className="text-[10px] text-slate-500">Distribuidora de Descartáveis e Embalagens</p>
+              <h4 className="font-black text-sm uppercase tracking-tight">App vendas</h4>
               <p className="text-[9px] text-slate-400">CNPJ: 12.345.678/0001-90 • Tel: (11) 3344-5566</p>
-              <p className="text-[9px] text-slate-400">Av. dos Descartáveis, 500 - São Paulo/SP</p>
+              <p className="text-[9px] text-slate-400">São Paulo - SP</p>
             </div>
 
             {/* Document Header */}
@@ -204,6 +204,7 @@ export const ReceiptModal: React.FC = () => {
               </div>
               <span className="text-[9px] text-slate-400 mt-1 tracking-widest">{sale.code}</span>
               <p className="text-[10px] text-slate-500 mt-2 italic">Obrigado pela preferência!</p>
+              <p className="text-[9px] text-slate-400 mt-1 font-sans">Criado por Marcia Alves</p>
             </div>
           </div>
         </div>
