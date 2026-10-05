@@ -18,7 +18,10 @@ import {
   Radio,
   Bell,
   Building2,
-  CheckCheck
+  CheckCheck,
+  Crown,
+  Settings2,
+  UserCheck
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -30,6 +33,10 @@ export const SubscriptionModal: React.FC = () => {
     setIsSubscriptionModalOpen,
     isSubscribed,
     isMasterAdmin,
+    isAdmin,
+    setAdminMode,
+    setClientTestMode,
+    adminConfig,
     nextDueDateFormatted,
     isTrialActive,
     trialDaysRemaining,
@@ -217,21 +224,38 @@ export const SubscriptionModal: React.FC = () => {
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 flex items-start justify-between relative shrink-0">
           <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase rounded-md tracking-wider">
-                {isSubscribed ? 'Licença Ativa' : 'Assinatura do Sistema'}
-              </span>
-              {isTrialActive && (
-                <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 text-[10px] font-bold rounded-md">
-                  {trialDaysRemaining}d {trialHoursRemaining}h de teste restantes
-                </span>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              {isMasterAdmin || isAdmin ? (
+                <>
+                  <span className="px-2.5 py-0.5 bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-black uppercase rounded-md tracking-wider flex items-center gap-1">
+                    <Crown className="w-3 h-3 text-amber-400" />
+                    Conta da Administradora
+                  </span>
+                  <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-bold rounded-md">
+                    Acesso Vitalício Gratuito
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase rounded-md tracking-wider">
+                    {isSubscribed ? 'Licença Ativa' : 'Assinatura do Sistema'}
+                  </span>
+                  {isTrialActive && (
+                    <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 text-[10px] font-bold rounded-md">
+                      {trialDaysRemaining}d {trialHoursRemaining}h de teste restantes
+                    </span>
+                  )}
+                </>
               )}
             </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              appvendas Pro
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
+              <span>appvendas Pro</span>
+              {(isMasterAdmin || isAdmin) && <span className="text-amber-400 text-base font-normal">(Admin Master)</span>}
             </h2>
             <p className="text-xs text-slate-300 mt-1 max-w-lg">
-              Sistema completo de controle de estoque, vendas no balcão e pedidos pelo WhatsApp.
+              {isMasterAdmin || isAdmin 
+                ? `Titular: ${adminConfig.name} (${adminConfig.email}) • Isenta de mensalidades para sempre.`
+                : 'Sistema completo de controle de estoque, vendas no balcão e pedidos pelo WhatsApp.'}
             </p>
           </div>
 
@@ -247,44 +271,142 @@ export const SubscriptionModal: React.FC = () => {
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
           
-          {/* Status & Price Card */}
-          <div className="bg-gradient-to-br from-indigo-50 to-slate-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black uppercase text-indigo-900 tracking-wider">
-                  Plano Mensal Completo
-                </span>
-                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
-                  Vencimento Todo Dia 05
-                </span>
-              </div>
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-3xl sm:text-4xl font-black text-slate-900">
-                  {formatCurrency(planPrice)}
-                </span>
-                <span className="text-xs text-slate-500 font-bold">/mês</span>
-              </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                {isSubscribed 
-                  ? (isMasterAdmin ? '👑 Acesso Vitalício do Administrador Márcia ativo.' : `✅ Assinatura ativa! Próximo vencimento: ${nextDueDateFormatted}.`)
-                  : `5 dias grátis para teste. Renovação mensal todo dia 05 (${nextDueDateFormatted}).`}
-              </p>
-            </div>
+          {/* Admin Master Exemption Card (When Admin) */}
+          {(isMasterAdmin || isAdmin) ? (
+            <div className="bg-gradient-to-br from-amber-50 via-emerald-50/50 to-indigo-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-amber-200 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center text-lg font-black shadow-xs">
+                    👑
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900">
+                      Licença Mestra de Administradora
+                    </h3>
+                    <p className="text-xs text-slate-600">
+                      {adminConfig.name} • <span className="text-slate-500">{adminConfig.email}</span>
+                    </p>
+                  </div>
+                </div>
 
-            <div className="shrink-0 w-full sm:w-auto text-right">
-              {isSubscribed ? (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-black">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>{isMasterAdmin ? 'Acesso Vitalício' : 'Acesso Total Ativo'}</span>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 text-white rounded-xl text-xs font-black shadow-xs">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Isenta de Cobrança</span>
                 </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-black">
-                  <Clock className="w-4 h-4 text-amber-700" />
-                  <span>{trialDaysRemaining} dias restantes de teste</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="p-3 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">Sua Mensalidade</span>
+                  <span className="text-xl font-black text-emerald-600">R$ 0,00</span>
+                  <span className="text-[10px] text-slate-500 block">100% Grátis para Você</span>
                 </div>
-              )}
+
+                <div className="p-3 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">Validade do Acesso</span>
+                  <span className="text-xl font-black text-indigo-700">Vitalícia</span>
+                  <span className="text-[10px] text-slate-500 block">Nunca expira</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-amber-200 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">Cobrança de Clientes</span>
+                  <span className="text-xl font-black text-slate-900">{formatCurrency(planPrice)}</span>
+                  <span className="text-[10px] text-slate-500 block">Por mês (após 5 dias teste)</span>
+                </div>
+              </div>
+
+              <div className="bg-white/80 p-3.5 rounded-xl border border-amber-200/80 text-xs text-slate-700 space-y-1.5">
+                <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  Regra do Administrador Confirmada:
+                </p>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Como proprietária e administradora do sistema <strong>appvendas</strong>, você tem acesso irrestrito a todos os recursos sem pagamento algum. A cobrança de R$ 58,94/mês é configurada para os clientes que comprarem o sistema de você.
+                </p>
+              </div>
+
+              {/* Seus dados de recebimento Pix */}
+              <div className="p-3.5 bg-slate-900 text-white rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                    <QrCode className="w-3.5 h-3.5" />
+                    Conta Pix Cadastrada para Receber dos Clientes
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.2 rounded-full font-bold">
+                    Recebendo
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Chave Pix:</span>
+                    <strong className="text-white font-mono">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Beneficiário:</span>
+                    <strong className="text-white">{paymentSettings.merchantName || 'appvendas'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Banco de Recebimento:</span>
+                    <strong className="text-white">{paymentSettings.receivingBank || 'NUBANK'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão de teste de visualização do cliente */}
+              <div className="pt-1 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClientTestMode();
+                    setIsSubscriptionModalOpen(false);
+                  }}
+                  className="text-[11px] text-slate-500 hover:text-indigo-600 font-bold flex items-center gap-1 underline cursor-pointer"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>Simular tela de cobrança como cliente</span>
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Status & Price Card for Client */
+            <div className="bg-gradient-to-br from-indigo-50 to-slate-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase text-indigo-900 tracking-wider">
+                    Plano Mensal Completo
+                  </span>
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
+                    Vencimento Todo Dia 05
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-3xl sm:text-4xl font-black text-slate-900">
+                    {formatCurrency(planPrice)}
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold">/mês</span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">
+                  {isSubscribed 
+                    ? `✅ Assinatura ativa! Próximo vencimento: ${nextDueDateFormatted}.`
+                    : `5 dias grátis para teste. Renovação mensal todo dia 05 (${nextDueDateFormatted}).`}
+                </p>
+              </div>
+
+              <div className="shrink-0 w-full sm:w-auto text-right">
+                {isSubscribed ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-black">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Acesso Total Ativo</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-black">
+                    <Clock className="w-4 h-4 text-amber-700" />
+                    <span>{trialDaysRemaining} dias restantes de teste</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Included Features List */}
           <div className="space-y-2">
@@ -508,8 +630,8 @@ export const SubscriptionModal: React.FC = () => {
             </div>
           )}
 
-          {/* If already subscribed */}
-          {isSubscribed && (
+          {/* If already subscribed (for regular clients) */}
+          {isSubscribed && !isMasterAdmin && !isAdmin && (
             <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-2xl text-emerald-950 space-y-2">
               <div className="flex items-center gap-2 font-black text-sm text-emerald-900">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />

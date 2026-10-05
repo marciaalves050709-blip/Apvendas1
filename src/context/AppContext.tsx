@@ -112,6 +112,11 @@ interface AppContextType {
   loadDemoData: () => void;
 
   // Trial & Subscription (5 Days Free Trial -> R$ 58,94)
+  isAdmin: boolean;
+  setIsAdmin: (val: boolean) => void;
+  setAdminMode: () => void;
+  setClientTestMode: () => void;
+  adminConfig: { name: string; email: string; role: string };
   subscription: SubscriptionState;
   isTrialActive: boolean;
   isTrialExpired: boolean;
@@ -140,6 +145,24 @@ const STORAGE_KEYS = {
   SHIFT: 'descart_clean_shift_v1',
   PAYMENT_SETTINGS: 'descart_clean_payment_settings_v1',
   SUBSCRIPTION: 'descart_clean_subscription_v1',
+};
+
+export const ADMIN_CONFIG = {
+  name: 'Marcia Alves',
+  email: 'marciaalves050709@gmail.com',
+  role: 'Administradora Mestra (Criadora)',
+  masterCode: 'MARCIA2026',
+};
+
+export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
+  isSubscribed: true,
+  trialStartDate: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+  trialDurationDays: 9999,
+  planPrice: 58.94,
+  planName: 'Licença Mestra Vitalícia (Isenta de Cobrança)',
+  activatedAt: new Date().toISOString(),
+  subscriptionExpiresAt: new Date('2099-12-31T23:59:59.000Z').toISOString(),
+  lastPaymentRef: 'MASTER-ADMIN-MARCIA',
 };
 
 export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
@@ -260,6 +283,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Administrator identification: Marcia Alves is exempt from all charges
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('appvendas_is_admin');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+      return true; // Márcia Alves is administrator by default
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('appvendas_is_admin', isAdmin ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+  }, [isAdmin]);
+
   // Subscription & 5-Day Free Trial state
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
@@ -268,17 +312,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(saved);
         return { ...DEFAULT_SUBSCRIPTION, ...parsed };
       }
-      // Initialize with fresh trial start date
-      const initial: SubscriptionState = {
-        ...DEFAULT_SUBSCRIPTION,
-        trialStartDate: new Date().toISOString(),
-      };
-      localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(initial));
-      return initial;
+      // If admin, initialize immediately with lifetime free subscription
+      return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
     } catch {
-      return DEFAULT_SUBSCRIPTION;
+      return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
     }
   });
+
+  // Keep administrator exempt from all charges and permanently active
+  useEffect(() => {
+    if (isAdmin && (!subscription.isSubscribed || subscription.lastPaymentRef !== 'MASTER-ADMIN-MARCIA')) {
+      setSubscription(MASTER_ADMIN_LIFETIME_SUBSCRIPTION);
+    }
+  }, [isAdmin, subscription.isSubscribed, subscription.lastPaymentRef]);
 
   // Current timestamp clock for live countdown
   const [currentTimeMs, setCurrentTimeMs] = useState<number>(Date.now());
@@ -301,20 +347,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const trialEndMs = trialStartMs + trialDurationMs;
   const msRemaining = Math.max(0, trialEndMs - currentTimeMs);
 
-  const isSubscribed = Boolean(subscription.isSubscribed);
-  const isTrialActive = !isSubscribed && msRemaining > 0;
-  const isTrialExpired = !isSubscribed && msRemaining <= 0;
-  const isAccessAllowed = isSubscribed || isTrialActive;
-
-  const trialDaysRemaining = Math.floor(msRemaining / (24 * 60 * 60 * 1000));
-  const trialHoursRemaining = Math.floor((msRemaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-  const trialMinutesRemaining = Math.floor((msRemaining % (60 * 60 * 1000)) / (60 * 1000));
-
   const isMasterAdmin = Boolean(
-    subscription.isSubscribed &&
-    (subscription.lastPaymentRef?.includes('MASTER-ADMIN') ||
-     (subscription.subscriptionExpiresAt && new Date(subscription.subscriptionExpiresAt).getFullYear() > 2090))
+    isAdmin ||
+    (subscription.isSubscribed &&
+      (subscription.lastPaymentRef?.includes('MASTER-ADMIN') ||
+       (subscription.subscriptionExpiresAt && new Date(subscription.subscriptionExpiresAt).getFullYear() > 2090)))
   );
+
+  // Administrator is ALWAYS subscribed and NEVER expired (100% exempt from charges)
+  const isSubscribed = Boolean(isAdmin || subscription.isSubscribed);
+  const isTrialActive = !isAdmin && !subscription.isSubscribed && msRemaining > 0;
+  const isTrialExpired = !isAdmin && !subscription.isSubscribed && msRemaining <= 0;
+  const isAccessAllowed = isAdmin || isSubscribed || isTrialActive;
+
+  const trialDaysRemaining = isAdmin ? 999 : Math.floor(msRemaining / (24 * 60 * 60 * 1000));
+  const trialHoursRemaining = isAdmin ? 0 : Math.floor((msRemaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const trialMinutesRemaining = isAdmin ? 0 : Math.floor((msRemaining % (60 * 60 * 1000)) / (60 * 1000));
+
+  const setAdminMode = () => {
+    setIsAdmin(true);
+    try {
+      localStorage.setItem('appvendas_is_admin', 'true');
+    } catch {
+      // ignore
+    }
+    setSubscription(MASTER_ADMIN_LIFETIME_SUBSCRIPTION);
+    showToast('success', '👑 Modo Administradora Ativo!', 'Acesso vitalício 100% gratuito confirmado para Márcia Alves.');
+  };
+
+  const setClientTestMode = () => {
+    setIsAdmin(false);
+    try {
+      localStorage.setItem('appvendas_is_admin', 'false');
+    } catch {
+      // ignore
+    }
+    const clientTrial: SubscriptionState = {
+      ...DEFAULT_SUBSCRIPTION,
+      trialStartDate: new Date().toISOString(),
+      isSubscribed: false,
+    };
+    setSubscription(clientTrial);
+    showToast('info', '📱 Modo Cliente Ativado', 'Visualizando como cliente/lojista (com teste de 5 dias e cobrança de R$ 58,94).');
+  };
 
   const activateSubscription = (code?: string, paymentRef?: string): boolean => {
     const rawInput = (code || '').trim();
@@ -1128,7 +1203,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetAllData,
         clearAllForNewClient,
         loadDemoData,
-        // Trial & Subscription
+        // Trial & Subscription & Admin Exemption
+        isAdmin,
+        setIsAdmin,
+        setAdminMode,
+        setClientTestMode,
+        adminConfig: ADMIN_CONFIG,
         subscription,
         isTrialActive,
         isTrialExpired,

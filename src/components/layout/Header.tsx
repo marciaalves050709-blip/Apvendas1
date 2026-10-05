@@ -29,6 +29,7 @@ export const Header: React.FC = () => {
     subscription,
     isSubscribed,
     isMasterAdmin,
+    isAdmin,
     isTrialActive,
     trialDaysRemaining,
     setIsSubscriptionModalOpen,
@@ -78,18 +79,26 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Subscription Plan Quick Button */}
+        {/* Subscription Plan / Admin Status Quick Button */}
         <button
           type="button"
           onClick={() => setIsSubscriptionModalOpen(true)}
           className={`px-3 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95 ${
-            isSubscribed
+            isMasterAdmin || isAdmin
+              ? 'bg-gradient-to-r from-amber-50 to-emerald-50 text-amber-950 border border-amber-300 hover:border-amber-400'
+              : isSubscribed
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
               : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
           }`}
-          title="Ver plano e status da assinatura"
+          title={isMasterAdmin || isAdmin ? 'Licença Mestra de Administradora (Isenta de Cobrança)' : 'Ver status da licença'}
         >
-          {isSubscribed ? (
+          {isMasterAdmin || isAdmin ? (
+            <>
+              <Crown className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Admin Vitalício (Grátis)</span>
+              <span className="sm:hidden font-black">Admin 👑</span>
+            </>
+          ) : isSubscribed ? (
             <>
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">Licença Pro</span>
@@ -169,10 +178,14 @@ export const Header: React.FC = () => {
             </div>
             
             <div>
-              <h3 className="text-base font-black text-slate-900">Zerar Sistema para Novo Cliente?</h3>
+              <h3 className="text-base font-black text-slate-900">Zerar Catálogo & Vendas?</h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Esta ação vai limpar todos os produtos cadastrados, histórico de vendas e movimentações de estoque. O app ficará totalmente em branco para o novo cliente cadastrar seus próprios produtos.
+                Esta ação vai limpar produtos, histórico de vendas e movimentações. O app ficará limpo em branco para novos cadastros.
               </p>
+              <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 font-medium flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Seu acesso de administradora continua <strong>100% vitalício e gratuito</strong>.</span>
+              </div>
             </div>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1">

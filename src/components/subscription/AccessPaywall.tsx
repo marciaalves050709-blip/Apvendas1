@@ -29,6 +29,10 @@ export const AccessPaywall: React.FC = () => {
     subscription,
     isTrialExpired,
     isSubscribed,
+    isMasterAdmin,
+    isAdmin,
+    setAdminMode,
+    adminConfig,
     activateSubscription,
     resetTrial,
     paymentSettings
@@ -102,8 +106,8 @@ export const AccessPaywall: React.FC = () => {
     }
   }, [isTrialExpired, isSubscribed, planPrice, paymentSettings]);
 
-  // Only render if trial is expired and not subscribed
-  if (!isTrialExpired || isSubscribed) {
+  // Only render if trial is expired, not subscribed, and NOT administrator
+  if (!isTrialExpired || isSubscribed || isMasterAdmin || isAdmin) {
     return null;
   }
 
@@ -225,6 +229,23 @@ export const AccessPaywall: React.FC = () => {
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col max-h-[94vh]">
         
+        {/* Administrator Instant Release Header Bar */}
+        <div className="bg-amber-100 border-b border-amber-300 px-4 py-2.5 flex items-center justify-between text-xs text-amber-950 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base">👑</span>
+            <span className="font-bold">
+              É a administradora {adminConfig.name}?
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdminMode()}
+            className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs shadow-xs cursor-pointer active:scale-95 transition-all"
+          >
+            Liberar Acesso Grátis (Admin)
+          </button>
+        </div>
+
         {/* Paywall Header */}
         <div className="bg-gradient-to-r from-rose-900 via-rose-950 to-slate-900 text-white p-5 sm:p-6 text-center relative shrink-0">
           <div className="w-12 h-12 bg-rose-600/30 border-2 border-rose-400/50 rounded-2xl flex items-center justify-center mx-auto mb-2.5 shadow-lg backdrop-blur-md">

@@ -10,7 +10,8 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Settings2,
-  Lock
+  Lock,
+  Crown
 } from 'lucide-react';
 
 export const TrialBanner: React.FC = () => {
@@ -19,6 +20,11 @@ export const TrialBanner: React.FC = () => {
     isTrialActive,
     isTrialExpired,
     isSubscribed,
+    isMasterAdmin,
+    isAdmin,
+    setAdminMode,
+    setClientTestMode,
+    adminConfig,
     trialDaysRemaining,
     trialHoursRemaining,
     setIsSubscriptionModalOpen,
@@ -28,6 +34,57 @@ export const TrialBanner: React.FC = () => {
   } = useApp();
 
   const [showSimMenu, setShowSimMenu] = useState(false);
+
+  // Administrator View: Completely exempt from charges and countdowns
+  if (isMasterAdmin || isAdmin) {
+    return (
+      <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 text-white px-3 sm:px-6 py-2 border-b border-indigo-800/60 shrink-0 shadow-xs select-none">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-300 shrink-0 shadow-xs">
+              <Crown className="w-4 h-4 text-amber-400" />
+            </div>
+            
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/40 rounded-md font-black text-[10px] uppercase tracking-wider flex items-center gap-1">
+                  👑 Administradora: {adminConfig.name}
+                </span>
+                <span className="font-black text-emerald-400 text-xs truncate flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  Acesso Vitalício Gratuito (Isenta de Cobrança)
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-300 hidden md:block mt-0.5">
+                Você nunca será cobrada. A mensalidade de R$ 58,94/mês é cobrada exclusivamente dos seus clientes após os 5 dias de teste.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsSubscriptionModalOpen(true)}
+              className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+            >
+              <span>Minha Licença Mestra</span>
+            </button>
+
+            {/* Test Client Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => setClientTestMode()}
+              className="p-1.5 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white rounded-lg text-[10px] font-medium transition-all flex items-center gap-1 cursor-pointer"
+              title="Testar como cliente/lojista (com teste de 5 dias e cobrança)"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline text-[10px]">Testar Modo Cliente</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isTrialExpired && !isSubscribed) {
     // Paywall covers the whole screen, but banner can show expired status
@@ -49,6 +106,13 @@ export const TrialBanner: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAdminMode()}
+            className="text-[11px] font-bold text-amber-300 hover:text-white underline cursor-pointer"
+          >
+            Sou Administradora Márcia
+          </button>
           <button
             type="button"
             onClick={() => setIsSubscriptionModalOpen(true)}
@@ -182,6 +246,17 @@ export const TrialBanner: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Quick return to Admin Mode if Márcia */}
+          <button
+            type="button"
+            onClick={() => setAdminMode()}
+            className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+            title="Voltar para Modo Administradora Vitalício (Sem cobrança)"
+          >
+            <Crown className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sou Administradora Márcia</span>
+          </button>
 
           {/* Main Subscribe Action Button */}
           <button

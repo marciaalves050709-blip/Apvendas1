@@ -252,16 +252,19 @@ export const Sidebar: React.FC = () => {
       {/* Bottom User Bar */}
       <div className="p-4 border-t border-slate-100 bg-white space-y-2.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-black text-xs shrink-0">
-              MA
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 font-black text-xs shrink-0 shadow-2xs">
+              👑
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate">Marcia Alves</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-black text-slate-900 truncate">Marcia Alves</p>
+                <span className="text-[9px] bg-amber-100 text-amber-800 font-black px-1.5 py-0.2 rounded">ADMIN</span>
+              </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider truncate">
-                  {currentShift.isOpen ? 'Caixa Aberto' : 'Caixa Fechado'}
+                <p className="text-[10px] text-emerald-700 font-semibold truncate">
+                  Acesso Vitalício Gratuito
                 </p>
               </div>
             </div>
@@ -269,7 +272,7 @@ export const Sidebar: React.FC = () => {
 
           <button
             onClick={() => {
-              if (confirm('Deseja reiniciar os dados de demonstração? Isso restaurará o estoque e vendas iniciais.')) {
+              if (confirm('Deseja reiniciar os dados de demonstração? Isso restaurará o estoque e vendas iniciais mantendo seu acesso vitalício.')) {
                 resetAllData();
               }
             }}
