@@ -16,6 +16,8 @@ import {
   Plus, 
   Minus, 
   Trash2, 
+  Edit3,
+  Package,
   Send, 
   Smartphone, 
   User, 
@@ -79,6 +81,7 @@ export const ClientStoreView: React.FC = () => {
     showToast, 
     addCustomer, 
     addStockMovement,
+    setProductModalProduct,
     setActiveTab 
   } = useApp();
 
@@ -510,54 +513,54 @@ export const ClientStoreView: React.FC = () => {
     showToast('success', 'WhatsApp Salvo!', `Pedidos serão enviados para ${formatPhoneDisplay(tempWhatsapp)}.`);
   };
 
-  // STEP 1: Identification Screen (Ultra Simple)
+  // STEP 1: Identification Screen (Ultra Simple & 100% Mobile Accessible)
   if (!isIdentified) {
     return (
-      <div className="flex-1 bg-slate-100 flex flex-col items-center justify-center p-4 min-h-screen overflow-y-auto">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+      <div className="flex-1 w-full h-full bg-slate-100 overflow-y-auto overscroll-contain p-3 sm:p-6 pb-40 sm:pb-16 flex flex-col items-center justify-start min-h-0">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden shrink-0 my-2 sm:my-auto">
           {/* Header Banner */}
-          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-6 text-white text-center relative">
-            <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl shadow-inner">
+          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 sm:p-6 text-white text-center relative">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-2.5 sm:mb-3 text-2xl sm:text-3xl shadow-inner">
               🛍️
             </div>
-            <h1 className="text-2xl font-black tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
               {paymentSettings.merchantName && !paymentSettings.merchantName.toUpperCase().includes('DESCART') && !paymentSettings.merchantName.toUpperCase().includes('DISTRIBUIDORA') 
                 ? paymentSettings.merchantName 
                 : 'appvendas'}
             </h1>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 rounded-full text-[11px] font-semibold mt-3 text-emerald-50">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 rounded-full text-[11px] font-semibold mt-2.5 text-emerald-50">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Faça suas compras direto pelo celular</span>
+              <span>Catálogo & Loja Virtual no Celular</span>
             </div>
           </div>
 
           {/* Form Content */}
-          <form onSubmit={handleIdentifyCustomer} className="p-6 space-y-4">
-            <div className="text-center mb-2">
-              <h2 className="text-base font-bold text-slate-800">Identifique-se para começar</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Digite apenas seu nome e WhatsApp para enviar seu pedido</p>
+          <form onSubmit={handleIdentifyCustomer} className="p-4 sm:p-6 space-y-3.5 sm:space-y-4">
+            <div className="text-center mb-1">
+              <h2 className="text-sm sm:text-base font-bold text-slate-800">Identifique-se para começar</h2>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">Informe seu nome e WhatsApp para ver o catálogo e fazer pedidos</p>
             </div>
 
             {/* Nome */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Seu Nome / Empresa</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="Ex: Márcia Alves ou Lanchonete Central"
+                placeholder="Ex: Márcia Alves ou Cliente"
                 value={inputName}
                 onChange={e => setInputName(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-2xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-sm font-medium text-slate-900 outline-none transition-all"
+                className="w-full px-3.5 py-3 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-sm font-medium text-slate-900 outline-none transition-all"
               />
             </div>
 
             {/* WhatsApp */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Seu WhatsApp (com DDD)</span>
               </label>
@@ -567,35 +570,57 @@ export const ClientStoreView: React.FC = () => {
                 placeholder="(11) 99999-9999"
                 value={inputPhone}
                 onChange={e => handlePhoneChange(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-2xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-sm font-medium text-slate-900 outline-none transition-all"
+                className="w-full px-3.5 py-3 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-sm font-medium text-slate-900 outline-none transition-all"
               />
             </div>
 
             {/* Endereço Inicial (Opcional) */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-400" />
                 <span>Endereço de Entrega (Opcional)</span>
               </label>
               <input
                 type="text"
-                placeholder="Rua, Número, Bairro (ou deixe em branco para retirar)"
+                placeholder="Rua, Número, Bairro (ou deixe em branco)"
                 value={inputAddress}
                 onChange={e => setInputAddress(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs font-medium text-slate-900 outline-none transition-all"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs font-medium text-slate-900 outline-none transition-all"
               />
             </div>
 
-            {/* Submit Button */}
+            {/* Main Submit Button: Entrar e Ver Produtos */}
             <button
               type="submit"
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              className="w-full py-3.5 sm:py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               <span>Entrar e Ver Produtos</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            {/* Demo Quick login */}
+            {/* Fast Alternative: Direct Visitor Entry without filling */}
+            <button
+              type="button"
+              onClick={() => {
+                setClientUser({ name: 'Visitante', phone: '(11) 99999-9999', address: '', deliveryType: 'RETIRADA' });
+                setIsIdentified(true);
+              }}
+              className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>👀 Ver Produtos sem cadastro (Visitante) →</span>
+            </button>
+
+            {/* Fast Link to Inventory/Product update */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('inventory')}
+              className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Ver Produtos pra Atualizar no Estoque</span>
+            </button>
+
+            {/* Demo Quick login & Back to dashboard */}
             <div className="pt-2 flex items-center justify-between text-xs text-slate-400">
               <button
                 type="button"
@@ -620,7 +645,7 @@ export const ClientStoreView: React.FC = () => {
           </form>
 
           {/* Footer signature */}
-          <div className="text-center py-3 text-[11px] text-slate-400 font-medium border-t border-slate-100 bg-slate-50">
+          <div className="text-center py-2.5 sm:py-3 text-[11px] text-slate-400 font-medium border-t border-slate-100 bg-slate-50">
             Criado por <strong className="text-slate-600 font-bold">Marcia Alves</strong>
           </div>
         </div>
@@ -715,6 +740,21 @@ export const ClientStoreView: React.FC = () => {
               <X className="w-3.5 h-3.5" />
             </button>
           )}
+        </div>
+
+        {/* Quick Product Manager Switcher */}
+        <div className="flex items-center justify-between text-xs pt-0.5">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            {filteredProducts.length} de {products.length} produtos
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveTab('inventory')}
+            className="text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1 transition-colors cursor-pointer"
+          >
+            <Edit3 className="w-3 h-3 text-indigo-600" />
+            <span>Ver Produtos no Estoque pra Atualizar</span>
+          </button>
         </div>
 
         {/* Category Horizontal Scroll Pills */}
@@ -883,15 +923,30 @@ export const ClientStoreView: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Pricing and Action Button */}
+                      {/* Pricing, Quick Update and Action Button */}
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Preço</p>
-                          <p className={`text-base font-black leading-none ${
-                            isOutOfStock ? 'text-slate-500 line-through' : 'text-slate-900'
-                          }`}>
-                            {formatCurrency(currentPrice)}
-                          </p>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Preço</p>
+                            <p className={`text-base font-black leading-none ${
+                              isOutOfStock ? 'text-slate-500 line-through' : 'text-slate-900'
+                            }`}>
+                              {formatCurrency(currentPrice)}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProductModalProduct(product);
+                            }}
+                            className="px-2 py-1 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95 ml-1"
+                            title="Atualizar dados, preço e estoque deste produto"
+                          >
+                            <Edit3 className="w-3 h-3 text-indigo-600" />
+                            <span>Atualizar</span>
+                          </button>
                         </div>
 
                         {/* Quantity Controls with Out of Stock Protection */}
@@ -1010,7 +1065,7 @@ export const ClientStoreView: React.FC = () => {
             </div>
 
             {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28 sm:pb-8">
               {/* Customer Info Card */}
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 flex items-center justify-between">
                 <div>

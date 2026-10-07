@@ -59,6 +59,7 @@ export const PosView: React.FC = () => {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [discountType, setDiscountType] = useState<'R$' | '%'>('R$');
   const [discountInput, setDiscountInput] = useState<string>('');
+  const [mobilePosTab, setMobilePosTab] = useState<'products' | 'cart'>('products');
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,8 +118,42 @@ export const PosView: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-slate-100">
+      {/* Mobile Tab Switcher */}
+      <div className="md:hidden flex items-center bg-slate-200 p-1.5 border-b border-slate-300 shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobilePosTab('products')}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobilePosTab === 'products'
+              ? 'bg-white text-indigo-700 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <span>Catálogo ({filteredProducts.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePosTab('cart')}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobilePosTab === 'cart'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <ShoppingCart className="w-3.5 h-3.5" />
+          <span>Carrinho ({cartItemCount})</span>
+          {cartItemCount > 0 && (
+            <span className="font-mono text-[10px] ml-1 bg-amber-400 text-slate-900 px-1.5 py-0.2 rounded-full font-black">
+              {formatCurrency(cartTotal)}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Left Column: Product Selection Grid */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 border-r border-slate-200">
+      <div className={`flex-1 flex flex-col overflow-hidden bg-slate-50 border-r border-slate-200 ${
+        mobilePosTab === 'products' ? 'flex' : 'hidden md:flex'
+      }`}>
         {/* Search & Category Filter Bar */}
         <div className="p-5 bg-white border-b border-slate-200 flex flex-col gap-3 shrink-0">
           <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
@@ -234,10 +269,31 @@ export const PosView: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Mobile floating button to view cart */}
+        {mobilePosTab === 'products' && cartItemCount > 0 && (
+          <div className="md:hidden p-3 bg-white border-t border-slate-200 shrink-0 shadow-lg z-20">
+            <button
+              type="button"
+              onClick={() => setMobilePosTab('cart')}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-between px-4 shadow-md transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-white" />
+                <span>Ver Carrinho ({cartItemCount} {cartItemCount === 1 ? 'item' : 'itens'})</span>
+              </div>
+              <span className="font-mono font-black text-xs bg-indigo-800/80 px-2.5 py-1 rounded-lg">
+                {formatCurrency(cartTotal)} →
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right Column: POS Cart & Checkout */}
-      <div className="w-full md:w-96 lg:w-[420px] bg-white flex flex-col h-full shrink-0 border-l border-slate-200 shadow-md">
+      <div className={`w-full md:w-96 lg:w-[420px] bg-white flex-col h-full shrink-0 border-l border-slate-200 shadow-md ${
+        mobilePosTab === 'cart' ? 'flex' : 'hidden md:flex'
+      }`}>
         {/* Cart Header & Customer Selector */}
         <div className="p-4 border-b border-slate-200 bg-white flex flex-col gap-3">
           <div className="flex items-center justify-between">

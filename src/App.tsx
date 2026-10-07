@@ -38,20 +38,20 @@ const MainLayout: React.FC = () => {
   }, [setActiveTab]);
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden select-none">
+    <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
       {/* Sidebar (Desktop) */}
-      <div className="hidden md:flex h-full">
+      <div className="hidden md:flex h-full shrink-0">
         <Sidebar />
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
         <MobileInstallBanner />
         <TrialBanner />
         <Header />
 
         {/* Dynamic Views */}
-        <main className="flex-1 flex flex-col overflow-hidden relative">
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
           {activeTab === 'client-store' && <ClientStoreView />}
           {activeTab === 'quick-add-product' && <QuickAddProductView />}
           {activeTab === 'dashboard' && <DashboardView />}

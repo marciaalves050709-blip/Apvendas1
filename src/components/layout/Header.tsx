@@ -14,7 +14,8 @@ import {
   Clock,
   Sparkles,
   Trash2,
-  Crown
+  Crown,
+  Package
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -73,8 +74,8 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-16 sm:h-20 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between shrink-0">
-      <div className="flex flex-col min-w-0">
+    <header className="h-14 sm:h-20 bg-white border-b border-slate-200 px-3 sm:px-8 flex items-center justify-between shrink-0">
+      <div className="flex flex-col min-w-0 pr-2">
         <h1 className="text-base sm:text-xl font-black text-slate-900 tracking-tight truncate">{getTitle()}</h1>
         <p className="text-xs text-slate-500 hidden md:block">{getSubtitle()}</p>
       </div>
@@ -116,28 +117,41 @@ export const Header: React.FC = () => {
         {/* PWA Install Button for Mobile & Desktop */}
         <PWAInstallButton />
 
-        {/* Quick Customer Store Tab Button */}
+        {/* Quick Customer Store Tab Button (Mobile & Desktop) */}
         {activeTab !== 'client-store' && (
           <button
             onClick={() => setActiveTab('client-store')}
-            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
-            title="Abrir Catálogo / Loja do Cliente para celular"
+            className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Abrir Catálogo / Loja do Cliente"
           >
             <ShoppingBag className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Loja do Cliente (WhatsApp)</span>
-            <span className="sm:hidden">Loja Zap</span>
+            <span className="hidden sm:inline">Loja do Cliente</span>
+            <span className="sm:hidden font-bold">Loja</span>
           </button>
         )}
 
-        {/* Quick Add Product Tab Button */}
+        {/* Quick Back to Inventory when in Store (Mobile & Desktop) */}
+        {activeTab === 'client-store' && (
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Ir para Estoque para Atualizar Produtos"
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Atualizar Produtos</span>
+            <span className="sm:hidden font-bold">Estoque</span>
+          </button>
+        )}
+
+        {/* Quick Add Product Tab Button (Desktop) */}
         {activeTab !== 'quick-add-product' && (
           <button
             onClick={() => setActiveTab('quick-add-product')}
-            className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
-            title="Cadastrar novo produto no celular"
+            className="hidden md:flex px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Cadastrar novo produto"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Add Produto</span>
+            <span>Add Produto</span>
           </button>
         )}
 
@@ -145,7 +159,7 @@ export const Header: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowCleanConfirm(true)}
-          className="px-2.5 py-2 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+          className="hidden sm:flex px-2.5 py-2 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl font-bold text-xs items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
           title="Zerar catálogo de produtos e vendas para entregar ao cliente"
         >
           <Sparkles className="w-3.5 h-3.5 text-indigo-500" />

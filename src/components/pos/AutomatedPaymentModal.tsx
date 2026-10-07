@@ -507,8 +507,8 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[94vh] relative">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[94dvh] max-w-3xl sm:rounded-3xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col relative">
         
         {/* ================= REAL-TIME BANKING PUSH NOTIFICATION ALERT ================= */}
         {bankAlert?.visible && (

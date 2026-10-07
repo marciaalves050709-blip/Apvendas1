@@ -15,7 +15,8 @@ import {
   Clock, 
   FileText,
   PlusCircle,
-  MinusCircle
+  MinusCircle,
+  X
 } from 'lucide-react';
 
 export const CashierView: React.FC = () => {
@@ -65,7 +66,7 @@ export const CashierView: React.FC = () => {
   const totalShiftSales = shiftSales.reduce((acc, s) => acc + s.total, 0);
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-8">
+    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-3 sm:p-6 lg:p-8">
       {/* Top Status Header */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="flex items-center gap-4">
@@ -303,18 +304,25 @@ export const CashierView: React.FC = () => {
 
       {/* Modal: Open / Close / Sangria / Suprimento */}
       {modalType && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
-              <h3 className="font-bold text-base">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] max-w-md sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            <div className="shrink-0 p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between z-10 border-b border-slate-800">
+              <h3 className="font-bold text-sm sm:text-base text-white">
                 {modalType === 'OPEN' && 'Abertura de Caixa'}
                 {modalType === 'CLOSE' && 'Fechamento de Caixa'}
                 {modalType === 'SUPRIMENTO' && 'Registrar Suprimento (Entrada de Troco)'}
                 {modalType === 'SANGRIA' && 'Registrar Sangria (Retirada de Dinheiro)'}
               </h3>
+              <button
+                type="button"
+                onClick={() => setModalType(null)}
+                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="p-6 flex flex-col gap-4">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 flex flex-col gap-4 pb-24 sm:pb-6">
               {modalType === 'OPEN' && (
                 <>
                   <div>
@@ -323,7 +331,7 @@ export const CashierView: React.FC = () => {
                       type="text"
                       value={inputOperator}
                       onChange={e => setInputOperator(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-600"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600"
                     />
                   </div>
                   <div>
@@ -334,7 +342,7 @@ export const CashierView: React.FC = () => {
                       placeholder="0.00"
                       value={inputAmount}
                       onChange={e => setInputAmount(e.target.value)}
-                      className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-lg font-mono font-bold focus:outline-none focus:border-indigo-600"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-lg font-mono font-bold focus:outline-none focus:border-indigo-600"
                     />
                   </div>
                 </>
@@ -342,7 +350,7 @@ export const CashierView: React.FC = () => {
 
               {modalType === 'CLOSE' && (
                 <>
-                  <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs">
+                  <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs">
                     <p className="text-indigo-900">
                       Saldo Calculado em Dinheiro: <strong>{formatCurrency(currentShift.finalCashCalculated)}</strong>
                     </p>
@@ -356,7 +364,7 @@ export const CashierView: React.FC = () => {
                       step="0.01"
                       value={inputAmount}
                       onChange={e => setInputAmount(e.target.value)}
-                      className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-lg font-mono font-bold focus:outline-none focus:border-indigo-600"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-lg font-mono font-bold focus:outline-none focus:border-indigo-600"
                     />
                   </div>
                   <div>
@@ -366,7 +374,7 @@ export const CashierView: React.FC = () => {
                       placeholder="Conferência de cartões ok, dinheiro fechado sem divergências..."
                       value={inputNotes}
                       onChange={e => setInputNotes(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-600"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600 resize-none"
                     />
                   </div>
                 </>
@@ -382,7 +390,7 @@ export const CashierView: React.FC = () => {
                       placeholder="0.00"
                       value={inputAmount}
                       onChange={e => setInputAmount(e.target.value)}
-                      className="w-full px-4 py-2 bg-white border border-slate-300 rounded-lg text-lg font-mono font-bold focus:outline-none focus:border-indigo-600"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-lg font-mono font-bold focus:outline-none focus:border-indigo-600"
                     />
                   </div>
                   <div>
@@ -392,18 +400,18 @@ export const CashierView: React.FC = () => {
                       placeholder="Ex: Pagamento de freteiro, reposição de moedas..."
                       value={inputReason}
                       onChange={e => setInputReason(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-600"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600"
                     />
                   </div>
                 </>
               )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+            <div className="shrink-0 p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 z-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => setModalType(null)}
-                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 rounded-lg text-xs font-bold text-slate-700 cursor-pointer"
+                className="px-4 py-2.5 border border-slate-300 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 cursor-pointer"
               >
                 Cancelar
               </button>
@@ -414,7 +422,7 @@ export const CashierView: React.FC = () => {
                   else if (modalType === 'CLOSE') handleClose();
                   else handleAddMovement();
                 }}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
               >
                 Confirmar
               </button>

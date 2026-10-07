@@ -54,10 +54,10 @@ export const ReceiptModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] max-w-md sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between no-print">
+        <div className="shrink-0 p-4 bg-slate-900 text-white flex items-center justify-between no-print border-b border-slate-800 z-10">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-400" />
             <h3 className="font-bold text-sm">Comprovante de Venda {sale.code}</h3>
@@ -210,7 +210,7 @@ export const ReceiptModal: React.FC = () => {
         </div>
 
         {/* Modal Actions */}
-        <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-2 no-print">
+        <div className="shrink-0 p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-2 no-print z-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button
             onClick={handleCopyText}
             className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"

@@ -18,6 +18,7 @@ import {
   Layers,
   ArrowUpDown
 } from 'lucide-react';
+import { getProductImage, CATEGORY_EMOJIS } from '../../utils/productImages';
 
 const CATEGORIES: (Category | 'ALL')[] = [
   'ALL',
@@ -126,7 +127,7 @@ export const InventoryView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-8">
+    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-3 sm:p-6 lg:p-8">
       {/* Top Inventory Summary Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
         <div className="bg-white p-5 border border-slate-200 rounded-xl shadow-xs flex items-center justify-between">
@@ -279,7 +280,119 @@ export const InventoryView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-x-auto">
+        {/* Mobile View: High Quality Responsive Cards (sm:hidden) */}
+        <div className="sm:hidden flex-1 overflow-y-auto p-3 space-y-3 pb-36">
+          {filteredProducts.map(prod => {
+            const status = getProductStatus(prod);
+            return (
+              <div
+                key={prod.id}
+                className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs flex flex-col gap-3"
+              >
+                <div className="flex items-start gap-3">
+                  <img
+                    src={getProductImage(prod.category, prod.imageUrl)}
+                    alt={prod.name}
+                    className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0 bg-slate-50"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md truncate">
+                        {CATEGORY_EMOJIS[prod.category] || '📦'} {prod.category}
+                      </span>
+                      <span className={`px-2 py-0.5 text-[9px] rounded-full font-bold uppercase tracking-wider shrink-0 ${status.badgeClass}`}>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-xs text-slate-900 mt-1 line-clamp-2 leading-tight">
+                      {prod.name}
+                    </h4>
+
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      SKU: {prod.sku} • {prod.unit}
+                    </p>
+                    {prod.location && (
+                      <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                        📍 {prod.location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pricing & Stock Details */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">Venda</span>
+                    <span className="text-xs font-black text-slate-900">{formatCurrency(prod.salePrice)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">Custo</span>
+                    <span className="text-xs font-bold text-slate-600">{formatCurrency(prod.costPrice)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">Estoque</span>
+                    <span className={`text-xs font-black ${status.label === 'BAIXO' || status.label === 'ZERADO' ? 'text-rose-600' : 'text-emerald-700'}`}>
+                      {prod.currentStock} {prod.unit.toLowerCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Big Touch-Friendly Action Buttons for Mobile */}
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setProductModalProduct(prod)}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Atualizar Dados</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStockModalProduct(prod)}
+                    title="Ajuste / Entrada de Estoque"
+                    className="px-3 py-2.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <ArrowDownToLine className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Estoque</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Excluir "${prod.name}" do estoque?`)) {
+                        deleteProduct(prod.id);
+                      }
+                    }}
+                    title="Excluir produto"
+                    className="p-2.5 text-rose-500 hover:bg-rose-50 border border-rose-200 rounded-xl cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredProducts.length === 0 && (
+            <div className="py-12 text-center bg-white rounded-2xl border border-slate-200 p-6">
+              <Boxes className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs font-bold text-slate-700">Nenhum produto encontrado</p>
+              <button
+                type="button"
+                onClick={() => setProductModalProduct('new')}
+                className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
+              >
+                Cadastrar Novo
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View: Full Comprehensive Table (hidden sm:block) */}
+        <div className="hidden sm:block flex-1 overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100">
               <tr>

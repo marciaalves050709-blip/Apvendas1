@@ -226,8 +226,8 @@ export const AccessPaywall: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col max-h-[94vh]">
+    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-0 sm:p-6 overflow-y-auto">
+      <div className="w-full max-w-2xl bg-white h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:rounded-3xl shadow-2xl border-0 sm:border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col">
         
         {/* Administrator Instant Release Header Bar */}
         <div className="bg-amber-100 border-b border-amber-300 px-4 py-2.5 flex items-center justify-between text-xs text-amber-950 shrink-0">

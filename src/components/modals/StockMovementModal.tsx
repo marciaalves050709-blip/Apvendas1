@@ -47,36 +47,38 @@ export const StockMovementModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] max-w-md sm:rounded-2xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
+        <div className="shrink-0 p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between z-10">
           <div>
             <h3 className="font-bold text-base">Movimentar Estoque</h3>
             <p className="text-xs text-slate-300 truncate max-w-xs">{product.name}</p>
           </div>
           <button
             onClick={() => setStockModalProduct(null)}
-            className="text-slate-400 hover:text-white p-1 rounded cursor-pointer"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
-          {/* Current Product Info Banner */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
-            <div>
-              <p className="font-mono text-[11px] text-slate-400">SKU: {product.sku}</p>
-              <p className="font-bold text-slate-900 mt-0.5">Estoque Atual:</p>
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {/* Scrollable Form Body */}
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 flex flex-col gap-4">
+            {/* Current Product Info Banner */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+              <div>
+                <p className="font-mono text-[11px] text-slate-400">SKU: {product.sku}</p>
+                <p className="font-bold text-slate-900 mt-0.5">Estoque Atual:</p>
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-mono font-black text-slate-900">
+                  {product.currentStock} {product.unit.toLowerCase()}
+                </span>
+                <p className="text-[10px] text-slate-400">Mínimo: {product.minStock} un</p>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-lg font-mono font-black text-slate-900">
-                {product.currentStock} {product.unit.toLowerCase()}
-              </span>
-              <p className="text-[10px] text-slate-400">Mínimo: {product.minStock} un</p>
-            </div>
-          </div>
 
           {/* Movement Type Selector */}
           <div>
@@ -214,18 +216,20 @@ export const StockMovementModal: React.FC = () => {
             </span>
           </div>
 
-          {/* Modal Actions */}
-          <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+          </div>
+
+          {/* Modal Actions - Sticky Bottom */}
+          <div className="shrink-0 p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <button
               type="button"
               onClick={() => setStockModalProduct(null)}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              className="px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
             >
               Salvar Movimentação
             </button>

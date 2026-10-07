@@ -218,8 +218,8 @@ export const SubscriptionModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-scale-up flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-5 overflow-y-auto">
+      <div className="w-full max-w-2xl bg-white h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:rounded-3xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden my-auto animate-scale-up flex flex-col">
         
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 flex items-start justify-between relative shrink-0">
@@ -651,7 +651,7 @@ export const SubscriptionModal: React.FC = () => {
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+        <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <span>Garantia de satisfação • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
           <button
             type="button"

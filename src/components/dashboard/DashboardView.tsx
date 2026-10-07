@@ -79,7 +79,7 @@ export const DashboardView: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50">
       {/* 4 Stat Cards */}
-      <section className="p-8 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
+      <section className="p-3 sm:p-6 lg:p-8 pb-3 sm:pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 shrink-0">
         {/* Card 1: Total Estoque */}
         <div className="bg-white p-6 border border-slate-200 rounded-xl shadow-xs hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between mb-2">
@@ -155,7 +155,7 @@ export const DashboardView: React.FC = () => {
       </section>
 
       {/* Main Content Grid: Table + Sales Summary */}
-      <section className="px-8 py-4 grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+      <section className="px-3 sm:px-6 lg:px-8 py-4 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 flex-1">
         {/* Left 2 Cols: Table */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl flex flex-col shadow-xs overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white">

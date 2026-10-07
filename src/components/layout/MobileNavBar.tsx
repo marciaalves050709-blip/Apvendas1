@@ -24,7 +24,7 @@ export const MobileNavBar: React.FC = () => {
     },
     {
       id: 'quick-add-product',
-      label: 'Add Produto',
+      label: 'Add / Atualizar',
       icon: <PlusCircle className="w-5 h-5" />,
     },
     {

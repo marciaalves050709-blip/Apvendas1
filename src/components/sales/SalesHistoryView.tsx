@@ -63,7 +63,7 @@ export const SalesHistoryView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-8">
+    <div className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-3 sm:p-6 lg:p-8">
       {/* Top Metric Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
         <div className="bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
