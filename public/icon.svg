@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="50%" stop-color="#3730a3"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="bagGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  
+  <!-- Subtle inner border -->
+  <rect x="8" y="8" width="496" height="496" rx="120" fill="none" stroke="#818cf8" stroke-width="4" stroke-opacity="0.25"/>
+
+  <!-- Main Shopping Bag / Register Graphic -->
+  <g filter="url(#shadow)">
+    <!-- Bag Handle -->
+    <path d="M 196 170 C 196 120, 316 120, 316 170" fill="none" stroke="url(#goldGrad)" stroke-width="26" stroke-linecap="round"/>
+
+    <!-- Bag Body -->
+    <path d="M 140 180 L 372 180 C 384 180, 394 190, 392 202 L 370 380 C 368 392, 358 400, 346 400 L 166 400 C 154 400, 144 392, 142 380 L 120 202 C 118 190, 128 180, 140 180 Z" fill="url(#bagGrad)"/>
+
+    <!-- Fold Crease Detail -->
+    <path d="M 150 200 L 362 200" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Fast Checkout Lightning / Spark Symbol -->
+    <path d="M 270 216 L 222 288 L 254 288 L 238 356 L 294 278 L 260 278 Z" fill="url(#bgGrad)"/>
+  </g>
+
+  <!-- Success Notification Badge (Emerald Floating Badge) -->
+  <g filter="url(#shadow)">
+    <circle cx="360" cy="150" r="48" fill="url(#accentGrad)"/>
+    <path d="M 342 150 L 354 162 L 378 138" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Bottom Mini Text -->
+  <text x="256" y="460" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" fill="#c7d2fe" text-anchor="middle" letter-spacing="4">APPVENDAS</text>
+</svg>

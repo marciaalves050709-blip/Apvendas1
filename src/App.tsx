@@ -19,6 +19,8 @@ import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
 import { SubscriptionModal } from './components/subscription/SubscriptionModal';
 import { AccessPaywall } from './components/subscription/AccessPaywall';
+import { MobileInstallBanner } from './components/pwa/MobileInstallBanner';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
 const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab } = useApp();
@@ -36,14 +38,15 @@ const MainLayout: React.FC = () => {
   }, [setActiveTab]);
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden select-none">
       {/* Sidebar (Desktop) */}
       <div className="hidden md:flex h-full">
         <Sidebar />
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pb-14 md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+        <MobileInstallBanner />
         <TrialBanner />
         <Header />
 
@@ -64,12 +67,13 @@ const MainLayout: React.FC = () => {
       {/* Mobile Bottom Navigation Bar */}
       <MobileNavBar />
 
-      {/* Global Modals, Paywall & Notifications */}
+      {/* Global Modals, Paywall, PWA & Notifications */}
       <AccessPaywall />
       <SubscriptionModal />
       <ReceiptModal />
       <StockMovementModal />
       <ProductFormModal />
+      <OfflineIndicator />
       <ToastContainer />
     </div>
   );

@@ -20,6 +20,7 @@ import {
   Clock
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 export const Sidebar: React.FC = () => {
   const { 
@@ -247,6 +248,9 @@ export const Sidebar: React.FC = () => {
             Pressione <strong>F2</strong> para abrir o PDV instantaneamente.
           </p>
         </div>
+
+        {/* PWA Mobile App Install Button */}
+        <PWAInstallButton variant="sidebar" />
       </nav>
 
       {/* Bottom User Bar */}

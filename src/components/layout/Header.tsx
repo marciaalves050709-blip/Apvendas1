@@ -17,6 +17,7 @@ import {
   Crown
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 export const Header: React.FC = () => {
   const { 
@@ -111,6 +112,9 @@ export const Header: React.FC = () => {
             </>
           )}
         </button>
+
+        {/* PWA Install Button for Mobile & Desktop */}
+        <PWAInstallButton />
 
         {/* Quick Customer Store Tab Button */}
         {activeTab !== 'client-store' && (
