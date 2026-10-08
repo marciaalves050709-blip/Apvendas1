@@ -15,6 +15,7 @@ import { ReportsView } from './components/reports/ReportsView';
 import { ReceiptModal } from './components/modals/ReceiptModal';
 import { StockMovementModal } from './components/modals/StockMovementModal';
 import { ProductFormModal } from './components/modals/ProductFormModal';
+import { CompanySettingsModal } from './components/modals/CompanySettingsModal';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
 import { SubscriptionModal } from './components/subscription/SubscriptionModal';
@@ -73,6 +74,7 @@ const MainLayout: React.FC = () => {
       <ReceiptModal />
       <StockMovementModal />
       <ProductFormModal />
+      <CompanySettingsModal />
       <OfflineIndicator />
       <ToastContainer />
     </div>

@@ -210,3 +210,16 @@ export interface SubscriptionState {
   activatedAt?: string;
   lastPaymentRef?: string;
 }
+
+export interface CompanyAccount {
+  id: string; // Unique workspace ID, e.g. "empresa_default" or "empresa_1712345678"
+  name: string; // Business name, e.g. "Mercado Silva"
+  slug: string; // URL-safe slug, e.g. "mercado-silva"
+  ownerName: string; // Owner name, e.g. "João Silva"
+  email?: string;
+  phone?: string;
+  category?: string;
+  logoEmoji?: string; // e.g. "🏪", "🛒", "📦", "🍕", "🧴"
+  createdAt: string;
+}
+

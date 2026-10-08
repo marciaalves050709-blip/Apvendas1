@@ -15,7 +15,10 @@ import {
   Sparkles,
   Trash2,
   Crown,
-  Package
+  Package,
+  Edit3,
+  Building2,
+  Users
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -36,7 +39,10 @@ export const Header: React.FC = () => {
     trialDaysRemaining,
     setIsSubscriptionModalOpen,
     clearAllForNewClient,
-    loadDemoData
+    loadDemoData,
+    currentCompany,
+    companies,
+    setIsCompanyModalOpen
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
@@ -81,6 +87,18 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Company Name & Multi-User Switcher Button */}
+        <button
+          type="button"
+          onClick={() => setIsCompanyModalOpen(true)}
+          className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-100 hover:bg-indigo-50 hover:border-indigo-300 text-slate-800 hover:text-indigo-900 border border-slate-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95 max-w-[130px] sm:max-w-[210px]"
+          title="Clique para mudar o nome da sua empresa ou trocar de usuário"
+        >
+          <span className="text-sm shrink-0">{currentCompany?.logoEmoji || '🏪'}</span>
+          <span className="truncate">{currentCompany?.name || 'appvendas'}</span>
+          <Edit3 className="w-3 h-3 text-slate-400 shrink-0" />
+        </button>
+
         {/* Subscription Plan / Admin Status Quick Button */}
         <button
           type="button"

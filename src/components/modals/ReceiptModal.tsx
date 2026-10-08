@@ -3,11 +3,14 @@ import { useApp } from '../../context/AppContext';
 import { Printer, X, CheckCircle, Share2, Copy, QrCode } from 'lucide-react';
 
 export const ReceiptModal: React.FC = () => {
-  const { receiptModalSale, setReceiptModalSale, showToast } = useApp();
+  const { receiptModalSale, setReceiptModalSale, showToast, currentCompany, paymentSettings } = useApp();
 
   if (!receiptModalSale) return null;
 
   const sale = receiptModalSale;
+  const companyTitle = (paymentSettings.merchantName || currentCompany?.name || 'Minha Empresa').toUpperCase();
+  const companyPhone = paymentSettings.merchantWhatsapp || '';
+  const companyCity = paymentSettings.merchantCity || 'São Paulo - SP';
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -21,9 +24,9 @@ export const ReceiptModal: React.FC = () => {
     const details = sale.paymentDetails;
     const lines = [
       '========================================',
-      '             APP DE VENDAS',
-      '       CNPJ: 12.345.678/0001-90',
-      '            São Paulo - SP',
+      `             ${companyTitle}`,
+      paymentSettings.pixKey ? `       PIX: ${paymentSettings.pixKey}` : '',
+      `            ${companyCity}`,
       '========================================',
       `CUPOM NÃO FISCAL: ${sale.code}`,
       `DATA: ${new Date(sale.createdAt).toLocaleDateString('pt-BR')} ${new Date(sale.createdAt).toLocaleTimeString('pt-BR')}`,
@@ -78,9 +81,12 @@ export const ReceiptModal: React.FC = () => {
           >
             {/* Store Banner */}
             <div className="text-center border-b border-dashed border-slate-400 pb-3 mb-3">
-              <h4 className="font-black text-sm uppercase tracking-tight">App vendas</h4>
-              <p className="text-[9px] text-slate-400">CNPJ: 12.345.678/0001-90 • Tel: (11) 3344-5566</p>
-              <p className="text-[9px] text-slate-400">São Paulo - SP</p>
+              <h4 className="font-black text-sm uppercase tracking-tight">{companyTitle}</h4>
+              <p className="text-[9px] text-slate-400">
+                {paymentSettings.pixKey ? `PIX: ${paymentSettings.pixKey}` : ''}
+                {companyPhone ? ` • Tel: ${companyPhone}` : ''}
+              </p>
+              <p className="text-[9px] text-slate-400">{companyCity}</p>
             </div>
 
             {/* Document Header */}

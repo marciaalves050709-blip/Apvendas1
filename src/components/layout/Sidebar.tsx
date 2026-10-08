@@ -17,7 +17,9 @@ import {
   Smartphone,
   ShieldCheck,
   Zap,
-  Clock
+  Clock,
+  Edit3,
+  Building2
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -33,7 +35,10 @@ export const Sidebar: React.FC = () => {
     isSubscribed,
     isTrialActive,
     trialDaysRemaining,
-    setIsSubscriptionModalOpen
+    setIsSubscriptionModalOpen,
+    currentCompany,
+    companies,
+    setIsCompanyModalOpen
   } = useApp();
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
@@ -95,21 +100,36 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-full shrink-0 select-none">
-      {/* Brand Header */}
-      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm">
-            A
+      {/* Brand Header with Dynamic Company Name */}
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setIsCompanyModalOpen(true)}
+          className="flex items-center gap-2.5 min-w-0 text-left hover:bg-slate-50 p-1.5 -m-1.5 rounded-xl transition-all cursor-pointer group w-full"
+          title="Clique para alterar o nome da empresa ou trocar de usuário"
+        >
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+            {currentCompany?.logoEmoji || '🏪'}
           </div>
-          <div>
-            <span className="font-black text-base tracking-tight uppercase text-slate-900 block leading-tight">
-              appvendas
-            </span>
-            <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">
-              Vendas & Estoque
-            </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-black text-sm tracking-tight uppercase text-slate-900 block leading-tight truncate">
+                {currentCompany?.name || 'appvendas'}
+              </span>
+              <Edit3 className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 shrink-0" />
+            </div>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase truncate">
+                {currentCompany?.ownerName || 'Vendas & Estoque'}
+              </span>
+              {companies.length > 1 && (
+                <span className="px-1 py-0.2 bg-slate-100 text-slate-600 rounded text-[9px] font-bold shrink-0">
+                  +{companies.length - 1}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Navigation */}

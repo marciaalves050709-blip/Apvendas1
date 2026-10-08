@@ -249,7 +249,7 @@ export const SubscriptionModal: React.FC = () => {
               )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
-              <span>appvendas Pro</span>
+              <span>{paymentSettings.merchantName || 'Sistema'} Pro</span>
               {(isMasterAdmin || isAdmin) && <span className="text-amber-400 text-base font-normal">(Admin Master)</span>}
             </h2>
             <p className="text-xs text-slate-300 mt-1 max-w-lg">
@@ -321,7 +321,7 @@ export const SubscriptionModal: React.FC = () => {
                   Regra do Administrador Confirmada:
                 </p>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Como proprietária e administradora do sistema <strong>appvendas</strong>, você tem acesso irrestrito a todos os recursos sem pagamento algum. A cobrança de R$ 58,94/mês é configurada para os clientes que comprarem o sistema de você.
+                  Como proprietária e administradora do sistema, você tem acesso irrestrito a todos os recursos sem pagamento algum. A cobrança de R$ 58,94/mês é configurada para os clientes que comprarem o sistema de você.
                 </p>
               </div>
 

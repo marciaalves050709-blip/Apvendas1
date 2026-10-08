@@ -165,7 +165,7 @@ export const QuickAddProductView: React.FC = () => {
             <span>Adicionar & Gerenciar Produtos</span>
           </h2>
           <p className="text-xs text-slate-500 hidden sm:block">
-            Cadastre novos produtos e controle preços e estoque facilmente pelo celular no appvendas.
+            Cadastre novos produtos e controle preços e estoque facilmente pelo celular na sua empresa.
           </p>
         </div>
 

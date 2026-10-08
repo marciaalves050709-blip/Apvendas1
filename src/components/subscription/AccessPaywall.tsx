@@ -356,7 +356,7 @@ export const AccessPaywall: React.FC = () => {
                 🎉 Transferência Pix de {formatCurrency(bankAlert.amount)} Recebida no {bankAlert.bankTag}!
               </p>
               <p className="text-xs text-emerald-100">
-                O pagamento foi identificado com sucesso. Código E2E: <strong className="font-mono text-[10px]">{bankAlert.e2eId}</strong>. Liberando acesso ao appvendas...
+                O pagamento foi identificado com sucesso. Código E2E: <strong className="font-mono text-[10px]">{bankAlert.e2eId}</strong>. Liberando acesso ao sistema...
               </p>
             </div>
           )}
@@ -481,7 +481,7 @@ export const AccessPaywall: React.FC = () => {
 
         {/* Paywall Footer */}
         <div className="p-3.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <span>appvendas • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
+          <span>{paymentSettings.merchantName || 'Sistema'} • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
           
           {/* Master Owner Security Access */}
           <button

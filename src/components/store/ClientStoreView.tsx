@@ -82,6 +82,7 @@ export const ClientStoreView: React.FC = () => {
     addCustomer, 
     addStockMovement,
     setProductModalProduct,
+    currentCompany,
     setActiveTab 
   } = useApp();
 
@@ -524,9 +525,7 @@ export const ClientStoreView: React.FC = () => {
               🛍️
             </div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-              {paymentSettings.merchantName && !paymentSettings.merchantName.toUpperCase().includes('DESCART') && !paymentSettings.merchantName.toUpperCase().includes('DISTRIBUIDORA') 
-                ? paymentSettings.merchantName 
-                : 'appvendas'}
+              {paymentSettings.merchantName || currentCompany?.name || 'Minha Loja'}
             </h1>
 
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 rounded-full text-[11px] font-semibold mt-2.5 text-emerald-50">
@@ -639,7 +638,7 @@ export const ClientStoreView: React.FC = () => {
                 onClick={() => setActiveTab('dashboard')}
                 className="hover:text-emerald-700 font-bold transition-colors text-[11px] flex items-center gap-1 cursor-pointer"
               >
-                Entrar no appvendas →
+                Entrar na Gestão →
               </button>
             </div>
           </form>
@@ -684,13 +683,13 @@ export const ClientStoreView: React.FC = () => {
 
         {/* Action icons */}
         <div className="flex items-center gap-2">
-          {/* Back to appvendas button */}
+          {/* Back to management button */}
           <button
             onClick={() => setActiveTab('dashboard')}
             className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
-            title="Entrar no sistema appvendas"
+            title="Ir para o Painel de Gestão"
           >
-            <span>Entrar no appvendas</span>
+            <span>Painel Gestão</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
 

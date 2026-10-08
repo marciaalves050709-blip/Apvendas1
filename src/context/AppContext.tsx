@@ -13,7 +13,8 @@ import {
   PaymentSettings,
   MovementType,
   Category,
-  SubscriptionState
+  SubscriptionState,
+  CompanyAccount
 } from '../types';
 import { sounds, formatCurrency } from '../utils/pixHelper';
 import confetti from 'canvas-confetti';
@@ -132,6 +133,18 @@ interface AppContextType {
   resetTrial: () => void;
   simulateTrialExpired: () => void;
   simulateTrialDay: (daysFromStart: number) => void;
+
+  // Multi-Company & Infinite Users Workspaces
+  companyName: string;
+  setCompanyName: (name: string) => void;
+  currentCompany: CompanyAccount;
+  companies: CompanyAccount[];
+  createCompany: (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }) => CompanyAccount;
+  switchCompany: (companyId: string) => void;
+  updateCurrentCompany: (data: Partial<CompanyAccount>) => void;
+  deleteCompany: (companyId: string) => boolean;
+  isCompanyModalOpen: boolean;
+  setIsCompanyModalOpen: (open: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -145,6 +158,14 @@ const STORAGE_KEYS = {
   SHIFT: 'descart_clean_shift_v1',
   PAYMENT_SETTINGS: 'descart_clean_payment_settings_v1',
   SUBSCRIPTION: 'descart_clean_subscription_v1',
+};
+
+const DEFAULT_COMPANY_ID = 'empresa_principal';
+const STORAGE_COMPANIES_KEY = 'appvendas_companies_list_v1';
+const STORAGE_ACTIVE_COMPANY_KEY = 'appvendas_active_company_id_v1';
+
+export const getTenantKey = (baseKey: string, companyId: string) => {
+  return `tenant_${companyId}_${baseKey}`;
 };
 
 export const ADMIN_CONFIG = {
@@ -170,7 +191,7 @@ export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
   trialStartDate: new Date().toISOString(),
   trialDurationDays: 5,
   planPrice: 58.94,
-  planName: 'Plano Pro appvendas (Estoque + PDV + Loja WhatsApp)',
+  planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
 };
 
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
@@ -187,85 +208,184 @@ const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  // Check URL params for deep-linking directly to a specific company/store
+  const initialUrlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const initialCompanyFromUrl = initialUrlParams?.get('empresa') || initialUrlParams?.get('loja');
+  const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTabFromUrl || (initialCompanyFromUrl ? 'client-store' : 'dashboard'));
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'ALL'>('ALL');
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
 
-  // Persistence loader with auto-migration from legacy name
+  // Multi-Company (Infinite Users) Workspaces
+  const [companies, setCompanies] = useState<CompanyAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_COMPANIES_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    const legacySettings = (() => {
+      try {
+        const s = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
+        return s ? JSON.parse(s) : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const initialCompany: CompanyAccount = {
+      id: DEFAULT_COMPANY_ID,
+      name: legacySettings?.merchantName || 'appvendas',
+      slug: (legacySettings?.merchantName || 'appvendas').toLowerCase().replace(/\s+/g, '-'),
+      ownerName: ADMIN_CONFIG.name,
+      phone: legacySettings?.merchantWhatsapp || '5511999998888',
+      email: ADMIN_CONFIG.email,
+      category: 'Comércio & Serviços',
+      logoEmoji: '🏪',
+      createdAt: new Date().toISOString()
+    };
+    return [initialCompany];
+  });
+
+  const [activeCompanyId, setActiveCompanyId] = useState<string>(() => {
+    if (initialCompanyFromUrl) return initialCompanyFromUrl;
+    try {
+      const saved = localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY);
+      if (saved) return saved;
+    } catch {
+      // fallback
+    }
+    return DEFAULT_COMPANY_ID;
+  });
+
+  // Active Company Object
+  const currentCompany = companies.find(c => c.id === activeCompanyId) || companies[0] || {
+    id: DEFAULT_COMPANY_ID,
+    name: 'appvendas',
+    slug: 'appvendas',
+    ownerName: ADMIN_CONFIG.name,
+    phone: '5511999998888',
+    email: ADMIN_CONFIG.email,
+    category: 'Comércio & Serviços',
+    logoEmoji: '🏪',
+    createdAt: new Date().toISOString()
+  };
+
+  // Company Name
+  const companyName = currentCompany.name;
+
+  // Persistence loader for PaymentSettings (customized per company workspace)
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
+      const tenantSaved = localStorage.getItem(getTenantKey('payment_settings', activeCompanyId));
+      if (tenantSaved) {
+        const parsed = JSON.parse(tenantSaved);
+        return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed };
+      }
       const saved = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (
-          !parsed.merchantName ||
-          parsed.merchantName.toUpperCase().includes('DESCART') ||
-          parsed.merchantName.toUpperCase().includes('DISTRIBUIDORA')
-        ) {
-          parsed.merchantName = 'appvendas';
-          try {
-            localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify({ ...DEFAULT_PAYMENT_SETTINGS, ...parsed, merchantName: 'appvendas' }));
-          } catch {
-            // ignore
-          }
-        }
-        return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed, merchantName: parsed.merchantName || 'appvendas' };
+        return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed, merchantName: currentCompany.name };
       }
-      return DEFAULT_PAYMENT_SETTINGS;
+      return { ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name };
     } catch {
-      return DEFAULT_PAYMENT_SETTINGS;
+      return { ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name };
     }
   });
 
+  // Products state (isolated per company)
   const [products, setProducts] = useState<Product[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+      const tenantSaved = localStorage.getItem(getTenantKey('products', activeCompanyId));
+      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+        return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+      }
+      return [];
     } catch {
       return INITIAL_PRODUCTS;
     }
   });
 
+  // Sales state (isolated per company)
   const [sales, setSales] = useState<Sale[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SALES);
-      return saved ? JSON.parse(saved) : INITIAL_SALES;
+      const tenantSaved = localStorage.getItem(getTenantKey('sales', activeCompanyId));
+      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        const saved = localStorage.getItem(STORAGE_KEYS.SALES);
+        return saved ? JSON.parse(saved) : INITIAL_SALES;
+      }
+      return [];
     } catch {
       return INITIAL_SALES;
     }
   });
 
+  // Movements state (isolated per company)
   const [movements, setMovements] = useState<StockMovement[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.MOVEMENTS);
-      return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
+      const tenantSaved = localStorage.getItem(getTenantKey('movements', activeCompanyId));
+      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        const saved = localStorage.getItem(STORAGE_KEYS.MOVEMENTS);
+        return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
+      }
+      return [];
     } catch {
       return INITIAL_MOVEMENTS;
     }
   });
 
+  // Customers state (isolated per company)
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-      return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
+      const tenantSaved = localStorage.getItem(getTenantKey('customers', activeCompanyId));
+      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        const saved = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+        return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
+      }
+      return [];
     } catch {
       return INITIAL_CUSTOMERS;
     }
   });
 
+  // Suppliers state (isolated per company)
   const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
-      return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
+      const tenantSaved = localStorage.getItem(getTenantKey('suppliers', activeCompanyId));
+      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        const saved = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
+        return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
+      }
+      return [];
     } catch {
       return INITIAL_SUPPLIERS;
     }
   });
 
+  // Cashier shift state (isolated per company)
   const [currentShift, setCurrentShift] = useState<CashierShift>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.SHIFT);
-      return saved ? JSON.parse(saved) : INITIAL_SHIFT;
+      const tenantSaved = localStorage.getItem(getTenantKey('shift', activeCompanyId));
+      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        const saved = localStorage.getItem(STORAGE_KEYS.SHIFT);
+        return saved ? JSON.parse(saved) : INITIAL_SHIFT;
+      }
+      return INITIAL_SHIFT;
     } catch {
       return INITIAL_SHIFT;
     }
@@ -489,38 +609,250 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('info', `Simulação do ${daysFromStart + 1}º Dia`, `Calculado com ${daysFromStart} dias passados.`);
   };
 
-  // Sync to local storage
+  // Persist companies list
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-  }, [products]);
+    try {
+      localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(companies));
+    } catch {
+      // ignore
+    }
+  }, [companies]);
+
+  // Persist active company ID
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, activeCompanyId);
+    } catch {
+      // ignore
+    }
+  }, [activeCompanyId]);
+
+  // Sync document title with current company name
+  useEffect(() => {
+    if (currentCompany?.name && typeof document !== 'undefined') {
+      document.title = `${currentCompany.name} - Gestão & Vendas`;
+    }
+  }, [currentCompany?.name]);
+
+  // Sync to local storage per-tenant (Multi-tenant isolation)
+  useEffect(() => {
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(products));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+      }
+    } catch {
+      // ignore
+    }
+  }, [products, activeCompanyId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
-  }, [sales]);
+    try {
+      localStorage.setItem(getTenantKey('sales', activeCompanyId), JSON.stringify(sales));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales));
+      }
+    } catch {
+      // ignore
+    }
+  }, [sales, activeCompanyId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify(movements));
-  }, [movements]);
+    try {
+      localStorage.setItem(getTenantKey('movements', activeCompanyId), JSON.stringify(movements));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify(movements));
+      }
+    } catch {
+      // ignore
+    }
+  }, [movements, activeCompanyId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
-  }, [customers]);
+    try {
+      localStorage.setItem(getTenantKey('customers', activeCompanyId), JSON.stringify(customers));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+      }
+    } catch {
+      // ignore
+    }
+  }, [customers, activeCompanyId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
-  }, [suppliers]);
+    try {
+      localStorage.setItem(getTenantKey('suppliers', activeCompanyId), JSON.stringify(suppliers));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
+      }
+    } catch {
+      // ignore
+    }
+  }, [suppliers, activeCompanyId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SHIFT, JSON.stringify(currentShift));
-  }, [currentShift]);
+    try {
+      localStorage.setItem(getTenantKey('shift', activeCompanyId), JSON.stringify(currentShift));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.SHIFT, JSON.stringify(currentShift));
+      }
+    } catch {
+      // ignore
+    }
+  }, [currentShift, activeCompanyId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(paymentSettings));
-  }, [paymentSettings]);
+    try {
+      localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(paymentSettings));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(paymentSettings));
+      }
+    } catch {
+      // ignore
+    }
+  }, [paymentSettings, activeCompanyId]);
 
   const updatePaymentSettings = (newSettings: Partial<PaymentSettings>) => {
     setPaymentSettings(prev => ({ ...prev, ...newSettings }));
-    showToast('success', 'Configurações de Pagamento', 'Preferências de Pix e Maquininha salvas com sucesso.');
+    showToast('success', 'Configurações Salvas', 'Preferências salvas com sucesso.');
+  };
+
+  // Set Company Name directly (Replaces "appvendas" everywhere)
+  const setCompanyName = (newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setCompanies(prev => prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: trimmed.toLowerCase().replace(/\s+/g, '-') } : c));
+    setPaymentSettings(prev => ({ ...prev, merchantName: trimmed }));
+    if (typeof document !== 'undefined') {
+      document.title = `${trimmed} - Gestão & Vendas`;
+    }
+    showToast('success', 'Nome da Empresa Salvo!', `O nome "${trimmed}" agora é o oficial em todo o sistema.`);
+  };
+
+  const updateCurrentCompany = (data: Partial<CompanyAccount>) => {
+    setCompanies(prev => prev.map(c => {
+      if (c.id === activeCompanyId) {
+        const updated = { ...c, ...data };
+        if (data.name) {
+          updated.slug = data.name.trim().toLowerCase().replace(/\s+/g, '-');
+          setPaymentSettings(ps => ({ ...ps, merchantName: data.name!.trim() }));
+          if (typeof document !== 'undefined') {
+            document.title = `${data.name.trim()} - Gestão & Vendas`;
+          }
+        }
+        return updated;
+      }
+      return c;
+    }));
+  };
+
+  const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }): CompanyAccount => {
+    const newId = `empresa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newComp: CompanyAccount = {
+      id: newId,
+      name: companyData.name.trim(),
+      slug: companyData.name.trim().toLowerCase().replace(/\s+/g, '-'),
+      ownerName: companyData.ownerName?.trim() || 'Usuário',
+      phone: companyData.phone?.trim() || '',
+      category: companyData.category || 'Comércio & Varejo',
+      logoEmoji: companyData.logoEmoji || '🏪',
+      createdAt: new Date().toISOString()
+    };
+
+    const initialTenantSettings: PaymentSettings = {
+      ...DEFAULT_PAYMENT_SETTINGS,
+      merchantName: newComp.name,
+      merchantWhatsapp: newComp.phone || ''
+    };
+
+    try {
+      localStorage.setItem(getTenantKey('products', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('sales', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('movements', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('customers', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('suppliers', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('payment_settings', newId), JSON.stringify(initialTenantSettings));
+    } catch {
+      // ignore
+    }
+
+    setCompanies(prev => [...prev, newComp]);
+    setActiveCompanyId(newId);
+
+    // Switch in-memory state cleanly
+    setProducts([]);
+    setSales([]);
+    setMovements([]);
+    setCustomers([]);
+    setSuppliers([]);
+    setPaymentSettings(initialTenantSettings);
+    setCart([]);
+
+    if (typeof document !== 'undefined') {
+      document.title = `${newComp.name} - Gestão & Vendas`;
+    }
+    return newComp;
+  };
+
+  const switchCompany = (companyId: string) => {
+    if (companyId === activeCompanyId) return;
+    const target = companies.find(c => c.id === companyId);
+    if (!target) return;
+
+    setActiveCompanyId(companyId);
+
+    const loadTenant = <T,>(key: string, fallback: T): T => {
+      try {
+        const val = localStorage.getItem(getTenantKey(key, companyId));
+        return val ? JSON.parse(val) : fallback;
+      } catch {
+        return fallback;
+      }
+    };
+
+    const loadedProds = loadTenant<Product[]>('products', companyId === DEFAULT_COMPANY_ID ? INITIAL_PRODUCTS : []);
+    const loadedSales = loadTenant<Sale[]>('sales', companyId === DEFAULT_COMPANY_ID ? INITIAL_SALES : []);
+    const loadedMoves = loadTenant<StockMovement[]>('movements', companyId === DEFAULT_COMPANY_ID ? INITIAL_MOVEMENTS : []);
+    const loadedCusts = loadTenant<Customer[]>('customers', companyId === DEFAULT_COMPANY_ID ? INITIAL_CUSTOMERS : []);
+    const loadedSupps = loadTenant<Supplier[]>('suppliers', companyId === DEFAULT_COMPANY_ID ? INITIAL_SUPPLIERS : []);
+    const loadedSettings = loadTenant<PaymentSettings>('payment_settings', { ...DEFAULT_PAYMENT_SETTINGS, merchantName: target.name });
+
+    setProducts(loadedProds);
+    setSales(loadedSales);
+    setMovements(loadedMoves);
+    setCustomers(loadedCusts);
+    setSuppliers(loadedSupps);
+    setPaymentSettings(loadedSettings);
+    setCart([]);
+
+    if (typeof document !== 'undefined') {
+      document.title = `${target.name} - Gestão & Vendas`;
+    }
+  };
+
+  const deleteCompany = (companyId: string): boolean => {
+    if (companies.length <= 1) {
+      showToast('error', 'Ação Não Permitida', 'Você precisa manter pelo menos 1 empresa cadastrada.');
+      return false;
+    }
+    const remaining = companies.filter(c => c.id !== companyId);
+    setCompanies(remaining);
+
+    try {
+      localStorage.removeItem(getTenantKey('products', companyId));
+      localStorage.removeItem(getTenantKey('sales', companyId));
+      localStorage.removeItem(getTenantKey('movements', companyId));
+      localStorage.removeItem(getTenantKey('customers', companyId));
+      localStorage.removeItem(getTenantKey('suppliers', companyId));
+      localStorage.removeItem(getTenantKey('payment_settings', companyId));
+    } catch {
+      // ignore
+    }
+
+    if (activeCompanyId === companyId) {
+      switchCompany(remaining[0].id);
+    }
+    return true;
   };
 
   // Toast helpers
@@ -1224,6 +1556,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetTrial,
         simulateTrialExpired,
         simulateTrialDay,
+        // Multi-Company & Infinite Users
+        companyName,
+        setCompanyName,
+        currentCompany,
+        companies,
+        createCompany,
+        switchCompany,
+        updateCurrentCompany,
+        deleteCompany,
+        isCompanyModalOpen,
+        setIsCompanyModalOpen,
       }}
     >
       {children}
