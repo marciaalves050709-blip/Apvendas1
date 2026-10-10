@@ -29,6 +29,7 @@ export const AccessPaywall: React.FC = () => {
   const {
     subscription,
     isTrialExpired,
+    isBlockedDueToDay5,
     isSubscribed,
     isMasterAdmin,
     isAdmin,
@@ -36,8 +37,11 @@ export const AccessPaywall: React.FC = () => {
     adminConfig,
     activateSubscription,
     resetTrial,
+    nextDueDateFormatted,
     paymentSettings
   } = useApp();
+
+  const isBlocked = Boolean((isTrialExpired || isBlockedDueToDay5) && !isMasterAdmin && !isAdmin);
 
   const [copiedPix, setCopiedPix] = useState(false);
   const [pixQrDataUrl, setPixQrDataUrl] = useState<string>('');
@@ -68,16 +72,16 @@ export const AccessPaywall: React.FC = () => {
 
   // Live Radar Pulse Animation
   useEffect(() => {
-    if (!isTrialExpired || isSubscribed) return;
+    if (!isBlocked) return;
     const interval = setInterval(() => {
       setRadarPulseCount(c => c + 1);
     }, 1400);
     return () => clearInterval(interval);
-  }, [isTrialExpired, isSubscribed]);
+  }, [isBlocked]);
 
   // Generate Validated Pix Payload (EMVCo / BR Code standard with CRC16)
   useEffect(() => {
-    if (!isTrialExpired || isSubscribed) return;
+    if (!isBlocked) return;
 
     try {
       const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -105,10 +109,10 @@ export const AccessPaywall: React.FC = () => {
     } catch {
       setPixPayloadCode(`PIX-DESCARTCLEAN-${planPrice}`);
     }
-  }, [isTrialExpired, isSubscribed, planPrice, paymentSettings]);
+  }, [isBlocked, planPrice, paymentSettings]);
 
-  // Only render if trial is expired, not subscribed, and NOT administrator
-  if (!isTrialExpired || isSubscribed || isMasterAdmin || isAdmin) {
+  // Only render if access is blocked (either trial expired or Day 5 passed without payment)
+  if (!isBlocked) {
     return null;
   }
 
@@ -225,7 +229,9 @@ export const AccessPaywall: React.FC = () => {
     const rawPhone = paymentSettings.merchantWhatsapp || '5511999998888';
     const cleanPhone = rawPhone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Olá! Meu período de teste de 2 dias do App de vendas acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
+      isBlockedDueToDay5
+        ? `Olá! Meu sistema foi bloqueado devido ao vencimento do dia 05 e realizei o pagamento via Pix da mensalidade de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
+        : `Olá! Meu período de teste de 2 dias do App de vendas acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
@@ -258,15 +264,23 @@ export const AccessPaywall: React.FC = () => {
           </div>
 
           <div className="inline-block px-3 py-1 bg-rose-500/20 border border-rose-400/40 text-rose-300 font-black text-[10px] uppercase rounded-full tracking-wider mb-1.5">
-            Período de Teste de 2 Dias Concluído
+            {isBlockedDueToDay5 ? '🚨 Vencimento do Dia 05 Ultrapassado' : 'Período de Teste de 2 Dias Concluído'}
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-            Acesso ao Sistema Bloqueado
+            {isBlockedDueToDay5 ? 'Acesso Bloqueado Imediatamente' : 'Acesso ao Sistema Bloqueado'}
           </h2>
 
           <p className="text-xs sm:text-sm text-rose-200 mt-1 max-w-lg mx-auto leading-relaxed">
-            Seus 2 dias de teste grátis terminaram. Efetue o pagamento de <strong>{formatCurrency(planPrice)}</strong> via Pix para liberar o acesso imediato.
+            {isBlockedDueToDay5 ? (
+              <>
+                A sua mensalidade venceu no <strong>dia 05</strong> e o acesso foi suspenso automaticamente por falta de pagamento. Realize o Pix de <strong>{formatCurrency(planPrice)}</strong> para restabelecer seu acesso imediatamente.
+              </>
+            ) : (
+              <>
+                Seus 2 dias de teste grátis terminaram. Efetue o pagamento de <strong>{formatCurrency(planPrice)}</strong> via Pix para liberar o acesso imediato com vencimento todo dia 05.
+              </>
+            )}
           </p>
         </div>
 

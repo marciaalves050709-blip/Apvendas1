@@ -37,6 +37,9 @@ export const Header: React.FC = () => {
     isAdmin,
     isTrialActive,
     trialDaysRemaining,
+    isDueWarningActive,
+    daysUntilDue,
+    nextDueDateFormatted,
     setIsSubscriptionModalOpen,
     clearAllForNewClient,
     loadDemoData,
@@ -106,17 +109,31 @@ export const Header: React.FC = () => {
           className={`px-3 py-2 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95 ${
             isMasterAdmin || isAdmin
               ? 'bg-gradient-to-r from-amber-50 to-emerald-50 text-amber-950 border border-amber-300 hover:border-amber-400'
+              : isDueWarningActive
+              ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 border-2 border-amber-600 animate-pulse'
               : isSubscribed
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
               : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
           }`}
-          title={isMasterAdmin || isAdmin ? 'Licença Mestra de Administradora (Isenta de Cobrança)' : 'Ver status da licença'}
+          title={
+            isMasterAdmin || isAdmin
+              ? 'Licença Mestra de Administradora (Isenta de Cobrança)'
+              : isDueWarningActive
+              ? `Mensalidade vence dia 05 (${nextDueDateFormatted}). Clique para renovar!`
+              : 'Ver status da licença'
+          }
         >
           {isMasterAdmin || isAdmin ? (
             <>
               <Crown className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">Admin Vitalício (Grátis)</span>
               <span className="sm:hidden font-black">Admin 👑</span>
+            </>
+          ) : isDueWarningActive ? (
+            <>
+              <Clock className="w-3.5 h-3.5 text-slate-950 animate-bounce" />
+              <span className="hidden sm:inline font-black">Vence Dia 05 ({daysUntilDue === 0 ? 'Hoje' : `${daysUntilDue}d`})</span>
+              <span className="sm:hidden font-black">Dia 05 ⚠️</span>
             </>
           ) : isSubscribed ? (
             <>

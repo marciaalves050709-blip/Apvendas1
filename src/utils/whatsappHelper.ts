@@ -1,4 +1,4 @@
-import { CartItem, PaymentMethod, PaymentSettings } from '../types';
+import { CartItem, PaymentMethod, PaymentSettings, SellerProfile } from '../types';
 import { formatCurrency } from './pixHelper';
 
 export interface CustomerOrderData {
@@ -15,6 +15,10 @@ export interface CustomerOrderData {
   cartTotal: number;
   notes?: string;
   createdAt: string;
+  sellerId?: string;
+  sellerName?: string;
+  sellerWhatsapp?: string;
+  sellerPixKey?: string;
 }
 
 /**
@@ -81,7 +85,8 @@ export function getPaymentMethodName(method: PaymentMethod, changeFor?: number):
  */
 export function buildWhatsAppOrderMessage(
   order: CustomerOrderData,
-  settings: PaymentSettings
+  settings: PaymentSettings,
+  seller?: SellerProfile
 ): string {
   const dateStr = new Date(order.createdAt).toLocaleDateString('pt-BR');
   const timeStr = new Date(order.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -90,6 +95,17 @@ export function buildWhatsAppOrderMessage(
   msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
   msg += `📋 *Pedido:* \`#${order.orderCode}\`\n`;
   msg += `📅 *Data:* ${dateStr} às ${timeStr}\n\n`;
+
+  if (seller?.name || order.sellerName) {
+    const sName = seller?.name || order.sellerName;
+    const sPhone = seller?.whatsapp || order.sellerWhatsapp;
+    msg += `👨‍💼 *ATENDIMENTO / VENDEDOR*\n`;
+    msg += `• *Vendedor:* ${sName}\n`;
+    if (sPhone) {
+      msg += `• *Contato:* ${formatPhoneDisplay(sPhone)}\n`;
+    }
+    msg += `\n`;
+  }
   
   msg += `👤 *DADOS DO CLIENTE*\n`;
   msg += `• *Nome:* ${order.customerName}\n`;
@@ -125,9 +141,16 @@ export function buildWhatsAppOrderMessage(
   msg += `• ${getPaymentMethodName(order.paymentMethod, order.cashChangeFor)}\n`;
   
   if (order.paymentMethod === 'PIX') {
-    msg += `• *Chave Pix (${settings.pixKeyType}):* \`${settings.pixKey}\`\n`;
-    msg += `• *Favorecido:* ${settings.merchantName}\n`;
-    msg += `• *Banco:* ${settings.receivingBank}\n`;
+    const activePixKey = seller?.pixKey || order.sellerPixKey || settings.pixKey;
+    const activePixType = seller?.pixKeyType || settings.pixKeyType;
+    const activeFavorecido = seller?.merchantName || seller?.name || settings.merchantName;
+    const activeBank = seller?.receivingBank || settings.receivingBank;
+    const activeCity = seller?.merchantCity || settings.merchantCity || 'Barcarena PA';
+
+    msg += `• *Chave Pix (${activePixType}):* \`${activePixKey}\`\n`;
+    msg += `• *Favorecido / Vendedor:* ${activeFavorecido}\n`;
+    msg += `• *Banco:* ${activeBank}\n`;
+    msg += `• *Cidade:* ${activeCity}\n`;
     msg += `_(Por favor, anexe o comprovante do Pix após a transferência)_\n`;
   }
   
@@ -141,10 +164,12 @@ export function buildWhatsAppOrderMessage(
  */
 export function generateWhatsAppLink(
   order: CustomerOrderData,
-  settings: PaymentSettings
+  settings: PaymentSettings,
+  seller?: SellerProfile
 ): string {
-  const rawPhone = formatPhoneToWhatsApp(settings.merchantWhatsapp || '5511999998888');
-  const message = buildWhatsAppOrderMessage(order, settings);
+  const targetPhone = seller?.whatsapp || order.sellerWhatsapp || settings.merchantWhatsapp || '5511999998888';
+  const rawPhone = formatPhoneToWhatsApp(targetPhone);
+  const message = buildWhatsAppOrderMessage(order, settings, seller);
   const encoded = encodeURIComponent(message);
   return `https://wa.me/${rawPhone}?text=${encoded}`;
 }

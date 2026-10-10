@@ -83,7 +83,11 @@ export const ClientStoreView: React.FC = () => {
     addStockMovement,
     setProductModalProduct,
     currentCompany,
-    setActiveTab 
+    setActiveTab,
+    activeSeller,
+    sellers,
+    isSellerWhatsappModalOpen,
+    setIsSellerWhatsappModalOpen
   } = useApp();
 
   // Client Session State
@@ -138,8 +142,9 @@ export const ClientStoreView: React.FC = () => {
   const [radarPulseCount, setRadarPulseCount] = useState(0);
 
   const activeBank = useMemo(() => {
-    return BANKS_LIST.find(b => b.id === (paymentSettings.receivingBank || 'NUBANK')) || BANKS_LIST[0];
-  }, [paymentSettings.receivingBank]);
+    const bankId = activeSeller?.receivingBank || paymentSettings.receivingBank || 'NUBANK';
+    return BANKS_LIST.find(b => b.id === bankId) || BANKS_LIST[0];
+  }, [activeSeller?.receivingBank, paymentSettings.receivingBank]);
 
   // Live Banking Pulse Radar when waiting for Pix
   useEffect(() => {
@@ -193,10 +198,6 @@ export const ClientStoreView: React.FC = () => {
     );
   };
   
-  // WhatsApp Settings Quick Popover
-  const [isSettingWhatsappOpen, setIsSettingWhatsappOpen] = useState(false);
-  const [tempWhatsapp, setTempWhatsapp] = useState(paymentSettings.merchantWhatsapp || '5511999998888');
-
   // Format phone input
   const handlePhoneChange = (val: string) => {
     const digits = val.replace(/\D/g, '').slice(0, 11);
@@ -396,9 +397,9 @@ export const ClientStoreView: React.FC = () => {
   useEffect(() => {
     if (paymentMethod === 'PIX' && cartTotal > 0) {
       const pixObj = generatePixPayload({
-        pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
-        merchantName: paymentSettings.merchantName || 'APP DE VENDAS',
-        merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
+        pixKey: activeSeller?.pixKey || paymentSettings.pixKey || '12.345.678/0001-90',
+        merchantName: (activeSeller?.merchantName || activeSeller?.name || paymentSettings.merchantName || 'APP DE VENDAS').toUpperCase(),
+        merchantCity: activeSeller?.merchantCity || paymentSettings.merchantCity || 'Barcarena PA',
         amount: cartTotal,
         txId: 'PED' + Math.floor(1000 + Math.random() * 9000),
       });
@@ -407,7 +408,7 @@ export const ClientStoreView: React.FC = () => {
         .then(url => setPixQrDataUrl(url))
         .catch(() => setPixQrDataUrl(''));
     }
-  }, [paymentMethod, cartTotal, paymentSettings]);
+  }, [paymentMethod, cartTotal, activeSeller, paymentSettings]);
 
   // Finalize Order and Send to WhatsApp with strict stock safety
   const handleSendOrderToWhatsApp = () => {
@@ -449,14 +450,18 @@ export const ClientStoreView: React.FC = () => {
       cartTotal,
       notes: orderNotes.trim() || undefined,
       createdAt: new Date().toISOString(),
+      sellerId: activeSeller?.id,
+      sellerName: activeSeller?.name,
+      sellerWhatsapp: activeSeller?.whatsapp,
+      sellerPixKey: activeSeller?.pixKey,
     };
 
     // Deduct inventory items so stock is accurately reserved/sold
     detailedCart.forEach(item => {
       addStockMovement(item.product.id, 'SAIDA_VENDA', item.quantity, {
-        reason: `Pedido WhatsApp #${orderNumber} (${clientUser.name})`,
+        reason: `Pedido WhatsApp #${orderNumber} (${clientUser.name} - Vendedor: ${activeSeller?.name || 'Geral'})`,
         documentRef: `WA-${orderNumber}`,
-        user: clientUser.name,
+        user: activeSeller?.name || clientUser.name,
       });
     });
 
@@ -476,42 +481,30 @@ export const ClientStoreView: React.FC = () => {
     clearClientCart();
 
     // Build URL and open WhatsApp in new tab
-    const waUrl = generateWhatsAppLink(orderData, paymentSettings);
+    const waUrl = generateWhatsAppLink(orderData, paymentSettings, activeSeller);
     window.open(waUrl, '_blank');
 
-    showToast('success', 'Pedido Gerado!', 'Redirecionando para o WhatsApp do vendedor com os detalhes da compra.');
+    showToast('success', 'Pedido Gerado!', `Redirecionando para o WhatsApp do vendedor (${activeSeller?.name || 'Vendedor'}) com os detalhes da compra.`);
   };
 
   // Copy Pix Key
   const handleCopyPix = () => {
-    if (!paymentSettings.pixKey) return;
-    navigator.clipboard.writeText(paymentSettings.pixKey);
+    const keyToCopy = activeSeller?.pixKey || paymentSettings.pixKey;
+    if (!keyToCopy) return;
+    navigator.clipboard.writeText(keyToCopy);
     setCopiedPixKey(true);
-    showToast('info', 'Copiado!', 'Chave Pix copiada para a área de transferência.');
+    showToast('info', 'Copiado!', `Chave Pix (${keyToCopy}) copiada para a área de transferência.`);
     setTimeout(() => setCopiedPixKey(false), 2500);
   };
 
   // Copy Full Message
   const handleCopyOrderText = () => {
     if (!completedOrder) return;
-    const msg = buildWhatsAppOrderMessage(completedOrder, paymentSettings);
+    const msg = buildWhatsAppOrderMessage(completedOrder, paymentSettings, activeSeller);
     navigator.clipboard.writeText(msg);
     setCopiedOrderText(true);
     showToast('info', 'Texto Copiado!', 'Você pode colar diretamente no chat do WhatsApp.');
     setTimeout(() => setCopiedOrderText(false), 2500);
-  };
-
-  // Save WhatsApp settings
-  const handleSaveWhatsapp = (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = tempWhatsapp.replace(/\D/g, '');
-    if (clean.length < 9) {
-      showToast('error', 'Número Inválido', 'Digite o DDD + Número do WhatsApp.');
-      return;
-    }
-    updatePaymentSettings({ merchantWhatsapp: tempWhatsapp });
-    setIsSettingWhatsappOpen(false);
-    showToast('success', 'WhatsApp Salvo!', `Pedidos serão enviados para ${formatPhoneDisplay(tempWhatsapp)}.`);
   };
 
   // STEP 1: Identification Screen (Ultra Simple & 100% Mobile Accessible)
@@ -679,12 +672,15 @@ export const ClientStoreView: React.FC = () => {
 
           {/* WhatsApp Destination Config */}
           <button
-            onClick={() => setIsSettingWhatsappOpen(true)}
-            title="Configurar WhatsApp que recebe os pedidos"
-            className="p-2 text-slate-600 hover:text-emerald-600 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
+            onClick={() => setIsSellerWhatsappModalOpen(true)}
+            title="Configurar WhatsApp, Chave Pix e QR Code do Vendedor"
+            className="p-1.5 sm:p-2 text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-slate-200 bg-white shadow-2xs"
           >
-            <Send className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">WhatsApp do Vendedor</span>
+            <Send className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="hidden sm:inline">WhatsApp & Pix:</span>
+            <span className="font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded-md text-[11px] truncate max-w-[90px] sm:max-w-none">
+              {activeSeller?.name || 'Vendedor'}
+            </span>
           </button>
 
           {/* Cart Trigger Button */}
@@ -1311,11 +1307,11 @@ export const ClientStoreView: React.FC = () => {
 
                 {/* Pix Quick Info */}
                 {paymentMethod === 'PIX' && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold flex items-center gap-1">
                         <QrCode className="w-3.5 h-3.5 text-emerald-700" />
-                        Chave Pix: {paymentSettings.pixKey}
+                        Chave Pix: {activeSeller?.pixKey || paymentSettings.pixKey}
                       </span>
                       <button
                         type="button"
@@ -1324,6 +1320,16 @@ export const ClientStoreView: React.FC = () => {
                       >
                         {copiedPixKey ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                         <span>{copiedPixKey ? 'Copiado!' : 'Copiar Chave'}</span>
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-emerald-800 pt-1.5 border-t border-emerald-200/60">
+                      <span>Vendedor: <strong>{activeSeller?.name}</strong> ({activeBank.shortName})</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSellerWhatsappModalOpen(true)}
+                        className="text-[10px] text-emerald-700 hover:text-emerald-900 underline font-bold cursor-pointer"
+                      >
+                        Alterar Pix / Vendedor
                       </button>
                     </div>
                   </div>
@@ -1520,7 +1526,7 @@ export const ClientStoreView: React.FC = () => {
                       className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-all"
                     >
                       {copiedPixKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedPixKey ? 'Chave Pix Copiada!' : `Copiar Chave Pix (${paymentSettings.pixKey})`}</span>
+                      <span>{copiedPixKey ? 'Chave Pix Copiada!' : `Copiar Chave Pix (${activeSeller?.pixKey || paymentSettings.pixKey})`}</span>
                     </button>
 
                     {/* Instant Simulation Action */}
@@ -1541,13 +1547,13 @@ export const ClientStoreView: React.FC = () => {
               {/* Action Buttons */}
               <div className="space-y-2 pt-2">
                 <a
-                  href={generateWhatsAppLink(completedOrder, paymentSettings)}
+                  href={generateWhatsAppLink(completedOrder, paymentSettings, activeSeller)}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Reabrir WhatsApp do Vendedor</span>
+                  <span>Reabrir WhatsApp do Vendedor ({activeSeller?.name || 'Vendedor'})</span>
                 </a>
 
                 <button
@@ -1575,53 +1581,6 @@ export const ClientStoreView: React.FC = () => {
         </div>
       )}
 
-      {/* WhatsApp Setting Quick Modal */}
-      {isSettingWhatsappOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <h3 className="font-bold text-sm text-slate-900">WhatsApp do Vendedor</h3>
-              </div>
-              <button
-                onClick={() => setIsSettingWhatsappOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Digite o número de WhatsApp para onde os clientes enviarão os pedidos do catálogo mobile.
-            </p>
-
-            <form onSubmit={handleSaveWhatsapp} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Número de Celular / WhatsApp
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 5511999998888 ou 11 98765-4321"
-                  value={tempWhatsapp}
-                  onChange={e => setTempWhatsapp(e.target.value)}
-                  className="w-full px-3.5 py-3 border border-slate-300 rounded-xl text-xs font-medium bg-slate-50 focus:bg-white focus:border-emerald-600 outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer"
-              >
-                Salvar Número do WhatsApp
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
       {/* Modal Alerta de Produto Indisponível */}
       {unavailableModalProduct && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">

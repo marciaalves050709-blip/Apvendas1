@@ -42,6 +42,9 @@ export const SubscriptionModal: React.FC = () => {
     isTrialActive,
     trialDaysRemaining,
     trialHoursRemaining,
+    isDueWarningActive,
+    daysUntilDue,
+    isBlockedDueToDay5,
     activateSubscription,
     paymentSettings
   } = useApp();
@@ -57,6 +60,7 @@ export const SubscriptionModal: React.FC = () => {
   const [radarPulseCount, setRadarPulseCount] = useState(0);
   const [selectedBankId, setSelectedBankId] = useState<string>(paymentSettings.receivingBank || 'NUBANK');
   const [copiedAdminKey, setCopiedAdminKey] = useState(false);
+  const [forceShowRenewalPayment, setForceShowRenewalPayment] = useState(false);
 
   // Real-time Bank Alert state
   const [bankAlert, setBankAlert] = useState<{
@@ -386,13 +390,23 @@ export const SubscriptionModal: React.FC = () => {
             </div>
           ) : (
             /* Status & Price Card for Client */
-            <div className="bg-gradient-to-br from-indigo-50 to-slate-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className={`border-2 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all ${
+              isDueWarningActive
+                ? 'bg-amber-50 border-amber-300 shadow-sm'
+                : isBlockedDueToDay5
+                ? 'bg-rose-50 border-rose-300 shadow-sm'
+                : 'bg-gradient-to-br from-indigo-50 to-slate-50 border-indigo-200'
+            }`}>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-black uppercase text-indigo-900 tracking-wider">
                     Plano Mensal Completo
                   </span>
-                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                    isDueWarningActive
+                      ? 'bg-amber-200 text-amber-950 font-black'
+                      : 'bg-indigo-100 text-indigo-800'
+                  }`}>
                     Vencimento Todo Dia 05
                   </span>
                 </div>
@@ -403,14 +417,28 @@ export const SubscriptionModal: React.FC = () => {
                   <span className="text-xs text-slate-500 font-bold">/mês</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1">
-                  {isSubscribed 
-                    ? `✅ Assinatura ativa! Próximo vencimento: ${nextDueDateFormatted}.`
+                  {isDueWarningActive
+                    ? `⚠️ Atenção: sua mensalidade vence dia 05 (${nextDueDateFormatted}). Renove antes para não ter o sistema bloqueado imediatamente!`
+                    : isBlockedDueToDay5
+                    ? `⛔ Sistema bloqueado: O vencimento do dia 05 foi ultrapassado. Renove via Pix para desbloquear imediatamente.`
+                    : isSubscribed 
+                    ? `✅ Assinatura ativa! Próximo vencimento: ${nextDueDateFormatted} (Dia 05).`
                     : `2 dias grátis para teste. Renovação mensal todo dia 05 (${nextDueDateFormatted}).`}
                 </p>
               </div>
 
               <div className="shrink-0 w-full sm:w-auto text-right">
-                {isSubscribed ? (
+                {isDueWarningActive ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-200 text-amber-950 border border-amber-400 rounded-xl text-xs font-black animate-pulse">
+                    <Clock className="w-4 h-4 text-amber-800 animate-bounce" />
+                    <span>Vence em {daysUntilDue} {daysUntilDue === 1 ? 'dia' : 'dias'} (Dia 05)</span>
+                  </div>
+                ) : isBlockedDueToDay5 ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-200 text-rose-950 border border-rose-400 rounded-xl text-xs font-black">
+                    <Lock className="w-4 h-4 text-rose-800" />
+                    <span>Bloqueado (Dia 05)</span>
+                  </div>
+                ) : isSubscribed ? (
                   <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-black">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span>Acesso Total Ativo</span>
@@ -422,6 +450,22 @@ export const SubscriptionModal: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* If subscribed and not warning, offer option to pre-pay renewal */}
+          {isSubscribed && !isDueWarningActive && !isBlockedDueToDay5 && !forceShowRenewalPayment && !(isMasterAdmin || isAdmin) && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+              <span className="text-emerald-900 font-semibold">
+                Sua mensalidade está em dia até <strong>{nextDueDateFormatted}</strong>.
+              </span>
+              <button
+                type="button"
+                onClick={() => setForceShowRenewalPayment(true)}
+                className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs cursor-pointer shadow-xs"
+              >
+                Antecipar Renovação
+              </button>
             </div>
           )}
 
@@ -441,7 +485,7 @@ export const SubscriptionModal: React.FC = () => {
           </div>
 
           {/* Real-Time Bank Webhook Radar Card */}
-          {!isSubscribed && (
+          {(!isSubscribed || isDueWarningActive || isBlockedDueToDay5 || forceShowRenewalPayment) && (
             <div className="p-3.5 rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/90 to-slate-50 text-slate-800 shadow-xs">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -497,7 +541,7 @@ export const SubscriptionModal: React.FC = () => {
           )}
 
           {/* Payment / Activation Options */}
-          {!isSubscribed && (
+          {(!isSubscribed || isDueWarningActive || isBlockedDueToDay5 || forceShowRenewalPayment) && (
             <div className="space-y-4 pt-2 border-t border-slate-100">
               
               {/* Tab Selector: Pix vs Activation Code */}

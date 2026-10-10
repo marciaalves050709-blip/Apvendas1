@@ -19,7 +19,8 @@ import {
   Zap,
   Clock,
   Edit3,
-  Building2
+  Building2,
+  QrCode
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -35,10 +36,15 @@ export const Sidebar: React.FC = () => {
     isSubscribed,
     isTrialActive,
     trialDaysRemaining,
+    isDueWarningActive,
+    daysUntilDue,
+    nextDueDateFormatted,
     setIsSubscriptionModalOpen,
     currentCompany,
     companies,
-    setIsCompanyModalOpen
+    setIsCompanyModalOpen,
+    setIsSellerWhatsappModalOpen,
+    activeSeller
   } = useApp();
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
@@ -168,6 +174,23 @@ export const Sidebar: React.FC = () => {
           );
         })}
 
+        <button
+          onClick={() => setIsSellerWhatsappModalOpen(true)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-950 border border-emerald-200 hover:bg-emerald-100 transition-all cursor-pointer group shadow-2xs"
+          title="Configurar WhatsApp e Chaves Pix de cada vendedor"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <QrCode className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+            <div className="text-left min-w-0">
+              <span className="block text-xs font-bold leading-tight truncate">Pix & WhatsApp Vendedor</span>
+              <span className="text-[10px] text-emerald-700 block truncate">{activeSeller?.name || 'Vendedor'}</span>
+            </div>
+          </div>
+          <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-md font-black shrink-0">
+            PIX
+          </span>
+        </button>
+
         <div className="px-3 pt-3 pb-1 border-t border-slate-100 mt-1">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Painel & Gestão</p>
         </div>
@@ -212,13 +235,20 @@ export const Sidebar: React.FC = () => {
 
         {/* Subscription Plan & Trial Status Card */}
         <div className={`mt-3 p-3 rounded-xl border text-xs transition-all ${
-          isSubscribed 
-            ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' 
-            : 'bg-indigo-50/80 border-indigo-200 text-indigo-950 shadow-xs'
+          isDueWarningActive
+            ? 'bg-amber-50 border-amber-300 text-amber-950 shadow-sm animate-pulse-subtle'
+            : isSubscribed 
+              ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950' 
+              : 'bg-indigo-50/80 border-indigo-200 text-indigo-950 shadow-xs'
         }`}>
           <div className="flex items-center justify-between mb-1.5">
             <span className="font-black text-[11px] uppercase tracking-wide flex items-center gap-1">
-              {isSubscribed ? (
+              {isDueWarningActive ? (
+                <>
+                  <Clock className="w-3.5 h-3.5 text-amber-700 animate-bounce" />
+                  <span>Vence Dia 05</span>
+                </>
+              ) : isSubscribed ? (
                 <>
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Plano Pro Ativo</span>
@@ -232,29 +262,47 @@ export const Sidebar: React.FC = () => {
             </span>
 
             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-              isSubscribed ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
+              isDueWarningActive
+                ? 'bg-amber-300 text-amber-950'
+                : isSubscribed 
+                  ? 'bg-emerald-200 text-emerald-900' 
+                  : 'bg-amber-200 text-amber-900'
             }`}>
-              {isSubscribed ? 'Ativo' : `${trialDaysRemaining}d restantes`}
+              {isDueWarningActive 
+                ? (daysUntilDue === 0 ? 'Vence Hoje' : `${daysUntilDue}d p/ vencer`)
+                : isSubscribed 
+                  ? 'Em dia' 
+                  : `${trialDaysRemaining}d restantes`}
             </span>
           </div>
 
           <p className="text-[10px] text-slate-600 leading-tight mb-2">
-            {isSubscribed 
-              ? 'Todos os módulos liberados sem restrições.'
-              : `Aproveite o teste de 2 dias. Assinatura: ${formatCurrency(subscription.planPrice)}/mês.`}
+            {isDueWarningActive
+              ? `Atenção: vence dia 05 (${nextDueDateFormatted}). Renove para evitar bloqueio imediato.`
+              : isSubscribed 
+                ? `Próximo vencimento: ${nextDueDateFormatted} (Dia 05).`
+                : `Aproveite o teste de 2 dias. Assinatura: ${formatCurrency(subscription.planPrice)}/mês.`}
           </p>
 
           <button
             type="button"
             onClick={() => setIsSubscriptionModalOpen(true)}
             className={`w-full py-1.5 px-2 rounded-lg font-black text-[11px] flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer ${
-              isSubscribed
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'
+              isDueWarningActive
+                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm active:scale-95'
+                : isSubscribed
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'
             }`}
           >
-            <Zap className="w-3 h-3 fill-white" />
-            <span>{isSubscribed ? 'Ver Licença' : `Assinar por ${formatCurrency(subscription.planPrice)}`}</span>
+            <Zap className={`w-3 h-3 ${isDueWarningActive ? 'fill-slate-950' : 'fill-white'}`} />
+            <span>
+              {isDueWarningActive 
+                ? `Renovar Agora (${formatCurrency(subscription.planPrice)})` 
+                : isSubscribed 
+                  ? 'Ver Licença' 
+                  : `Assinar por ${formatCurrency(subscription.planPrice)}`}
+            </span>
           </button>
         </div>
 

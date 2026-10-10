@@ -38,6 +38,7 @@ export const CompanySettingsModal: React.FC = () => {
     updatePaymentSettings, 
     isCompanyModalOpen, 
     setIsCompanyModalOpen, 
+    setIsSellerWhatsappModalOpen,
     showToast,
     products 
   } = useApp();
@@ -332,6 +333,33 @@ export const CompanySettingsModal: React.FC = () => {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-indigo-600"
                   />
                 </div>
+              </div>
+
+              {/* Vendedores & Pix Individual */}
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      WhatsApp & Pix dos Vendedores
+                    </p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      Cadastre cada vendedor para receber compras direto no Pix dele com QR Code
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCompanyModalOpen(false);
+                    setIsSellerWhatsappModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shrink-0 cursor-pointer transition-colors shadow-xs"
+                >
+                  Configurar Vendedores
+                </button>
               </div>
 
               {/* Live Preview Box */}

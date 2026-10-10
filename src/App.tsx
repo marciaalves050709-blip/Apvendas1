@@ -16,6 +16,7 @@ import { ReceiptModal } from './components/modals/ReceiptModal';
 import { StockMovementModal } from './components/modals/StockMovementModal';
 import { ProductFormModal } from './components/modals/ProductFormModal';
 import { CompanySettingsModal } from './components/modals/CompanySettingsModal';
+import { SellerWhatsappModal } from './components/modals/SellerWhatsappModal';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
 import { SubscriptionModal } from './components/subscription/SubscriptionModal';
@@ -24,7 +25,12 @@ import { MobileInstallBanner } from './components/pwa/MobileInstallBanner';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab } = useApp();
+  const { 
+    activeTab, 
+    setActiveTab,
+    isSellerWhatsappModalOpen,
+    setIsSellerWhatsappModalOpen 
+  } = useApp();
 
   // Keyboard shortcut support (F2 for POS)
   useEffect(() => {
@@ -75,6 +81,10 @@ const MainLayout: React.FC = () => {
       <StockMovementModal />
       <ProductFormModal />
       <CompanySettingsModal />
+      <SellerWhatsappModal 
+        isOpen={isSellerWhatsappModalOpen} 
+        onClose={() => setIsSellerWhatsappModalOpen(false)} 
+      />
       <OfflineIndicator />
       <ToastContainer />
     </div>

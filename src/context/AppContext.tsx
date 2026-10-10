@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { 
   Product, 
   Sale, 
@@ -14,9 +14,10 @@ import {
   MovementType,
   Category,
   SubscriptionState,
-  CompanyAccount
+  CompanyAccount,
+  SellerProfile
 } from '../types';
-import { sounds, formatCurrency } from '../utils/pixHelper';
+import { sounds, formatCurrency, calculateNextDay5Expiry, formatDay5Date } from '../utils/pixHelper';
 import confetti from 'canvas-confetti';
 import { 
   INITIAL_PRODUCTS, 
@@ -49,6 +50,15 @@ interface AppContextType {
   selectedCustomerId: string;
   paymentSettings: PaymentSettings;
   updatePaymentSettings: (settings: Partial<PaymentSettings>) => void;
+  sellers: SellerProfile[];
+  activeSeller: SellerProfile;
+  activeSellerId: string;
+  setActiveSellerId: (id: string) => void;
+  addSeller: (seller: Omit<SellerProfile, 'id'>) => SellerProfile;
+  updateSeller: (id: string, data: Partial<SellerProfile>) => void;
+  deleteSeller: (id: string) => boolean;
+  isSellerWhatsappModalOpen: boolean;
+  setIsSellerWhatsappModalOpen: (open: boolean) => void;
   
   // Cart Actions
   addToCart: (product: Product, quantity?: number) => void;
@@ -112,7 +122,7 @@ interface AppContextType {
   clearAllForNewClient: () => void;
   loadDemoData: () => void;
 
-  // Trial & Subscription (2 Days Free Trial -> R$ 94,98)
+  // Trial & Subscription (2 Days Free Trial -> R$ 94,98 • Vencimento Todo Dia 05)
   isAdmin: boolean;
   setIsAdmin: (val: boolean) => void;
   setAdminMode: () => void;
@@ -127,12 +137,20 @@ interface AppContextType {
   trialHoursRemaining: number;
   trialMinutesRemaining: number;
   isAccessAllowed: boolean;
+  isBlockedDueToDay5: boolean;
+  isDueWarningActive: boolean;
+  daysUntilDue: number;
+  nextDueDateFormatted: string;
+  nextDueDateDay5: string;
   isSubscriptionModalOpen: boolean;
   setIsSubscriptionModalOpen: (open: boolean) => void;
   activateSubscription: (code?: string, paymentRef?: string) => boolean;
   resetTrial: () => void;
   simulateTrialExpired: () => void;
   simulateTrialDay: (daysFromStart: number) => void;
+  simulateDay5Warning: () => void;
+  simulateDay5Blocked: () => void;
+  renewSubscription: () => void;
 
   // Multi-Company & Infinite Users Workspaces
   companyName: string;
@@ -196,6 +214,20 @@ export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
   planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
 };
 
+export const DEFAULT_SELLERS: SellerProfile[] = [
+  {
+    id: 'vendedor_principal',
+    name: 'Márcia Alves',
+    whatsapp: '5511999998888',
+    pixKey: '993192405',
+    pixKeyType: 'PHONE',
+    merchantName: 'MARCIA ALVES',
+    merchantCity: 'Barcarena PA',
+    receivingBank: 'NUBANK',
+    isDefault: true,
+  }
+];
+
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   pixKey: '993192405',
   pixKeyType: 'PHONE',
@@ -207,6 +239,8 @@ const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   autoPixDetection: true,
   autoCardApproval: true,
   soundEnabled: true,
+  sellers: DEFAULT_SELLERS,
+  activeSellerId: 'vendedor_principal',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -295,24 +329,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Persistence loader for PaymentSettings (customized per company workspace)
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
+      const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
+        const normCity = sanitizeMerchantCity(parsed.merchantCity);
+        const normSellers: SellerProfile[] = (parsed.sellers && parsed.sellers.length > 0)
+          ? parsed.sellers.map((s: SellerProfile) => ({ ...s, merchantCity: sanitizeMerchantCity(s.merchantCity) }))
+          : [
+              {
+                id: 'vendedor_principal',
+                name: 'Márcia Alves',
+                whatsapp: parsed.merchantWhatsapp || '5511999998888',
+                pixKey: parsed.pixKey || '993192405',
+                pixKeyType: parsed.pixKeyType || 'PHONE',
+                merchantName: parsed.merchantName || 'MARCIA ALVES',
+                merchantCity: normCity,
+                receivingBank: parsed.receivingBank || 'NUBANK',
+                isDefault: true,
+              }
+            ];
+
+        return {
+          ...DEFAULT_PAYMENT_SETTINGS,
+          ...parsed,
+          merchantCity: normCity,
+          sellers: normSellers,
+          activeSellerId: parsed.activeSellerId || normSellers[0]?.id || 'vendedor_principal',
+        };
+      };
+
       const tenantSaved = localStorage.getItem(getTenantKey('payment_settings', activeCompanyId));
       if (tenantSaved) {
         const parsed = JSON.parse(tenantSaved);
-        return { 
-          ...DEFAULT_PAYMENT_SETTINGS, 
-          ...parsed, 
-          merchantCity: sanitizeMerchantCity(parsed.merchantCity) 
-        };
+        return normalizeSettings(parsed);
       }
       const saved = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { 
-          ...DEFAULT_PAYMENT_SETTINGS, 
-          ...parsed, 
-          merchantName: currentCompany.name,
-          merchantCity: sanitizeMerchantCity(parsed.merchantCity)
-        };
+        return normalizeSettings({ ...parsed, merchantName: currentCompany.name });
       }
       return { ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name };
     } catch {
@@ -498,15 +550,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
        (subscription.subscriptionExpiresAt && new Date(subscription.subscriptionExpiresAt).getFullYear() > 2090)))
   );
 
+  // Day 5 Recurring Billing Rule:
+  // Subscription expires on Day 5 at 23:59:59. If not renewed, access is immediately blocked!
+  const subscriptionExpiresAtMs = subscription.subscriptionExpiresAt 
+    ? new Date(subscription.subscriptionExpiresAt).getTime() 
+    : (subscription.isSubscribed ? calculateNextDay5Expiry(new Date(), true).getTime() : 0);
+
+  // Check if Day 5 deadline has passed without payment/renewal
+  const isBlockedDueToDay5 = Boolean(
+    !isMasterAdmin && 
+    subscription.isSubscribed && 
+    subscriptionExpiresAtMs > 0 && 
+    currentTimeMs >= subscriptionExpiresAtMs
+  );
+
+  // Subscribed is only valid if not blocked by Day 5 deadline
+  const isSubscribedValid = Boolean(
+    isMasterAdmin || 
+    (subscription.isSubscribed && !isBlockedDueToDay5)
+  );
+
   // Administrator is ALWAYS subscribed and NEVER expired (100% exempt from charges)
-  const isSubscribed = Boolean(isAdmin || subscription.isSubscribed);
+  const isSubscribed = Boolean(isAdmin || isSubscribedValid);
   const isTrialActive = !isAdmin && !subscription.isSubscribed && msRemaining > 0;
   const isTrialExpired = !isAdmin && !subscription.isSubscribed && msRemaining <= 0;
-  const isAccessAllowed = isAdmin || isSubscribed || isTrialActive;
+  
+  // Total access allowed: Admin OR Valid Subscribed OR Active Trial
+  const isAccessAllowed = Boolean(isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5) || isTrialActive);
 
+  // Days remaining calculation:
   const trialDaysRemaining = isAdmin ? 999 : Math.floor(msRemaining / (24 * 60 * 60 * 1000));
   const trialHoursRemaining = isAdmin ? 0 : Math.floor((msRemaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
   const trialMinutesRemaining = isAdmin ? 0 : Math.floor((msRemaining % (60 * 60 * 1000)) / (60 * 1000));
+
+  // Countdown to Day 5 renewal & warning indicator:
+  const msUntilDue = Math.max(0, subscriptionExpiresAtMs - currentTimeMs);
+  const daysUntilDue = Math.ceil(msUntilDue / (24 * 60 * 60 * 1000));
+
+  // Informative warning: Triggered when user is subscribed, not master admin, not blocked, and <= 5 days to Day 5
+  const isDueWarningActive = Boolean(
+    !isMasterAdmin && 
+    subscription.isSubscribed && 
+    !isBlockedDueToDay5 && 
+    daysUntilDue <= 5
+  );
+
+  const nextDueDateFormatted = isMasterAdmin
+    ? 'Vitalício (Isento)'
+    : subscriptionExpiresAtMs > 0
+      ? formatDay5Date(subscriptionExpiresAtMs)
+      : formatDay5Date(calculateNextDay5Expiry(new Date(), true));
+
+  const nextDueDateDay5 = nextDueDateFormatted;
 
   const setAdminMode = () => {
     setIsAdmin(true);
@@ -555,10 +650,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ].includes(cleanCode) || rawInput.toLowerCase() === 'marciaalves050709@gmail.com';
 
     const nowIso = new Date().toISOString();
-    // Master Admin gets lifetime access until year 2099
-    const expiryIso = isMasterKey 
-      ? new Date('2099-12-31T23:59:59.000Z').toISOString()
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Master Admin gets lifetime access until year 2099; regular subscriptions expire on Day 5 of the next billing cycle
+    const expiryDate = isMasterKey 
+      ? new Date('2099-12-31T23:59:59.000Z')
+      : calculateNextDay5Expiry(new Date(), true);
+    const expiryIso = expiryDate.toISOString();
 
     const updated: SubscriptionState = {
       ...subscription,
@@ -593,11 +689,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       showToast(
         'success',
-        '🎉 Licença Ativada com Sucesso!',
-        `Acesso completo ao appvendas liberado! Plano de ${formatCurrency(subscription.planPrice)}/mês confirmado.`
+        '🎉 Licença Renovada com Sucesso!',
+        `Acesso liberado até ${formatDay5Date(expiryDate)}! Renovação mensal todo dia 05 (${formatCurrency(subscription.planPrice)}/mês).`
       );
     }
     return true;
+  };
+
+  const renewSubscription = () => {
+    activateSubscription(undefined, `RENOVACAO-PIX-${Date.now()}`);
+  };
+
+  const simulateDay5Warning = () => {
+    // Simulates that payment is 2 days before Day 5 deadline (informing approaching due date)
+    const inTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    const updated: SubscriptionState = {
+      ...subscription,
+      isSubscribed: true,
+      subscriptionExpiresAt: inTwoDays,
+      lastPaymentRef: 'SIMULACAO-AVISO-DIA-05',
+    };
+    setSubscription(updated);
+    setCurrentTimeMs(Date.now());
+    showToast('warning', '⚠️ Simulação: Aviso de Vencimento Ativado', 'Simulando que faltam 2 dias para o Dia 05. O sistema agora alerta proativamente sobre o vencimento!');
+  };
+
+  const simulateDay5Blocked = () => {
+    // Simulates that Day 5 has passed without payment -> immediate block!
+    const passedYesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const updated: SubscriptionState = {
+      ...subscription,
+      isSubscribed: true,
+      subscriptionExpiresAt: passedYesterday,
+      lastPaymentRef: 'SIMULACAO-BLOQUEIO-DIA-05',
+    };
+    setSubscription(updated);
+    setCurrentTimeMs(Date.now());
+    showToast('error', '⛔ Simulação: Bloqueio Imediato Ativado', 'Dia 05 ultrapassado sem pagamento. O aplicativo foi bloqueado imediatamente!');
   };
 
   const resetTrial = () => {
@@ -744,6 +872,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updatePaymentSettings = (newSettings: Partial<PaymentSettings>) => {
     setPaymentSettings(prev => ({ ...prev, ...newSettings }));
     showToast('success', 'Configurações Salvas', 'Preferências salvas com sucesso.');
+  };
+
+  // Sellers Management (WhatsApp, Pix, QR Code per seller)
+  const [isSellerWhatsappModalOpen, setIsSellerWhatsappModalOpen] = useState(false);
+
+  const sellers: SellerProfile[] = useMemo(() => {
+    if (paymentSettings.sellers && paymentSettings.sellers.length > 0) {
+      return paymentSettings.sellers;
+    }
+    return [
+      {
+        id: 'vendedor_principal',
+        name: 'Márcia Alves',
+        whatsapp: paymentSettings.merchantWhatsapp || '5511999998888',
+        pixKey: paymentSettings.pixKey || '993192405',
+        pixKeyType: paymentSettings.pixKeyType || 'PHONE',
+        merchantName: paymentSettings.merchantName || 'MARCIA ALVES',
+        merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
+        receivingBank: paymentSettings.receivingBank || 'NUBANK',
+        isDefault: true,
+      }
+    ];
+  }, [paymentSettings]);
+
+  const activeSellerId = paymentSettings.activeSellerId || sellers[0]?.id || 'vendedor_principal';
+
+  const activeSeller: SellerProfile = useMemo(() => {
+    const found = sellers.find(s => s.id === activeSellerId);
+    return found || sellers[0];
+  }, [sellers, activeSellerId]);
+
+  const setActiveSellerId = (id: string) => {
+    const target = sellers.find(s => s.id === id);
+    if (target) {
+      setPaymentSettings(prev => ({
+        ...prev,
+        activeSellerId: id,
+        pixKey: target.pixKey,
+        pixKeyType: target.pixKeyType,
+        merchantWhatsapp: target.whatsapp,
+        merchantName: target.merchantName || target.name,
+        merchantCity: target.merchantCity || 'Barcarena PA',
+        receivingBank: target.receivingBank || 'NUBANK',
+      }));
+    }
+  };
+
+  const addSeller = (newSellerData: Omit<SellerProfile, 'id'>): SellerProfile => {
+    const newId = 'vend_' + Date.now().toString(36);
+    const newSeller: SellerProfile = {
+      ...newSellerData,
+      id: newId,
+      merchantCity: newSellerData.merchantCity || 'Barcarena PA',
+    };
+    const updatedSellers = [...sellers, newSeller];
+    setPaymentSettings(prev => ({
+      ...prev,
+      sellers: updatedSellers,
+    }));
+    return newSeller;
+  };
+
+  const updateSeller = (id: string, data: Partial<SellerProfile>) => {
+    const updatedSellers = sellers.map(s => {
+      if (s.id === id) {
+        return { ...s, ...data };
+      }
+      return s;
+    });
+
+    const isCurrentActive = activeSellerId === id;
+    setPaymentSettings(prev => {
+      const patch: Partial<PaymentSettings> = { sellers: updatedSellers };
+      if (isCurrentActive) {
+        if (data.pixKey) patch.pixKey = data.pixKey;
+        if (data.pixKeyType) patch.pixKeyType = data.pixKeyType;
+        if (data.whatsapp) patch.merchantWhatsapp = data.whatsapp;
+        if (data.name) patch.merchantName = data.merchantName || data.name;
+        if (data.merchantName) patch.merchantName = data.merchantName;
+        if (data.merchantCity) patch.merchantCity = data.merchantCity;
+        if (data.receivingBank) patch.receivingBank = data.receivingBank;
+      }
+      return { ...prev, ...patch };
+    });
+  };
+
+  const deleteSeller = (id: string): boolean => {
+    if (sellers.length <= 1) {
+      showToast('error', 'Não Permitido', 'Deve haver pelo menos um vendedor cadastrado.');
+      return false;
+    }
+    const filtered = sellers.filter(s => s.id !== id);
+    const newActiveId = activeSellerId === id ? filtered[0].id : activeSellerId;
+    const newActiveSeller = filtered.find(s => s.id === newActiveId) || filtered[0];
+
+    setPaymentSettings(prev => ({
+      ...prev,
+      sellers: filtered,
+      activeSellerId: newActiveId,
+      pixKey: newActiveSeller.pixKey,
+      pixKeyType: newActiveSeller.pixKeyType,
+      merchantWhatsapp: newActiveSeller.whatsapp,
+      merchantName: newActiveSeller.merchantName || newActiveSeller.name,
+      merchantCity: newActiveSeller.merchantCity || 'Barcarena PA',
+      receivingBank: newActiveSeller.receivingBank || 'NUBANK',
+    }));
+    return true;
   };
 
   // Set Company Name directly (Replaces "appvendas" everywhere)
@@ -1528,6 +1763,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedCustomerId,
         paymentSettings,
         updatePaymentSettings,
+        sellers,
+        activeSeller,
+        activeSellerId,
+        setActiveSellerId,
+        addSeller,
+        updateSeller,
+        deleteSeller,
+        isSellerWhatsappModalOpen,
+        setIsSellerWhatsappModalOpen,
         addToCart,
         removeFromCart,
         updateCartQty,
@@ -1582,12 +1826,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         trialHoursRemaining,
         trialMinutesRemaining,
         isAccessAllowed,
+        isBlockedDueToDay5,
+        isDueWarningActive,
+        daysUntilDue,
+        nextDueDateFormatted,
+        nextDueDateDay5,
         isSubscriptionModalOpen,
         setIsSubscriptionModalOpen,
         activateSubscription,
         resetTrial,
         simulateTrialExpired,
         simulateTrialDay,
+        simulateDay5Warning,
+        simulateDay5Blocked,
+        renewSubscription,
         // Multi-Company & Infinite Users
         companyName,
         setCompanyName,

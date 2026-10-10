@@ -88,6 +88,18 @@ export interface PaymentDetails {
   splitPayments?: SplitPaymentItem[];
 }
 
+export interface SellerProfile {
+  id: string;
+  name: string;
+  whatsapp: string;
+  pixKey: string;
+  pixKeyType: 'CNPJ' | 'CPF' | 'EMAIL' | 'PHONE' | 'RANDOM';
+  merchantName?: string;
+  merchantCity?: string;
+  receivingBank?: BankProvider;
+  isDefault?: boolean;
+}
+
 export interface PaymentSettings {
   pixKey: string;
   pixKeyType: 'CNPJ' | 'CPF' | 'EMAIL' | 'PHONE' | 'RANDOM';
@@ -99,6 +111,8 @@ export interface PaymentSettings {
   autoPixDetection: boolean;
   autoCardApproval: boolean;
   soundEnabled: boolean;
+  sellers?: SellerProfile[];
+  activeSellerId?: string;
 }
 
 export interface CartItem {
@@ -205,10 +219,11 @@ export interface SubscriptionState {
   trialStartDate: string; // ISO string
   trialDurationDays: number; // 2 days
   planPrice: number; // 94.98
-  subscriptionExpiresAt?: string; // ISO string
+  subscriptionExpiresAt?: string; // ISO string (Vencimento todo dia 05)
   planName: string;
   activatedAt?: string;
   lastPaymentRef?: string;
+  lastPaidCycleMonth?: string;
 }
 
 export interface CompanyAccount {

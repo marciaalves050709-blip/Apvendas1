@@ -413,3 +413,38 @@ export function generateSubscriptionPix(txIdSuffix?: string): { payload: string;
     merchantName: SUBSCRIPTION_CONFIG.merchantName,
   };
 }
+
+/**
+ * Calculates the next Day 5 due date.
+ * Recurring rule: Due every Day 5 of the month at 23:59:59.
+ * If forceNextMonth is true (upon renewal/activation) or if current day > 5:
+ *   returns Day 5 of the next month.
+ * Otherwise returns Day 5 of current month.
+ */
+export function calculateNextDay5Expiry(fromDate: Date = new Date(), forceNextMonth: boolean = false): Date {
+  const d = new Date(fromDate);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const day = d.getDate();
+
+  if (forceNextMonth || day > 5) {
+    return new Date(year, month + 1, 5, 23, 59, 59, 999);
+  }
+  return new Date(year, month, 5, 23, 59, 59, 999);
+}
+
+/**
+ * Formats a Date or ISO string into Brazilian date format (DD/MM/AAAA)
+ */
+export function formatDay5Date(date: Date | string | number): string {
+  try {
+    const d = typeof date === 'number' || typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '05 do próximo mês';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return '05 do próximo mês';
+  }
+}

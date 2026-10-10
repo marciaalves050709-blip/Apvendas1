@@ -19,6 +19,7 @@ export const TrialBanner: React.FC = () => {
     subscription,
     isTrialActive,
     isTrialExpired,
+    isBlockedDueToDay5,
     isSubscribed,
     isMasterAdmin,
     isAdmin,
@@ -27,10 +28,16 @@ export const TrialBanner: React.FC = () => {
     adminConfig,
     trialDaysRemaining,
     trialHoursRemaining,
+    isDueWarningActive,
+    daysUntilDue,
+    nextDueDateFormatted,
     setIsSubscriptionModalOpen,
     resetTrial,
     simulateTrialExpired,
-    simulateTrialDay
+    simulateTrialDay,
+    simulateDay5Warning,
+    simulateDay5Blocked,
+    renewSubscription
   } = useApp();
 
   const [showSimMenu, setShowSimMenu] = useState(false);
@@ -56,7 +63,7 @@ export const TrialBanner: React.FC = () => {
                 </span>
               </div>
               <p className="text-[10px] text-slate-300 hidden md:block mt-0.5">
-                Você nunca será cobrada. A mensalidade de R$ 94,98/mês é cobrada exclusivamente dos seus clientes após os 2 dias de teste.
+                Você nunca será cobrada. A mensalidade de R$ 94,98/mês vence todo dia 05 para clientes, com aviso prévio e bloqueio automático se não renovarem.
               </p>
             </div>
           </div>
@@ -75,7 +82,7 @@ export const TrialBanner: React.FC = () => {
               type="button"
               onClick={() => setClientTestMode()}
               className="p-1.5 bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white rounded-lg text-[10px] font-medium transition-all flex items-center gap-1 cursor-pointer"
-              title="Testar como cliente/lojista (com teste de 2 dias e cobrança)"
+              title="Testar como cliente/lojista (com teste de 2 dias e cobrança todo dia 05)"
             >
               <Settings2 className="w-3.5 h-3.5" />
               <span className="hidden lg:inline text-[10px]">Testar Modo Cliente</span>
@@ -87,21 +94,72 @@ export const TrialBanner: React.FC = () => {
   }
 
   if (isTrialExpired && !isSubscribed) {
-    // Paywall covers the whole screen, but banner can show expired status
+    // Paywall covers the whole screen
     return null;
   }
 
+  // 1) WARNING BANNER: Proactively informing that payment is about to expire on Day 5!
+  if (isSubscribed && isDueWarningActive) {
+    return (
+      <div className="bg-gradient-to-r from-amber-900 via-orange-950 to-amber-950 text-white px-3 sm:px-6 py-2.5 border-b-2 border-amber-500 shrink-0 shadow-md select-none animate-pulse-subtle">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/30 border border-amber-400 flex items-center justify-center text-amber-300 shrink-0 shadow-xs">
+              <AlertTriangle className="w-4 h-4 text-amber-300 animate-bounce" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 bg-amber-400 text-slate-950 rounded-md font-black text-[10px] uppercase tracking-wider">
+                  ⚠️ Vencimento do Dia 05 Próximo
+                </span>
+                <span className="font-black text-amber-200 text-xs truncate">
+                  {daysUntilDue === 0
+                    ? 'Sua mensalidade vence HOJE (Dia 05)! Renove para não bloquear.'
+                    : `Sua mensalidade de ${formatCurrency(subscription.planPrice)} vence em ${daysUntilDue} ${daysUntilDue === 1 ? 'dia' : 'dias'} (${nextDueDateFormatted})!`}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-100/90 hidden sm:block mt-0.5">
+                O aplicativo bloqueia imediatamente se a renovação não for confirmada no dia 05. Faça o Pix para garantir seu acesso contínuo.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsSubscriptionModalOpen(true)}
+              className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+            >
+              <Zap className="w-3.5 h-3.5 fill-slate-950" />
+              <span>Renovar Agora ({formatCurrency(subscription.planPrice)})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAdminMode()}
+              className="text-[11px] font-bold text-amber-300 hover:text-white underline cursor-pointer px-1"
+            >
+              Sou Márcia (Admin)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2) Normal Subscribed Banner: Payment is completely up to date
   if (isSubscribed) {
     return (
-      <div className="bg-emerald-900 text-white px-4 py-1.5 text-xs flex items-center justify-between border-b border-emerald-800 shrink-0">
+      <div className="bg-emerald-950 text-white px-4 py-1.5 text-xs flex items-center justify-between border-b border-emerald-800 shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-bold flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-            Licença Pro Ativa ({formatCurrency(subscription.planPrice)}/mês)
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            Mensalidade em Dia ({formatCurrency(subscription.planPrice)}/mês)
           </span>
-          <span className="hidden md:inline text-emerald-200 text-[11px]">
-            • Acesso ilimitado a estoque, PDV, relatórios e catálogo WhatsApp.
+          <span className="hidden md:inline text-emerald-300 text-[11px]">
+            • Próximo vencimento: <strong>{nextDueDateFormatted} (Dia 05)</strong>. Bloqueio automático se não renovado.
           </span>
         </div>
 
@@ -118,7 +176,7 @@ export const TrialBanner: React.FC = () => {
             onClick={() => setIsSubscriptionModalOpen(true)}
             className="text-[11px] font-bold text-emerald-200 hover:text-white underline cursor-pointer"
           >
-            Ver Detalhes da Licença
+            Ver Detalhes do Plano
           </button>
         </div>
       </div>
@@ -228,9 +286,47 @@ export const TrialBanner: React.FC = () => {
                 >
                   <span className="flex items-center gap-1">
                     <Lock className="w-3 h-3" />
-                    Expirar Teste (Bloquear)
+                    Expirar 2 Dias (Bloquear)
                   </span>
                   <span className="text-[9px] bg-rose-200 text-rose-900 px-1.5 py-0.5 rounded">Trava</span>
+                </button>
+                <div className="border-t border-slate-100 my-1"></div>
+                <p className="text-[10px] font-black uppercase text-amber-700 px-2 py-0.5">Ciclo Mensal Dia 05</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    simulateDay5Warning();
+                    setShowSimMenu(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 text-xs font-bold text-amber-900 rounded-lg hover:bg-amber-50 flex items-center justify-between"
+                >
+                  <span>⚠️ Simular Aviso (Dia 05 Próximo)</span>
+                  <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">Aviso</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    simulateDay5Blocked();
+                    setShowSimMenu(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 text-xs font-bold text-rose-800 rounded-lg hover:bg-rose-50 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    ⛔ Simular Dia 05 Vencido (Bloquear)
+                  </span>
+                  <span className="text-[9px] bg-rose-200 text-rose-900 px-1.5 py-0.5 rounded">Bloqueio</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    renewSubscription();
+                    setShowSimMenu(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 text-xs font-bold text-emerald-800 rounded-lg hover:bg-emerald-50 flex items-center justify-between"
+                >
+                  <span>✅ Simular Pagamento Feito</span>
+                  <span className="text-[9px] bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">Liberado</span>
                 </button>
               </div>
             )}
