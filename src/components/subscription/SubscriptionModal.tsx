@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds } from '../../utils/pixHelper';
+import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
+import { PixRadarScanner } from './PixRadarScanner';
 import { 
   X, 
   Check, 
@@ -55,6 +56,7 @@ export const SubscriptionModal: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState<'PIX' | 'CODE'>('PIX');
   const [radarPulseCount, setRadarPulseCount] = useState(0);
   const [selectedBankId, setSelectedBankId] = useState<string>(paymentSettings.receivingBank || 'NUBANK');
+  const [copiedAdminKey, setCopiedAdminKey] = useState(false);
 
   // Real-time Bank Alert state
   const [bankAlert, setBankAlert] = useState<{
@@ -66,7 +68,7 @@ export const SubscriptionModal: React.FC = () => {
     e2eId: string;
   } | null>(null);
 
-  const planPrice = subscription.planPrice || 58.94;
+  const planPrice = subscription.planPrice || 94.98;
 
   const currentBank = useMemo(() => {
     return BANKS_LIST.find(b => b.id === selectedBankId) || BANKS_LIST[0];
@@ -81,17 +83,17 @@ export const SubscriptionModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [isSubscriptionModalOpen, isSubscribed]);
 
-  // Generate Pix Payload & QR Code for R$ 58,94
+  // Generate Pix Payload & QR Code for R$ 94,98 with Fixed Key 993192405
   useEffect(() => {
     if (!isSubscriptionModalOpen) return;
 
     try {
       const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const pixResult = generatePixPayload({
-        pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
-        merchantName: paymentSettings.merchantName || 'APP DE VENDAS SISTEMAS',
-        merchantCity: paymentSettings.merchantCity || 'SAO PAULO',
-        amount: planPrice,
+        pixKey: SUBSCRIPTION_CONFIG.pixKey,
+        merchantName: SUBSCRIPTION_CONFIG.merchantName,
+        merchantCity: SUBSCRIPTION_CONFIG.merchantCity,
+        amount: 94.98,
         txId: generatedTxId,
       });
 
@@ -109,9 +111,9 @@ export const SubscriptionModal: React.FC = () => {
         setPixQrDataUrl(url);
       });
     } catch {
-      setPixPayloadCode(`PIX-DESCARTCLEAN-ASSINATURA-${planPrice}`);
+      setPixPayloadCode(`PIX-APPVENDAS-993192405-94.98`);
     }
-  }, [isSubscriptionModalOpen, planPrice, paymentSettings]);
+  }, [isSubscriptionModalOpen]);
 
   if (!isSubscriptionModalOpen) return null;
 
@@ -311,7 +313,7 @@ export const SubscriptionModal: React.FC = () => {
                 <div className="p-3 bg-white rounded-xl border border-amber-200 shadow-2xs">
                   <span className="text-[10px] font-bold uppercase text-slate-500 block">Cobrança de Clientes</span>
                   <span className="text-xl font-black text-slate-900">{formatCurrency(planPrice)}</span>
-                  <span className="text-[10px] text-slate-500 block">Por mês (após 5 dias teste)</span>
+                  <span className="text-[10px] text-slate-500 block">Por mês (após 2 dias de teste)</span>
                 </div>
               </div>
 
@@ -321,7 +323,7 @@ export const SubscriptionModal: React.FC = () => {
                   Regra do Administrador Confirmada:
                 </p>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Como proprietária e administradora do sistema, você tem acesso irrestrito a todos os recursos sem pagamento algum. A cobrança de R$ 58,94/mês é configurada para os clientes que comprarem o sistema de você.
+                  Como proprietária e administradora do sistema, você tem acesso irrestrito a todos os recursos sem pagamento algum. A cobrança de R$ 94,98/mês é configurada para os clientes que comprarem o sistema de você após 2 dias de teste gratuito.
                 </p>
               </div>
 
@@ -339,15 +341,30 @@ export const SubscriptionModal: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
                   <div>
                     <span className="text-[10px] text-slate-400 block">Chave Pix:</span>
-                    <strong className="text-white font-mono">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-slate-300 font-mono text-xs tracking-wider select-none">•••••••••</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(SUBSCRIPTION_CONFIG.pixKey);
+                          setCopiedAdminKey(true);
+                          setTimeout(() => setCopiedAdminKey(false), 2000);
+                        }}
+                        className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-all"
+                        title="Copiar Chave Pix"
+                      >
+                        {copiedAdminKey ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedAdminKey ? 'Copiada!' : 'Copiar'}</span>
+                      </button>
+                    </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block">Beneficiário:</span>
-                    <strong className="text-white">{paymentSettings.merchantName || 'appvendas'}</strong>
+                    <span className="text-[10px] text-slate-400 block">Beneficiária:</span>
+                    <strong className="text-white">{SUBSCRIPTION_CONFIG.merchantName}</strong>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block">Banco de Recebimento:</span>
-                    <strong className="text-white">{paymentSettings.receivingBank || 'NUBANK'}</strong>
+                    <span className="text-[10px] text-slate-400 block">Valor Mensalidade:</span>
+                    <strong className="text-emerald-400 font-bold">R$ 94,98/mês</strong>
                   </div>
                 </div>
               </div>
@@ -388,7 +405,7 @@ export const SubscriptionModal: React.FC = () => {
                 <p className="text-[11px] text-slate-600 mt-1">
                   {isSubscribed 
                     ? `✅ Assinatura ativa! Próximo vencimento: ${nextDueDateFormatted}.`
-                    : `5 dias grátis para teste. Renovação mensal todo dia 05 (${nextDueDateFormatted}).`}
+                    : `2 dias grátis para teste. Renovação mensal todo dia 05 (${nextDueDateFormatted}).`}
                 </p>
               </div>
 
@@ -512,79 +529,12 @@ export const SubscriptionModal: React.FC = () => {
               </div>
 
               {selectedTab === 'PIX' ? (
-                <div className="bg-emerald-50/70 border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-4 text-center">
-                  
-                  {/* Validated Header */}
-                  <div className="flex flex-col items-center">
-                    <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-lg text-[11px] font-black uppercase tracking-wider mb-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>Código Pix Válido e Autenticado</span>
-                    </div>
-                    <h3 className="text-base font-black text-emerald-950 mt-0.5">
-                      Pague via Pix e libere o acesso na mesma hora
-                    </h3>
-                    <p className="text-xs text-emerald-800 mt-0.5">
-                      Chave: <strong className="text-emerald-950">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong> • Beneficiário: <strong className="text-emerald-950">{paymentSettings.merchantName || 'appvendas'}</strong>
-                    </p>
-                  </div>
-
-                  {/* QR Code */}
-                  {pixQrDataUrl && (
-                    <div className="inline-block p-2 bg-white rounded-2xl shadow-md border-2 border-emerald-400">
-                      <img
-                        src={pixQrDataUrl}
-                        alt="QR Code Pix"
-                        className="w-40 h-40 mx-auto"
-                      />
-                      <div className="text-[10px] font-bold text-slate-500 mt-1 font-mono">
-                        TxID: {pixTxId || 'ASSIN-5894'}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Copy Pix & Actions */}
-                  <div className="flex flex-col sm:flex-row gap-2.5 justify-center max-w-lg mx-auto">
-                    <button
-                      type="button"
-                      onClick={handleCopyPix}
-                      className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                    >
-                      {copiedPix ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      <span>{copiedPix ? 'Chave Copiada!' : 'Copiar Pix Copia e Cola'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleValidateAndConfirmBankPayment}
-                      disabled={isVerifying}
-                      className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {isVerifying ? (
-                        <>
-                          <Radio className="w-4 h-4 animate-spin" />
-                          <span>Consultando Banco...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
-                          <span>Validar Pagamento no Banco</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* WhatsApp Proof Button */}
-                  <div className="pt-2 border-t border-emerald-200">
-                    <button
-                      type="button"
-                      onClick={handleSendProofWhatsApp}
-                      className="text-xs text-emerald-800 hover:text-emerald-950 font-bold inline-flex items-center gap-1.5 underline cursor-pointer"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Enviar comprovante para suporte no WhatsApp</span>
-                    </button>
-                  </div>
-                </div>
+                <PixRadarScanner 
+                  onPaymentConfirmed={(e2e) => {
+                    activateSubscription(undefined, `PIX-RADAR-${e2e}`);
+                  }}
+                  planPrice={planPrice}
+                />
               ) : (
                 /* Activation Code Form */
                 <form onSubmit={handleApplyCode} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
@@ -593,7 +543,7 @@ export const SubscriptionModal: React.FC = () => {
                       Código de Ativação / Licença
                     </label>
                     <p className="text-xs text-slate-500 mb-3">
-                      Insira o código de liberação fornecido pelo administrador após a confirmação do pagamento.
+                      Insira o código de liberação fornecido pela administradora Márcia Alves após o pagamento.
                     </p>
                     <div className="flex gap-2">
                       <input
@@ -603,7 +553,7 @@ export const SubscriptionModal: React.FC = () => {
                           setActivationCode(e.target.value);
                           setCodeError('');
                         }}
-                        placeholder="Ex: DESCART58 ou LIBERAR2026"
+                        placeholder="Ex: LIBERAR2026 ou código de ativação"
                         className="flex-1 px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-sm font-mono font-bold uppercase tracking-wider focus:outline-hidden focus:border-indigo-600 text-slate-900"
                       />
                       <button
@@ -621,7 +571,7 @@ export const SubscriptionModal: React.FC = () => {
                   <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <p>
-                      Dica de teste: Você pode usar códigos como <strong>DESCART58</strong> ou <strong>LIBERAR2026</strong> para ativar imediatamente.
+                      Dica de liberação: Digite o código de ativação fornecido pela administradora ou <strong>LIBERAR2026</strong> para ativar imediatamente.
                     </p>
                   </div>
                 </form>

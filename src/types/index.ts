@@ -203,8 +203,8 @@ export type ActiveTab =
 export interface SubscriptionState {
   isSubscribed: boolean;
   trialStartDate: string; // ISO string
-  trialDurationDays: number; // 5 days
-  planPrice: number; // 58.94
+  trialDurationDays: number; // 2 days
+  planPrice: number; // 94.98
   subscriptionExpiresAt?: string; // ISO string
   planName: string;
   activatedAt?: string;

@@ -49,7 +49,7 @@ export const CompanySettingsModal: React.FC = () => {
   const [name, setName] = useState(currentCompany?.name || paymentSettings.merchantName || 'Minha Empresa');
   const [ownerName, setOwnerName] = useState(currentCompany?.ownerName || 'Administrador');
   const [phone, setPhone] = useState(paymentSettings.merchantWhatsapp || '');
-  const [city, setCity] = useState(paymentSettings.merchantCity || 'São Paulo - SP');
+  const [city, setCity] = useState(paymentSettings.merchantCity || 'Barcarena PA');
   const [pixKey, setPixKey] = useState(paymentSettings.pixKey || '');
   const [pixKeyType, setPixKeyType] = useState(paymentSettings.pixKeyType || 'CNPJ');
   const [selectedEmoji, setSelectedEmoji] = useState(currentCompany?.logoEmoji || '🏪');
@@ -326,7 +326,7 @@ export const CompanySettingsModal: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex: São Paulo - SP"
+                    placeholder="Ex: Barcarena PA"
                     value={city}
                     onChange={e => setCity(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-indigo-600"

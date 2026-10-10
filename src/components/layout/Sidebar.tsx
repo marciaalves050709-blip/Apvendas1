@@ -226,7 +226,7 @@ export const Sidebar: React.FC = () => {
               ) : (
                 <>
                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Teste Grátis (5 Dias)</span>
+                  <span>Teste Grátis (2 Dias)</span>
                 </>
               )}
             </span>
@@ -241,7 +241,7 @@ export const Sidebar: React.FC = () => {
           <p className="text-[10px] text-slate-600 leading-tight mb-2">
             {isSubscribed 
               ? 'Todos os módulos liberados sem restrições.'
-              : `Aproveite o teste de 5 dias. Assinatura: ${formatCurrency(subscription.planPrice)}/mês.`}
+              : `Aproveite o teste de 2 dias. Assinatura: ${formatCurrency(subscription.planPrice)}/mês.`}
           </p>
 
           <button

@@ -10,7 +10,7 @@ export const ReceiptModal: React.FC = () => {
   const sale = receiptModalSale;
   const companyTitle = (paymentSettings.merchantName || currentCompany?.name || 'Minha Empresa').toUpperCase();
   const companyPhone = paymentSettings.merchantWhatsapp || '';
-  const companyCity = paymentSettings.merchantCity || 'São Paulo - SP';
+  const companyCity = paymentSettings.merchantCity || 'Barcarena PA';
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);

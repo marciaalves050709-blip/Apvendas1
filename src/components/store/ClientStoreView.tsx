@@ -239,7 +239,7 @@ export const ClientStoreView: React.FC = () => {
       document: '',
       phone: newUser.phone,
       address: newUser.address,
-      city: paymentSettings.merchantCity || 'São Paulo',
+      city: paymentSettings.merchantCity || 'Barcarena PA',
       notes: 'Cliente cadastrado via Catálogo Mobile',
     });
 
@@ -398,7 +398,7 @@ export const ClientStoreView: React.FC = () => {
       const pixObj = generatePixPayload({
         pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
         merchantName: paymentSettings.merchantName || 'APP DE VENDAS',
-        merchantCity: paymentSettings.merchantCity || 'SAO PAULO',
+        merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
         amount: cartTotal,
         txId: 'PED' + Math.floor(1000 + Math.random() * 9000),
       });
@@ -517,128 +517,112 @@ export const ClientStoreView: React.FC = () => {
   // STEP 1: Identification Screen (Ultra Simple & 100% Mobile Accessible)
   if (!isIdentified) {
     return (
-      <div className="flex-1 w-full h-full bg-slate-100 overflow-y-auto overscroll-contain p-3 sm:p-6 pb-40 sm:pb-16 flex flex-col items-center justify-start min-h-0">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden shrink-0 my-2 sm:my-auto">
+      <div className="flex-1 w-full h-full bg-slate-100 overflow-y-auto overscroll-contain p-2 sm:p-6 pb-36 sm:pb-16 flex flex-col items-center justify-start min-h-0">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden shrink-0 my-1 sm:my-auto">
           {/* Header Banner */}
-          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-5 sm:p-6 text-white text-center relative">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-2.5 sm:mb-3 text-2xl sm:text-3xl shadow-inner">
+          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-4 sm:p-6 text-white text-center relative">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-3 text-2xl sm:text-3xl shadow-inner">
               🛍️
             </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+            <h1 className="text-lg sm:text-2xl font-black tracking-tight">
               {paymentSettings.merchantName || currentCompany?.name || 'Minha Loja'}
             </h1>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 rounded-full text-[11px] font-semibold mt-2.5 text-emerald-50">
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 bg-white/15 rounded-full text-[11px] font-semibold mt-1.5 text-emerald-50">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Catálogo & Loja Virtual no Celular</span>
+              <span>{products.length} Produtos Cadastrados</span>
             </div>
           </div>
 
-          {/* Form Content */}
-          <form onSubmit={handleIdentifyCustomer} className="p-4 sm:p-6 space-y-3.5 sm:space-y-4">
-            <div className="text-center mb-1">
-              <h2 className="text-sm sm:text-base font-bold text-slate-800">Identifique-se para começar</h2>
-              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">Informe seu nome e WhatsApp para ver o catálogo e fazer pedidos</p>
-            </div>
-
-            {/* Nome */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Seu Nome / Empresa</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: Márcia Alves ou Cliente"
-                value={inputName}
-                onChange={e => setInputName(e.target.value)}
-                className="w-full px-3.5 py-3 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-sm font-medium text-slate-900 outline-none transition-all"
-              />
-            </div>
-
-            {/* WhatsApp */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Seu WhatsApp (com DDD)</span>
-              </label>
-              <input
-                type="tel"
-                required
-                placeholder="(11) 99999-9999"
-                value={inputPhone}
-                onChange={e => handlePhoneChange(e.target.value)}
-                className="w-full px-3.5 py-3 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-sm font-medium text-slate-900 outline-none transition-all"
-              />
-            </div>
-
-            {/* Endereço Inicial (Opcional) */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                <span>Endereço de Entrega (Opcional)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Rua, Número, Bairro (ou deixe em branco)"
-                value={inputAddress}
-                onChange={e => setInputAddress(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs font-medium text-slate-900 outline-none transition-all"
-              />
-            </div>
-
-            {/* Main Submit Button: Entrar e Ver Produtos */}
-            <button
-              type="submit"
-              className="w-full py-3.5 sm:py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
-            >
-              <span>Entrar e Ver Produtos</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
-            {/* Fast Alternative: Direct Visitor Entry without filling */}
+          {/* Quick Action Buttons (Top of Mobile Screen - Always Visible) */}
+          <div className="p-3 sm:p-4 bg-emerald-50/80 border-b border-emerald-200 space-y-2">
             <button
               type="button"
               onClick={() => {
                 setClientUser({ name: 'Visitante', phone: '(11) 99999-9999', address: '', deliveryType: 'RETIRADA' });
                 setIsIdentified(true);
               }}
-              className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider shadow-md shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>👀 Ver Produtos sem cadastro (Visitante) →</span>
+              <span>🚀 Entrar e Ver Produtos ({products.length})</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
 
-            {/* Fast Link to Inventory/Product update */}
             <button
               type="button"
               onClick={() => setActiveTab('inventory')}
-              className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Package className="w-3.5 h-3.5" />
-              <span>Ver Produtos pra Atualizar no Estoque</span>
+              <span>✏️ Ver Produtos pra Atualizar no Estoque</span>
+            </button>
+          </div>
+
+          {/* Form Content */}
+          <form onSubmit={handleIdentifyCustomer} className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="text-center mb-0.5">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-800">Ou personalize seus dados para pedidos</h2>
+              <p className="text-[10px] sm:text-xs text-slate-500">Para receber o pedido com seu nome e WhatsApp</p>
+            </div>
+
+            {/* Nome */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Seu Nome / Razão Social</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Márcia Alves ou Seu Nome"
+                value={inputName}
+                onChange={e => setInputName(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-medium text-slate-900 outline-none transition-all"
+              />
+            </div>
+
+            {/* WhatsApp */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Seu WhatsApp</span>
+              </label>
+              <input
+                type="tel"
+                placeholder="(11) 99999-9999"
+                value={inputPhone}
+                onChange={e => handlePhoneChange(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-medium text-slate-900 outline-none transition-all"
+              />
+            </div>
+
+            {/* Main Submit Button: Entrar e Ver Produtos */}
+            <button
+              type="submit"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-1"
+            >
+              <span>Salvar Dados e Ver Produtos</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
             {/* Demo Quick login & Back to dashboard */}
-            <div className="pt-2 flex items-center justify-between text-xs text-slate-400">
+            <div className="pt-1 flex items-center justify-between text-xs text-slate-400">
               <button
                 type="button"
                 onClick={() => {
-                  setInputName('Cliente Demonstração');
+                  setInputName('Cliente VIP');
                   setInputPhone('(11) 98765-4321');
-                  setInputAddress('Av. Paulista, 1000 - Bela Vista');
                 }}
-                className="hover:text-emerald-700 transition-colors underline cursor-pointer text-[11px]"
+                className="hover:text-emerald-700 transition-colors underline cursor-pointer text-[10px]"
               >
-                Preencher dados de teste
+                Preencher dados rápidos
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
-                className="hover:text-emerald-700 font-bold transition-colors text-[11px] flex items-center gap-1 cursor-pointer"
+                className="hover:text-emerald-700 font-bold transition-colors text-[10px] flex items-center gap-1 cursor-pointer"
               >
-                Entrar na Gestão →
+                <span>Painel Principal →</span>
               </button>
             </div>
           </form>

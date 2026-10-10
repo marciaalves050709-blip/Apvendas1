@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds } from '../../utils/pixHelper';
+import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
+import { PixRadarScanner } from './PixRadarScanner';
 import { 
   Lock, 
   ShieldAlert, 
@@ -59,7 +60,7 @@ export const AccessPaywall: React.FC = () => {
     e2eId: string;
   } | null>(null);
 
-  const planPrice = subscription.planPrice || 58.94;
+  const planPrice = subscription.planPrice || 94.98;
 
   const currentBank = useMemo(() => {
     return BANKS_LIST.find(b => b.id === selectedBankId) || BANKS_LIST[0];
@@ -83,7 +84,7 @@ export const AccessPaywall: React.FC = () => {
       const pixResult = generatePixPayload({
         pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
         merchantName: paymentSettings.merchantName || 'APP DE VENDAS SISTEMAS',
-        merchantCity: paymentSettings.merchantCity || 'SAO PAULO',
+        merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
         amount: planPrice,
         txId: generatedTxId,
       });
@@ -170,13 +171,17 @@ export const AccessPaywall: React.FC = () => {
     const raw = activationCode.trim();
     const clean = raw.toUpperCase();
     const validCodes = [
+      '993192405',
+      '9498',
+      'PAGO9498',
+      'PAGO94',
+      'MESTRA94',
       'DESCART58', 
       'PAGO5894', 
       'LIBERAR2026', 
       'TESTE58', 
       'DESCARTCLEAN', 
       'PRO58', 
-      '5894', 
       'VIP2026',
       'MARCIA',
       'MARCIA2026',
@@ -220,7 +225,7 @@ export const AccessPaywall: React.FC = () => {
     const rawPhone = paymentSettings.merchantWhatsapp || '5511999998888';
     const cleanPhone = rawPhone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Olá! Meu período de teste de 5 dias do App de vendas acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
+      `Olá! Meu período de teste de 2 dias do App de vendas acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
@@ -253,7 +258,7 @@ export const AccessPaywall: React.FC = () => {
           </div>
 
           <div className="inline-block px-3 py-1 bg-rose-500/20 border border-rose-400/40 text-rose-300 font-black text-[10px] uppercase rounded-full tracking-wider mb-1.5">
-            Período de Teste de 5 Dias Concluído
+            Período de Teste de 2 Dias Concluído
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
@@ -261,7 +266,7 @@ export const AccessPaywall: React.FC = () => {
           </h2>
 
           <p className="text-xs sm:text-sm text-rose-200 mt-1 max-w-lg mx-auto leading-relaxed">
-            Seus 5 dias de teste grátis terminaram. Efetue o pagamento de <strong>{formatCurrency(planPrice)}</strong> via Pix para liberar o acesso imediato.
+            Seus 2 dias de teste grátis terminaram. Efetue o pagamento de <strong>{formatCurrency(planPrice)}</strong> via Pix para liberar o acesso imediato.
           </p>
         </div>
 
@@ -361,90 +366,23 @@ export const AccessPaywall: React.FC = () => {
             </div>
           )}
 
-          {/* Validated Pix Payment Box */}
-          <div className="bg-slate-50 border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-4 text-center">
-            
-            {/* Header with Validated Check */}
-            <div className="flex flex-col items-center">
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-lg text-[11px] font-black uppercase tracking-wider mb-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Código Pix Válido e Autenticado (Banco Central)</span>
-              </div>
-              <h3 className="text-sm sm:text-base font-black text-slate-900">
-                Pague R$ 58,94 via Pix para Desbloquear
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Chave Pix: <strong className="text-slate-800">{paymentSettings.pixKey || '12.345.678/0001-90'}</strong> • Beneficiário: <strong className="text-slate-800">{paymentSettings.merchantName || 'appvendas'}</strong>
-              </p>
-            </div>
+          {/* Validated Pix Payment Box with Real-time Radar */}
+          <PixRadarScanner 
+            onPaymentConfirmed={(e2e) => {
+              activateSubscription(undefined, `PIX-RADAR-${e2e}`);
+            }}
+            planPrice={planPrice}
+          />
 
-            {/* QR Code */}
-            {pixQrDataUrl && (
-              <div className="relative inline-block p-2 bg-white rounded-2xl shadow-md border-2 border-emerald-400">
-                <img
-                  src={pixQrDataUrl}
-                  alt="QR Code Pix Assinatura"
-                  className="w-40 h-40 sm:w-44 sm:h-44 mx-auto"
-                />
-                <div className="text-[10px] font-bold text-slate-500 mt-1 font-mono">
-                  TxID: {pixTxId || 'ASSIN-5894'}
-                </div>
-              </div>
-            )}
-
-            {/* Pix Actions */}
-            <div className="flex flex-col sm:flex-row gap-2.5 justify-center max-w-lg mx-auto">
-              {/* Copy Pix Payload */}
-              <button
-                type="button"
-                onClick={handleCopyPix}
-                className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-              >
-                {copiedPix ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedPix ? 'Código Pix Copiado!' : 'Copiar Pix Copia e Cola'}</span>
-              </button>
-
-              {/* Validate & Confirm Bank Drop Button */}
-              <button
-                type="button"
-                onClick={handleValidateAndConfirmBankPayment}
-                disabled={isVerifying}
-                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {isVerifying ? (
-                  <>
-                    <Radio className="w-4 h-4 animate-spin" />
-                    <span>Consultando Banco...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
-                    <span>Validar Pagamento no Banco</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* WhatsApp Proof & Code Link */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs border-t border-slate-200">
-              <button
-                type="button"
-                onClick={handleSendWhatsAppProof}
-                className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1.5 underline cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Enviar comprovante no WhatsApp</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowCodeInput(!showCodeInput)}
-                className="text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>{showCodeInput ? 'Ocultar código' : 'Digitar chave de liberação manual'}</span>
-              </button>
-            </div>
+          <div className="pt-1 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setShowCodeInput(!showCodeInput)}
+              className="text-xs text-slate-500 hover:text-indigo-600 font-bold flex items-center gap-1 underline cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{showCodeInput ? 'Ocultar código manual' : 'Tenho um código de liberação manual'}</span>
+            </button>
           </div>
 
           {/* Toggleable Activation Code Form */}

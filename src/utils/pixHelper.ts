@@ -44,7 +44,7 @@ export function generatePixPayload(params: {
   const {
     pixKey,
     merchantName = 'APP VENDAS',
-    merchantCity = 'SAO PAULO',
+    merchantCity = 'BARCARENA PA',
     amount,
     txId = 'VEN' + Math.random().toString(36).substring(2, 8).toUpperCase(),
   } = params;
@@ -384,3 +384,32 @@ class SoundPlayer {
 }
 
 export const sounds = new SoundPlayer();
+
+// Master Subscription Pix Configuration (Fixed as requested: R$ 94,98, Key: 993192405, Beneficiary: Marcia Alves)
+export const SUBSCRIPTION_CONFIG = {
+  monthlyPrice: 94.98,
+  pixKey: '993192405',
+  merchantName: 'MARCIA ALVES',
+  merchantCity: 'BARCARENA PA',
+  adminEmail: 'marciaalves050709@gmail.com',
+  planName: 'Plano Mensal Pro - Sistema de Vendas & Estoque',
+};
+
+export function generateSubscriptionPix(txIdSuffix?: string): { payload: string; txId: string; pixKey: string; amount: number; merchantName: string } {
+  const txId = 'ASSIN' + (txIdSuffix || Math.random().toString(36).substring(2, 8).toUpperCase());
+  const pix = generatePixPayload({
+    pixKey: SUBSCRIPTION_CONFIG.pixKey,
+    merchantName: SUBSCRIPTION_CONFIG.merchantName,
+    merchantCity: SUBSCRIPTION_CONFIG.merchantCity,
+    amount: SUBSCRIPTION_CONFIG.monthlyPrice,
+    txId,
+  });
+
+  return {
+    payload: pix.payload,
+    txId: pix.txId,
+    pixKey: SUBSCRIPTION_CONFIG.pixKey,
+    amount: SUBSCRIPTION_CONFIG.monthlyPrice,
+    merchantName: SUBSCRIPTION_CONFIG.merchantName,
+  };
+}

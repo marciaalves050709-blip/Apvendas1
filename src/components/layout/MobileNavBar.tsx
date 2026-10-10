@@ -18,7 +18,7 @@ export const MobileNavBar: React.FC = () => {
   const items: { id: ActiveTab; label: string; icon: React.ReactNode; badge?: number; highlight?: boolean }[] = [
     {
       id: 'client-store',
-      label: 'Loja Cliente',
+      label: 'Entrar / Loja',
       icon: <ShoppingBag className="w-5 h-5" />,
       highlight: true,
     },

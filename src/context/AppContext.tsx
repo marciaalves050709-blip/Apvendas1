@@ -112,7 +112,7 @@ interface AppContextType {
   clearAllForNewClient: () => void;
   loadDemoData: () => void;
 
-  // Trial & Subscription (5 Days Free Trial -> R$ 58,94)
+  // Trial & Subscription (2 Days Free Trial -> R$ 94,98)
   isAdmin: boolean;
   setIsAdmin: (val: boolean) => void;
   setAdminMode: () => void;
@@ -173,13 +173,15 @@ export const ADMIN_CONFIG = {
   email: 'marciaalves050709@gmail.com',
   role: 'Administradora Mestra (Criadora)',
   masterCode: 'MARCIA2026',
+  pixKey: '993192405',
+  monthlyPrice: 94.98,
 };
 
 export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
   isSubscribed: true,
   trialStartDate: new Date('2026-01-01T00:00:00.000Z').toISOString(),
   trialDurationDays: 9999,
-  planPrice: 58.94,
+  planPrice: 94.98,
   planName: 'Licença Mestra Vitalícia (Isenta de Cobrança)',
   activatedAt: new Date().toISOString(),
   subscriptionExpiresAt: new Date('2099-12-31T23:59:59.000Z').toISOString(),
@@ -189,20 +191,20 @@ export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
 export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
   isSubscribed: false,
   trialStartDate: new Date().toISOString(),
-  trialDurationDays: 5,
-  planPrice: 58.94,
+  trialDurationDays: 2,
+  planPrice: 94.98,
   planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
 };
 
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
-  pixKey: '12.345.678/0001-90',
-  pixKeyType: 'CNPJ',
+  pixKey: '993192405',
+  pixKeyType: 'PHONE',
   merchantName: 'appvendas',
-  merchantCity: 'SAO PAULO',
+  merchantCity: 'Barcarena PA',
   merchantWhatsapp: '5511999998888',
   receivingBank: 'NUBANK',
   cardProvider: 'STONE',
-  autoPixDetection: false,
+  autoPixDetection: true,
   autoCardApproval: true,
   soundEnabled: true,
 };
@@ -282,18 +284,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Company Name
   const companyName = currentCompany.name;
 
+  // Helper to migrate legacy city names
+  const sanitizeMerchantCity = (city?: string) => {
+    if (!city || city.toUpperCase().includes('PAULO') || city.toUpperCase().includes('SAO PAULO')) {
+      return 'Barcarena PA';
+    }
+    return city;
+  };
+
   // Persistence loader for PaymentSettings (customized per company workspace)
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('payment_settings', activeCompanyId));
       if (tenantSaved) {
         const parsed = JSON.parse(tenantSaved);
-        return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed };
+        return { 
+          ...DEFAULT_PAYMENT_SETTINGS, 
+          ...parsed, 
+          merchantCity: sanitizeMerchantCity(parsed.merchantCity) 
+        };
       }
       const saved = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...DEFAULT_PAYMENT_SETTINGS, ...parsed, merchantName: currentCompany.name };
+        return { 
+          ...DEFAULT_PAYMENT_SETTINGS, 
+          ...parsed, 
+          merchantName: currentCompany.name,
+          merchantCity: sanitizeMerchantCity(parsed.merchantCity)
+        };
       }
       return { ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name };
     } catch {
@@ -430,7 +449,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...DEFAULT_SUBSCRIPTION, ...parsed };
+        return { 
+          ...DEFAULT_SUBSCRIPTION, 
+          ...parsed,
+          trialDurationDays: (parsed.trialDurationDays === 5 || !parsed.trialDurationDays) ? 2 : parsed.trialDurationDays,
+          planPrice: (parsed.planPrice === 58.94 || !parsed.planPrice) ? 94.98 : parsed.planPrice
+        };
       }
       // If admin, initialize immediately with lifetime free subscription
       return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
@@ -463,7 +487,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Derived Trial & Subscription status
   const trialStartMs = new Date(subscription.trialStartDate || Date.now()).getTime();
-  const trialDurationMs = (subscription.trialDurationDays || 5) * 24 * 60 * 60 * 1000;
+  const trialDurationMs = (subscription.trialDurationDays || 2) * 24 * 60 * 60 * 1000;
   const trialEndMs = trialStartMs + trialDurationMs;
   const msRemaining = Math.max(0, trialEndMs - currentTimeMs);
 
@@ -508,7 +532,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSubscribed: false,
     };
     setSubscription(clientTrial);
-    showToast('info', '📱 Modo Cliente Ativado', 'Visualizando como cliente/lojista (com teste de 5 dias e cobrança de R$ 58,94).');
+    showToast('info', '📱 Modo Cliente Ativado', 'Visualizando como cliente/lojista (com teste de 2 dias e cobrança de R$ 94,98).');
   };
 
   const activateSubscription = (code?: string, paymentRef?: string): boolean => {
@@ -519,9 +543,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'MARCIA2026',
       'ADMINMARCIA',
       'MARCIA0507',
+      '993192405',
+      '9498',
+      'PAGO9498',
+      'PAGO94',
+      'MESTRA94',
       'MESTRA58',
       'MARCIAALVES050709@GMAIL.COM',
-      '5894',
       'MASTER2026',
       'VIP2026'
     ].includes(cleanCode) || rawInput.toLowerCase() === 'marciaalves050709@gmail.com';
@@ -580,19 +608,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSubscription(updated);
     setCurrentTimeMs(Date.now());
-    showToast('info', 'Período de Teste Reiniciado', 'Você tem 5 dias grátis de acesso completo a partir de agora.');
+    showToast('info', 'Período de Teste Reiniciado', 'Você tem 2 dias grátis de acesso completo a partir de agora.');
   };
 
   const simulateTrialExpired = () => {
-    const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     const updated: SubscriptionState = {
       ...subscription,
+      trialDurationDays: 2,
       isSubscribed: false,
-      trialStartDate: sixDaysAgo,
+      trialStartDate: threeDaysAgo,
     };
     setSubscription(updated);
     setCurrentTimeMs(Date.now());
-    showToast('warning', 'Simulação de Teste Expirado', 'O período de 5 dias foi marcado como expirado para teste do bloqueio.');
+    showToast('warning', 'Simulação de Teste Expirado', 'O período de 2 dias foi marcado como expirado para teste do bloqueio.');
   };
 
   const simulateTrialDay = (daysFromStart: number) => {
@@ -816,6 +845,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadedCusts = loadTenant<Customer[]>('customers', companyId === DEFAULT_COMPANY_ID ? INITIAL_CUSTOMERS : []);
     const loadedSupps = loadTenant<Supplier[]>('suppliers', companyId === DEFAULT_COMPANY_ID ? INITIAL_SUPPLIERS : []);
     const loadedSettings = loadTenant<PaymentSettings>('payment_settings', { ...DEFAULT_PAYMENT_SETTINGS, merchantName: target.name });
+    if (loadedSettings) {
+      loadedSettings.merchantCity = sanitizeMerchantCity(loadedSettings.merchantCity);
+    }
 
     setProducts(loadedProds);
     setSales(loadedSales);
