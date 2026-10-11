@@ -18,7 +18,8 @@ import {
   Package,
   Edit3,
   Building2,
-  Users
+  Users,
+  QrCode
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -45,7 +46,9 @@ export const Header: React.FC = () => {
     loadDemoData,
     currentCompany,
     companies,
-    setIsCompanyModalOpen
+    setIsCompanyModalOpen,
+    setIsSellerWhatsappModalOpen,
+    activeSeller
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
@@ -164,6 +167,19 @@ export const Header: React.FC = () => {
             <span className="sm:hidden font-bold">Loja</span>
           </button>
         )}
+
+        {/* WhatsApp & Pix do Vendedor Quick Button */}
+        <button
+          onClick={() => setIsSellerWhatsappModalOpen(true)}
+          className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+          title="Alterar WhatsApp, Chave Pix e QR Code de cada vendedor"
+        >
+          <QrCode className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span className="hidden sm:inline">Pix & Zap:</span>
+          <span className="font-extrabold text-emerald-700 truncate max-w-[80px] sm:max-w-[110px]">
+            {activeSeller?.name || 'Vendedor'}
+          </span>
+        </button>
 
         {/* Quick Back to Inventory when in Store (Mobile & Desktop) */}
         {activeTab === 'client-store' && (

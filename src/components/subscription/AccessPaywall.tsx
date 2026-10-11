@@ -38,10 +38,11 @@ export const AccessPaywall: React.FC = () => {
     activateSubscription,
     resetTrial,
     nextDueDateFormatted,
-    paymentSettings
+    paymentSettings,
+    isAccessAllowed
   } = useApp();
 
-  const isBlocked = Boolean((isTrialExpired || isBlockedDueToDay5) && !isMasterAdmin && !isAdmin);
+  const isBlocked = Boolean(!isAdmin && !isMasterAdmin && (!isAccessAllowed || isTrialExpired || isBlockedDueToDay5));
 
   const [copiedPix, setCopiedPix] = useState(false);
   const [pixQrDataUrl, setPixQrDataUrl] = useState<string>('');
@@ -236,8 +237,8 @@ export const AccessPaywall: React.FC = () => {
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-0 sm:p-6 overflow-y-auto">
+    return (
+    <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-6 overflow-y-auto">
       <div className="w-full max-w-2xl bg-white h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:rounded-3xl shadow-2xl border-0 sm:border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col">
         
         {/* Administrator Instant Release Header Bar */}
@@ -264,11 +265,19 @@ export const AccessPaywall: React.FC = () => {
           </div>
 
           <div className="inline-block px-3 py-1 bg-rose-500/20 border border-rose-400/40 text-rose-300 font-black text-[10px] uppercase rounded-full tracking-wider mb-1.5">
-            {isBlockedDueToDay5 ? '🚨 Vencimento do Dia 05 Ultrapassado' : 'Período de Teste de 2 Dias Concluído'}
+            {isBlockedDueToDay5 
+              ? '🚨 Vencimento do Dia 05 Ultrapassado' 
+              : isTrialExpired 
+              ? '⏳ Período de Teste de 2 Dias Concluído' 
+              : '⛔ Acesso Bloqueado: Pagamento Pendente'}
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-            {isBlockedDueToDay5 ? 'Acesso Bloqueado Imediatamente' : 'Acesso ao Sistema Bloqueado'}
+            {isBlockedDueToDay5 
+              ? 'Acesso Bloqueado: Dia 05 Vencido' 
+              : isTrialExpired 
+              ? 'Acesso Bloqueado: Teste Expirado' 
+              : 'Acesso Bloqueado por Não Pagamento'}
           </h2>
 
           <p className="text-xs sm:text-sm text-rose-200 mt-1 max-w-lg mx-auto leading-relaxed">
@@ -276,9 +285,13 @@ export const AccessPaywall: React.FC = () => {
               <>
                 A sua mensalidade venceu no <strong>dia 05</strong> e o acesso foi suspenso automaticamente por falta de pagamento. Realize o Pix de <strong>{formatCurrency(planPrice)}</strong> para restabelecer seu acesso imediatamente.
               </>
-            ) : (
+            ) : isTrialExpired ? (
               <>
                 Seus 2 dias de teste grátis terminaram. Efetue o pagamento de <strong>{formatCurrency(planPrice)}</strong> via Pix para liberar o acesso imediato com vencimento todo dia 05.
+              </>
+            ) : (
+              <>
+                O acesso a esta conta está suspenso por falta de pagamento. Realize o Pix de <strong>{formatCurrency(planPrice)}</strong> ou insira o código de ativação para restabelecer o acesso.
               </>
             )}
           </p>

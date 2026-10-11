@@ -150,6 +150,7 @@ interface AppContextType {
   simulateTrialDay: (daysFromStart: number) => void;
   simulateDay5Warning: () => void;
   simulateDay5Blocked: () => void;
+  blockUnpaidUser: () => void;
   renewSubscription: () => void;
 
   // Multi-Company & Infinite Users Workspaces
@@ -474,16 +475,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Administrator identification: Marcia Alves is exempt from all charges
+  // Administrator identification:
+  // Marcia Alves can activate admin mode with her master credentials/button.
+  // Defaults to false so client users and unpaid stores are properly blocked.
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('appvendas_is_admin');
       if (saved !== null) {
         return saved === 'true';
       }
-      return true; // Márcia Alves is administrator by default
+      return false; // Regular users and unpaid clients must not be granted admin automatically
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -495,12 +498,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isAdmin]);
 
-  // Subscription & 5-Day Free Trial state
+  // Subscription & 2-Day Free Trial state
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
+      const isSavedAdmin = localStorage.getItem('appvendas_is_admin') === 'true';
       if (saved) {
         const parsed = JSON.parse(saved);
+        // If not authenticated as admin, discard any cached master admin ref so unpaid users get blocked
+        if (!isSavedAdmin && parsed.lastPaymentRef?.includes('MASTER-ADMIN')) {
+          return DEFAULT_SUBSCRIPTION;
+        }
         return { 
           ...DEFAULT_SUBSCRIPTION, 
           ...parsed,
@@ -509,9 +517,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
       // If admin, initialize immediately with lifetime free subscription
-      return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
+      if (isSavedAdmin) {
+        return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
+      }
+      return DEFAULT_SUBSCRIPTION;
     } catch {
-      return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
+      return DEFAULT_SUBSCRIPTION;
     }
   });
 
@@ -543,8 +554,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const trialEndMs = trialStartMs + trialDurationMs;
   const msRemaining = Math.max(0, trialEndMs - currentTimeMs);
 
+  // Master Admin ONLY applies if isAdmin is true
   const isMasterAdmin = Boolean(
-    isAdmin ||
+    isAdmin &&
     (subscription.isSubscribed &&
       (subscription.lastPaymentRef?.includes('MASTER-ADMIN') ||
        (subscription.subscriptionExpiresAt && new Date(subscription.subscriptionExpiresAt).getFullYear() > 2090)))
@@ -559,6 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Check if Day 5 deadline has passed without payment/renewal
   const isBlockedDueToDay5 = Boolean(
     !isMasterAdmin && 
+    !isAdmin &&
     subscription.isSubscribed && 
     subscriptionExpiresAtMs > 0 && 
     currentTimeMs >= subscriptionExpiresAtMs
@@ -572,10 +585,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Administrator is ALWAYS subscribed and NEVER expired (100% exempt from charges)
   const isSubscribed = Boolean(isAdmin || isSubscribedValid);
-  const isTrialActive = !isAdmin && !subscription.isSubscribed && msRemaining > 0;
-  const isTrialExpired = !isAdmin && !subscription.isSubscribed && msRemaining <= 0;
+  const isTrialActive = !isAdmin && !isMasterAdmin && !subscription.isSubscribed && msRemaining > 0;
+  const isTrialExpired = !isAdmin && !isMasterAdmin && !subscription.isSubscribed && msRemaining <= 0;
   
-  // Total access allowed: Admin OR Valid Subscribed OR Active Trial
+  // Total access allowed: Admin OR Valid Subscribed OR Active Trial (NOT expired & NOT blocked due to Day 5)
   const isAccessAllowed = Boolean(isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5) || isTrialActive);
 
   // Days remaining calculation:
@@ -716,6 +729,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const simulateDay5Blocked = () => {
     // Simulates that Day 5 has passed without payment -> immediate block!
+    setIsAdmin(false);
+    try {
+      localStorage.setItem('appvendas_is_admin', 'false');
+    } catch {
+      // ignore
+    }
     const passedYesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const updated: SubscriptionState = {
       ...subscription,
@@ -725,7 +744,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSubscription(updated);
     setCurrentTimeMs(Date.now());
-    showToast('error', '⛔ Simulação: Bloqueio Imediato Ativado', 'Dia 05 ultrapassado sem pagamento. O aplicativo foi bloqueado imediatamente!');
+    showToast('error', '⛔ Bloqueio Ativado: Dia 05 Vencido', 'Dia 05 ultrapassado sem pagamento. O aplicativo foi bloqueado imediatamente!');
+  };
+
+  const blockUnpaidUser = () => {
+    // Blocks user immediately due to non-payment
+    setIsAdmin(false);
+    try {
+      localStorage.setItem('appvendas_is_admin', 'false');
+    } catch {
+      // ignore
+    }
+    const expiredPast = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const updated: SubscriptionState = {
+      ...subscription,
+      isSubscribed: false,
+      trialDurationDays: 2,
+      trialStartDate: expiredPast,
+      subscriptionExpiresAt: expiredPast,
+      lastPaymentRef: undefined,
+    };
+    setSubscription(updated);
+    setCurrentTimeMs(Date.now());
+    showToast('error', '⛔ Acesso Bloqueado por Não Pagamento', 'O usuário foi bloqueado imediatamente por falta de pagamento!');
   };
 
   const resetTrial = () => {
@@ -740,6 +781,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const simulateTrialExpired = () => {
+    setIsAdmin(false);
+    try {
+      localStorage.setItem('appvendas_is_admin', 'false');
+    } catch {
+      // ignore
+    }
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     const updated: SubscriptionState = {
       ...subscription,
@@ -749,7 +796,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSubscription(updated);
     setCurrentTimeMs(Date.now());
-    showToast('warning', 'Simulação de Teste Expirado', 'O período de 2 dias foi marcado como expirado para teste do bloqueio.');
+    showToast('warning', '⛔ Teste Expirado: Bloqueio Ativado', 'O período de 2 dias foi marcado como expirado. Acesso bloqueado até o Pix ser realizado!');
   };
 
   const simulateTrialDay = (daysFromStart: number) => {
@@ -1839,6 +1886,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         simulateTrialDay,
         simulateDay5Warning,
         simulateDay5Blocked,
+        blockUnpaidUser,
         renewSubscription,
         // Multi-Company & Infinite Users
         companyName,

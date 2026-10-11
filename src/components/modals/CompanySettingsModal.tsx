@@ -19,7 +19,8 @@ import {
   ExternalLink,
   Users,
   Smartphone,
-  Share2
+  Share2,
+  Lock
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { formatPhoneDisplay } from '../../utils/whatsappHelper';
@@ -40,7 +41,15 @@ export const CompanySettingsModal: React.FC = () => {
     setIsCompanyModalOpen, 
     setIsSellerWhatsappModalOpen,
     showToast,
-    products 
+    products,
+    blockUnpaidUser,
+    subscription,
+    isSubscribed,
+    isMasterAdmin,
+    isAdmin,
+    isBlockedDueToDay5,
+    isTrialExpired,
+    activateSubscription
   } = useApp();
 
   // Active Tab inside modal: 'edit' | 'list' | 'create'
@@ -381,6 +390,52 @@ export const CompanySettingsModal: React.FC = () => {
                       🛒 NOVO PEDIDO - {(name || 'SUA EMPRESA').toUpperCase()}
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* Status de Pagamento & Bloqueio da Conta */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-slate-700" />
+                    <span className="text-xs font-bold text-slate-900">Assinatura & Bloqueio por Pagamento</span>
+                  </div>
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                    isBlockedDueToDay5 || isTrialExpired
+                      ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                      : isSubscribed || isMasterAdmin || isAdmin
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    {isBlockedDueToDay5 || isTrialExpired ? '⛔ Bloqueado (Não Pagou)' : (isSubscribed || isMasterAdmin || isAdmin) ? '✅ Em Dia (Liberado)' : '⏳ Teste Grátis Ativo'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Cobrança de {formatCurrency(subscription.planPrice || 94.98)}/mês todo dia 05. Usuários que não pagarem têm o acesso suspenso imediatamente.
+                </p>
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      blockUnpaidUser();
+                      setIsCompanyModalOpen(false);
+                    }}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Bloquear Esta Empresa (Não Pagou)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      activateSubscription();
+                      showToast('success', 'Acesso Confirmado', 'Empresa liberada com sucesso.');
+                    }}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Confirmar Pagamento Realizado</span>
+                  </button>
                 </div>
               </div>
 

@@ -29,12 +29,18 @@ const MainLayout: React.FC = () => {
     activeTab, 
     setActiveTab,
     isSellerWhatsappModalOpen,
-    setIsSellerWhatsappModalOpen 
+    setIsSellerWhatsappModalOpen,
+    isAccessAllowed,
+    isAdmin,
+    isMasterAdmin
   } = useApp();
 
-  // Keyboard shortcut support (F2 for POS)
+  const isBlocked = Boolean(!isAdmin && !isMasterAdmin && !isAccessAllowed);
+
+  // Keyboard shortcut support (F2 for POS) - disabled when blocked
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isBlocked) return;
       if (e.key === 'F2') {
         e.preventDefault();
         setActiveTab('pos');
@@ -42,7 +48,7 @@ const MainLayout: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setActiveTab]);
+  }, [setActiveTab, isBlocked]);
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">

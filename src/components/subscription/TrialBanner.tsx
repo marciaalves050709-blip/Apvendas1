@@ -37,6 +37,7 @@ export const TrialBanner: React.FC = () => {
     simulateTrialDay,
     simulateDay5Warning,
     simulateDay5Blocked,
+    blockUnpaidUser,
     renewSubscription
   } = useApp();
 
@@ -75,6 +76,17 @@ export const TrialBanner: React.FC = () => {
               className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
             >
               <span>Minha Licença Mestra</span>
+            </button>
+
+            {/* Test Unpaid Blocking Action */}
+            <button
+              type="button"
+              onClick={() => blockUnpaidUser()}
+              className="p-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/40 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+              title="Testar bloqueio imediato de usuário que não pagou"
+            >
+              <Lock className="w-3.5 h-3.5 text-rose-300" />
+              <span className="hidden sm:inline">Testar Bloqueio (Não Pagou)</span>
             </button>
 
             {/* Test Client Mode Toggle */}
@@ -316,6 +328,20 @@ export const TrialBanner: React.FC = () => {
                     ⛔ Simular Dia 05 Vencido (Bloquear)
                   </span>
                   <span className="text-[9px] bg-rose-200 text-rose-900 px-1.5 py-0.5 rounded">Bloqueio</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    blockUnpaidUser();
+                    setShowSimMenu(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 text-xs font-bold text-rose-950 bg-rose-50 rounded-lg hover:bg-rose-100 flex items-center justify-between border border-rose-200"
+                >
+                  <span className="flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-rose-700" />
+                    🚨 Bloquear Usuário (Não Pagou)
+                  </span>
+                  <span className="text-[9px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded">Travar</span>
                 </button>
                 <button
                   type="button"
