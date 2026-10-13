@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 const ALL_CATEGORIES: Category[] = [
   'Copos & Taças',
@@ -618,6 +619,11 @@ export const ClientStoreView: React.FC = () => {
                 <span>Painel Principal →</span>
               </button>
             </div>
+
+            {/* Quick Install App on Phone button */}
+            <div className="pt-2 flex justify-center">
+              <PWAInstallButton />
+            </div>
           </form>
 
           {/* Footer signature */}
@@ -682,6 +688,9 @@ export const ClientStoreView: React.FC = () => {
               {activeSeller?.name || 'Vendedor'}
             </span>
           </button>
+
+          {/* PWA Install Button */}
+          <PWAInstallButton />
 
           {/* Cart Trigger Button */}
           <button

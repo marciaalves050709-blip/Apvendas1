@@ -32,12 +32,24 @@ export const MobileInstallBanner: React.FC = () => {
   };
 
   const handleAction = async () => {
-    if (isInstallable) {
-      const ok = await install();
-      if (!ok) {
-        setShowModal(true);
+    try {
+      const res = await install();
+      if (res.success) {
+        if (res.outcome === 'accepted' || res.action === 'prompt') {
+          try {
+            const confettiModule = await import('canvas-confetti');
+            confettiModule.default({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
+          } catch {
+            // ignore
+          }
+        }
+        return;
       }
-    } else {
+      if (res.outcome === 'dismissed' || res.action === 'opened_window' || res.action === 'ios_share' || res.action === 'android_intent') {
+        return;
+      }
+      setShowModal(true);
+    } catch {
       setShowModal(true);
     }
   };

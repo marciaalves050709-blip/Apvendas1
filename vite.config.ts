@@ -17,6 +17,8 @@ export default defineConfig(() => {
           name: 'appvendas - PDV e Estoque',
           short_name: 'appvendas',
           description: 'Sistema completo de controle de estoque, vendas PDV e catálogo WhatsApp.',
+          lang: 'pt-BR',
+          categories: ['business', 'productivity', 'shopping'],
           theme_color: '#4f46e5',
           background_color: '#0f172a',
           display: 'standalone',
@@ -78,8 +80,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],
