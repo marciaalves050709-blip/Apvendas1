@@ -27,7 +27,9 @@ import {
   MapPin,
   ExternalLink,
   ShieldCheck,
-  Send
+  Send,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface SellerWhatsappModalProps {
@@ -63,6 +65,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
   const [merchantName, setMerchantName] = useState('');
   const [merchantCity, setMerchantCity] = useState('Barcarena PA');
   const [receivingBank, setReceivingBank] = useState<BankProvider>('NUBANK');
+  const [showPixKeyInput, setShowPixKeyInput] = useState(false);
 
   // Preview QR code state
   const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
@@ -328,8 +331,9 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                           <Phone className="w-2.5 h-2.5 text-emerald-600" />
                           <span>{formatPhoneDisplay(s.whatsapp)}</span>
                         </p>
-                        <p className="text-[10px] text-slate-600 font-mono mt-1 truncate bg-slate-100 px-1.5 py-0.5 rounded-md">
-                          Pix: {s.pixKey}
+                        <p className="text-[10px] text-slate-600 font-mono mt-1 truncate bg-slate-100 px-1.5 py-0.5 rounded-md flex items-center justify-between">
+                          <span>Pix: •••••••••</span>
+                          <span className="text-[9px] text-emerald-700 font-bold">Chave Protegida</span>
                         </p>
                         <div className="mt-1 flex items-center gap-1.5">
                           <span className="text-[10px] font-bold text-slate-600">{bank.shortName}</span>
@@ -477,11 +481,11 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                   })}
                 </div>
 
-                {/* Input Chave Pix */}
+                {/* Input Chave Pix Protegida */}
                 <div className="relative">
                   <CreditCard className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="text"
+                    type={showPixKeyInput ? 'text' : 'password'}
                     required
                     placeholder={
                       pixKeyType === 'PHONE' ? 'Ex: 993192405 ou 11999998888' :
@@ -491,8 +495,16 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                     }
                     value={pixKey}
                     onChange={e => setPixKey(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none transition-all"
+                    className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none transition-all"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPixKeyInput(!showPixKeyInput)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+                    title={showPixKeyInput ? 'Ocultar Chave' : 'Mostrar Chave'}
+                  >
+                    {showPixKeyInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
 
                 {/* Titular / Favorecido na Conta */}
@@ -587,8 +599,8 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                     Carregando QR Code...
                   </div>
                 )}
-                <div className="mt-2 text-[10px] font-mono text-slate-500 font-bold truncate max-w-[180px] mx-auto">
-                  Chave: {pixKey || 'Informe a chave'}
+                <div className="mt-2 text-[10px] font-mono text-slate-500 font-bold tracking-widest select-none">
+                  Chave: •••••••••
                 </div>
               </div>
 

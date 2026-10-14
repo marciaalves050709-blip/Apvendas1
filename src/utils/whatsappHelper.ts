@@ -147,7 +147,7 @@ export function buildWhatsAppOrderMessage(
     const activeBank = seller?.receivingBank || settings.receivingBank;
     const activeCity = seller?.merchantCity || settings.merchantCity || 'Barcarena PA';
 
-    msg += `• *Chave Pix (${activePixType}):* \`${activePixKey}\`\n`;
+    msg += `• *Pagamento Pix:* Chave Pix copiada pelo cliente no catálogo\n`;
     msg += `• *Favorecido / Vendedor:* ${activeFavorecido}\n`;
     msg += `• *Banco:* ${activeBank}\n`;
     msg += `• *Cidade:* ${activeCity}\n`;

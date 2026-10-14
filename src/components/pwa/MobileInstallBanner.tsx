@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Download, X, Sparkles } from 'lucide-react';
+import { Smartphone, Download, X } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { PWAInstallModal } from './PWAInstallModal';
+import confetti from 'canvas-confetti';
 
 export const MobileInstallBanner: React.FC = () => {
-  const { isInstalled, isInstallable, isIOS, install } = usePWAInstall();
+  const { isInstalled, isInstallable, install } = usePWAInstall();
   const [dismissed, setDismissed] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
@@ -33,20 +34,19 @@ export const MobileInstallBanner: React.FC = () => {
 
   const handleAction = async () => {
     try {
-      const res = await install();
-      if (res.success) {
-        if (res.outcome === 'accepted' || res.action === 'prompt') {
+      if (isInstallable) {
+        const res = await install();
+        if (res.success && res.action === 'prompt') {
           try {
-            const confettiModule = await import('canvas-confetti');
-            confettiModule.default({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
+            confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
           } catch {
             // ignore
           }
+          return;
         }
-        return;
-      }
-      if (res.outcome === 'dismissed' || res.action === 'opened_window' || res.action === 'ios_share' || res.action === 'android_intent') {
-        return;
+        if (res.action === 'android_intent') {
+          return;
+        }
       }
       setShowModal(true);
     } catch {
@@ -64,14 +64,14 @@ export const MobileInstallBanner: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-xs text-white truncate">
-                Usar como Aplicativo no Celular
+                Instalar Aplicativo no Celular
               </span>
               <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.2 rounded hidden sm:inline">
                 Grátis
               </span>
             </div>
             <p className="text-[10px] text-indigo-200 truncate">
-              Abra em tela cheia com 1 toque na sua tela inicial
+              Abra em tela cheia direto da sua tela inicial
             </p>
           </div>
         </div>

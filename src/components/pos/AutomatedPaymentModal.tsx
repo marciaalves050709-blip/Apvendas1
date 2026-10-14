@@ -33,7 +33,9 @@ import {
   Volume2,
   Building2,
   Radio,
-  Zap
+  Zap,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface AutomatedPaymentModalProps {
@@ -108,6 +110,7 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
   const [editReceivingBank, setEditReceivingBank] = useState<BankProvider>(paymentSettings.receivingBank || 'NUBANK');
   const [editCardProvider, setEditCardProvider] = useState(paymentSettings.cardProvider);
   const [editSound, setEditSound] = useState(paymentSettings.soundEnabled);
+  const [showEditPixKey, setShowEditPixKey] = useState(false);
 
   const activeBank = BANKS_LIST.find(b => b.id === (paymentSettings.receivingBank || 'NUBANK')) || BANKS_LIST[0];
 
@@ -221,7 +224,7 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
     if (!paymentSettings.pixKey) return;
     navigator.clipboard.writeText(paymentSettings.pixKey);
     setCopiedKey(true);
-    showToast('success', 'Chave Copiada!', `Chave Pix (${paymentSettings.pixKey}) copiada com sucesso.`);
+    showToast('success', 'Chave Copiada!', 'Chave Pix copiada com sucesso para a área de transferência.');
     setTimeout(() => setCopiedKey(false), 3000);
   };
 
@@ -678,14 +681,24 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Chave Pix da Loja</label>
-                <input
-                  type="text"
-                  value={editPixKey}
-                  onChange={e => setEditPixKey(e.target.value)}
-                  placeholder="Ex: 12.345.678/0001-90"
-                  className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold"
-                />
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">Chave Pix da Loja (Protegida)</label>
+                <div className="relative">
+                  <input
+                    type={showEditPixKey ? 'text' : 'password'}
+                    value={editPixKey}
+                    onChange={e => setEditPixKey(e.target.value)}
+                    placeholder="Ex: 12.345.678/0001-90"
+                    className="w-full pl-2.5 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPixKey(!showEditPixKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-0.5"
+                    title={showEditPixKey ? 'Ocultar Chave' : 'Mostrar Chave'}
+                  >
+                    {showEditPixKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -941,7 +954,7 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase block">Chave Pix ({paymentSettings.pixKeyType}) • {activeBank.shortName}</span>
-                    <span className="font-mono font-bold text-slate-900 text-sm block">{paymentSettings.pixKey}</span>
+                    <span className="font-mono font-bold text-slate-500 text-sm block tracking-widest select-none">•••••••••</span>
                     <span className="text-[10px] text-slate-500 block mt-0.5">Favorecido: <strong>{paymentSettings.merchantName}</strong></span>
                   </div>
                   <div className="flex items-center gap-1.5">

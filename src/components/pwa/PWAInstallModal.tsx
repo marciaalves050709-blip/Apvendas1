@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Smartphone, 
@@ -12,10 +12,12 @@ import {
   Copy,
   Check,
   ExternalLink,
-  AlertTriangle,
-  Loader2,
-  Sparkles
+  Sparkles,
+  QrCode,
+  ArrowRight,
+  MoreVertical
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import confetti from 'canvas-confetti';
 
@@ -37,7 +39,27 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   } = usePWAInstall();
 
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isInstalling, setIsInstalling] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [isTriggering, setIsTriggering] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Generate QR code for mobile scanning
+    try {
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://appvendas.app';
+      QRCode.toDataURL(currentUrl, {
+        width: 220,
+        margin: 1.5,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff',
+        },
+      }).then(setQrCodeUrl);
+    } catch {
+      // ignore
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -53,14 +75,16 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   };
 
   const handleDirectInstall = async () => {
-    setIsInstalling(true);
+    setIsTriggering(true);
+    setTimeout(() => setIsTriggering(false), 300);
+
     try {
       const res = await install();
       if (res.success) {
-        if (res.outcome === 'accepted' || res.action === 'prompt') {
+        if (res.action === 'prompt') {
           try {
             confetti({
-              particleCount: 75,
+              particleCount: 80,
               spread: 80,
               origin: { y: 0.6 }
             });
@@ -68,19 +92,31 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
             // ignore
           }
           onClose();
-        } else if (res.action === 'opened_window' || res.action === 'ios_share' || res.action === 'android_intent') {
+        } else if (res.action === 'android_intent') {
           onClose();
         }
       }
-    } finally {
-      setIsInstalling(false);
+    } catch {
+      // ignore
     }
   };
 
   const handleOpenBrowserTab = () => {
-    const opened = openDirectInstallInBrowser();
-    if (opened) {
-      onClose();
+    openDirectInstallInBrowser();
+    onClose();
+  };
+
+  const handleIosShare = async () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: 'appvendas - PDV e Estoque',
+          text: 'Instale o appvendas na sua Tela de Início',
+          url: window.location.href,
+        });
+      } catch {
+        // user closed share sheet
+      }
     }
   };
 
@@ -108,8 +144,8 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                 <Sparkles className="w-3 h-3 text-emerald-400" />
                 <span>Aplicativo Oficial</span>
               </div>
-              <h2 className="text-lg font-black tracking-tight text-white">
-                Instalar Aplicativo
+              <h2 className="text-lg font-black tracking-tight text-white leading-tight">
+                Instalar no Celular
               </h2>
               <p className="text-xs text-indigo-200">
                 Acesse o appvendas direto da sua tela inicial
@@ -130,77 +166,126 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                 Você já possui o appvendas instalado. Ele já tem um ícone próprio na sua tela inicial!
               </p>
             </div>
-          ) : isIframe ? (
-            /* Running inside test frame / AI Studio preview: 1-Click Launch & Install */
-            <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-2xl space-y-3">
-              <div className="flex items-start gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-black text-slate-900 text-sm">Instalar no Dispositivo</h4>
-                  <p className="text-xs text-slate-600">
-                    Clique no botão abaixo para abrir a janela de instalação direta no seu celular ou computador:
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleOpenBrowserTab}
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-sm rounded-xl shadow-md shadow-emerald-700/25 flex items-center justify-center gap-2 cursor-pointer transition-all"
-              >
-                <DownloadCloud className="w-5 h-5 text-emerald-200" />
-                <span>Abrir e Instalar Aplicativo Agora</span>
-              </button>
-
-              <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500 border-t border-emerald-200/60">
-                <span>Ou copie o link para compartilhar:</span>
-                <button
-                  type="button"
-                  onClick={handleCopyLink}
-                  className="font-bold text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  {copiedLink ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedLink ? 'Copiado!' : 'Copiar'}</span>
-                </button>
-              </div>
-            </div>
           ) : (
-            /* Regular Browser Flow: Direct Install Button */
-            <div className="space-y-3 pt-1">
-              <button
-                type="button"
-                onClick={handleDirectInstall}
-                disabled={isInstalling}
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-75"
-              >
-                {isInstalling ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <DownloadCloud className="w-5 h-5 text-emerald-200" />
-                )}
-                <span>
-                  {isInstalling 
-                    ? 'Preparando Instalação...' 
-                    : isIOS 
-                      ? 'Adicionar à Tela de Início (iPhone)' 
-                      : 'Instalar Aplicativo Agora'}
-                </span>
-              </button>
-              <p className="text-[11px] text-center text-slate-500">
-                Toque no botão verde acima para instalar diretamente no seu celular ou computador.
-              </p>
+            <div className="space-y-3">
+              
+              {/* 1. Android Flow */}
+              {isAndroid ? (
+                <div className="space-y-3">
+                  {/* Primary 1-Touch Install Button */}
+                  <button
+                    type="button"
+                    onClick={handleDirectInstall}
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    <DownloadCloud className="w-5 h-5 text-emerald-200" />
+                    <span>Instalar Aplicativo Agora</span>
+                  </button>
+
+                  {/* Android Step-by-Step Guide */}
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2.5">
+                    <span className="font-black text-slate-900 block text-xs">
+                      Ou instale pelo navegador em 3 passos:
+                    </span>
+                    <div className="space-y-2 text-slate-700 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">1</span>
+                        <span>Toque nos <strong>3 pontinhos ⋮</strong> no canto superior direito do Chrome.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">2</span>
+                        <span>Toque em <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">3</span>
+                        <span>Confirme em <strong>"Instalar"</strong>. O ícone aparecerá no seu celular!</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : isIOS ? (
+                /* 2. iOS Safari Flow */
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleIosShare}
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-slate-900 hover:from-indigo-700 hover:to-slate-950 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Share className="w-5 h-5 text-indigo-300" />
+                    <span>Abrir Menu de Instalação (iPhone)</span>
+                  </button>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2.5">
+                    <span className="font-black text-slate-900 block text-xs">
+                      Como instalar no iPhone (Safari):
+                    </span>
+                    <div className="space-y-2 text-slate-700 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">1</span>
+                        <span>Toque no botão <strong>Compartilhar ⎋</strong> na barra inferior do Safari.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">2</span>
+                        <span>Role para baixo e toque em <strong>"Adicionar à Tela de Início" ➕</strong>.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">3</span>
+                        <span>Toque em <strong>"Adicionar"</strong> no canto superior direito!</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* 3. Computer / Preview / QR Code Flow */
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleDirectInstall}
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    <DownloadCloud className="w-5 h-5 text-emerald-200" />
+                    <span>Instalar Aplicativo Agora</span>
+                  </button>
+
+                  {/* QR Code for instant phone install */}
+                  {qrCodeUrl && (
+                    <div className="p-3 bg-gradient-to-br from-indigo-50/80 to-slate-50 border border-indigo-200 rounded-2xl text-center space-y-2">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-indigo-100 text-indigo-900 rounded-md text-[10px] font-black uppercase tracking-wider">
+                        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Instalar Direto no Celular</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Aponte a câmera do seu celular para o QR Code abaixo:
+                      </p>
+                      <div className="inline-block p-2 bg-white rounded-xl shadow-xs border border-indigo-200">
+                        <img src={qrCodeUrl} alt="QR Code Instalação Celular" className="w-36 h-36 mx-auto" />
+                      </div>
+                    </div>
+                  )}
+
+                  {isIframe && (
+                    <button
+                      type="button"
+                      onClick={handleOpenBrowserTab}
+                      className="w-full py-2.5 px-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <ExternalLink className="w-4 h-4 text-slate-600" />
+                      <span>Abrir em Nova Aba do Navegador</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
             </div>
           )}
 
           {/* Benefits Grid */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-2 gap-2 text-xs pt-1">
             <div className="p-2.5 bg-indigo-50/80 rounded-2xl border border-indigo-100 flex items-start gap-2">
               <Zap className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
               <div>
                 <strong className="block text-slate-900 font-bold text-[11px]">Acesso Rápido</strong>
-                <span className="text-[10px] text-slate-500">Abre em 1 toque na tela inicial</span>
+                <span className="text-[10px] text-slate-500">1 toque na tela inicial</span>
               </div>
             </div>
 
@@ -224,123 +309,25 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
               <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
               <div>
                 <strong className="block text-slate-900 font-bold text-[11px]">Leve e Seguro</strong>
-                <span className="text-[10px] text-slate-500">Não ocupa memória do celular</span>
+                <span className="text-[10px] text-slate-500">Não ocupa memória</span>
               </div>
             </div>
           </div>
 
-          {/* In-App Browser Warning (WhatsApp / Instagram / Facebook WebView) */}
-          {isInAppBrowser && (
-            <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs space-y-2 text-amber-950">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="font-bold text-[11px]">
-                  Navegador interno do WhatsApp / Instagram detectado
-                </p>
-              </div>
-              <p className="text-[10px] text-amber-900 leading-relaxed">
-                Navegadores internos de redes sociais não permitem instalação nativa. Toque no botão abaixo para abrir diretamente no navegador do seu celular:
-              </p>
-              <button
-                type="button"
-                onClick={handleDirectInstall}
-                className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Abrir no Google Chrome / Safari</span>
-              </button>
-            </div>
-          )}
-
-          {/* Detailed OS Steps */}
-          {isIOS ? (
-            /* iOS Safari Step-by-Step */
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5 text-xs">
-              <div className="flex items-center gap-1.5 font-black text-slate-900 text-xs uppercase tracking-wide">
-                <span>Passo a passo no iPhone / iPad (Safari):</span>
-              </div>
-
-              <div className="space-y-2 text-slate-700">
-                <div className="flex items-start gap-2 p-2 bg-white rounded-xl border border-slate-200">
-                  <div className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
-                    1
-                  </div>
-                  <div>
-                    <span>Toque no botão <strong>Compartilhar</strong></span>
-                    <div className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.2 bg-slate-100 rounded text-slate-900 font-mono text-[10px]">
-                      <Share className="w-3 h-3 text-blue-600" />
-                      <span>Compartilhar</span>
-                    </div>
-                    <span>na barra inferior do Safari.</span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2 p-2 bg-white rounded-xl border border-slate-200">
-                  <div className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
-                    2
-                  </div>
-                  <div>
-                    <span>Role a tela e toque em </span>
-                    <strong className="text-slate-900">"Adicionar à Tela de Início"</strong>
-                    <div className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.2 bg-slate-100 rounded text-slate-900 font-mono text-[10px]">
-                      <PlusSquare className="w-3 h-3 text-emerald-600" />
-                      <span>Tela de Início</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2 p-2 bg-white rounded-xl border border-slate-200">
-                  <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
-                    3
-                  </div>
-                  <div>
-                    <span>Toque em <strong>"Adicionar"</strong> no canto superior direito. Pronto!</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : !isInstalled && !isIframe && (
-            /* Android / Chrome helper */
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
-                <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Também disponível pelo menu do Chrome:</span>
-              </div>
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                Toque no menu <strong>⋮ (três pontinhos)</strong> no topo do Google Chrome e escolha <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
-              </p>
-            </div>
-          )}
-
-          {/* Action Footer Button */}
-          <div className="flex gap-2 pt-1">
+          {/* Copy Link Footer */}
+          <div className="pt-2 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
+            <span className="text-[11px]">Compartilhar link do app:</span>
             <button
               type="button"
               onClick={handleCopyLink}
-              className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-800 font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+              className="font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors"
             >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5 text-emerald-700" />}
               <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white font-bold text-xs rounded-xl cursor-pointer transition-all"
-            >
-              Fechar
             </button>
           </div>
 
         </div>
-
-        {/* Footer */}
-        <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-500">
-            Compatível com Android (Chrome / Samsung), iPhone (Safari) e Computadores (Chrome / Edge).
-          </p>
-        </div>
-
       </div>
     </div>
   );

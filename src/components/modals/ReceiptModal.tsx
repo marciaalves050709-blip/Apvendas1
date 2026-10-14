@@ -25,7 +25,6 @@ export const ReceiptModal: React.FC = () => {
     const lines = [
       '========================================',
       `             ${companyTitle}`,
-      paymentSettings.pixKey ? `       PIX: ${paymentSettings.pixKey}` : '',
       `            ${companyCity}`,
       '========================================',
       `CUPOM NÃO FISCAL: ${sale.code}`,
@@ -83,10 +82,8 @@ export const ReceiptModal: React.FC = () => {
             <div className="text-center border-b border-dashed border-slate-400 pb-3 mb-3">
               <h4 className="font-black text-sm uppercase tracking-tight">{companyTitle}</h4>
               <p className="text-[9px] text-slate-400">
-                {paymentSettings.pixKey ? `PIX: ${paymentSettings.pixKey}` : ''}
-                {companyPhone ? ` • Tel: ${companyPhone}` : ''}
+                {companyPhone ? `Tel: ${companyPhone} • ` : ''}{companyCity}
               </p>
-              <p className="text-[9px] text-slate-400">{companyCity}</p>
             </div>
 
             {/* Document Header */}

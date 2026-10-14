@@ -494,7 +494,7 @@ export const ClientStoreView: React.FC = () => {
     if (!keyToCopy) return;
     navigator.clipboard.writeText(keyToCopy);
     setCopiedPixKey(true);
-    showToast('info', 'Copiado!', `Chave Pix (${keyToCopy}) copiada para a área de transferência.`);
+    showToast('info', 'Copiado!', 'Chave Pix copiada com sucesso para a área de transferência.');
     setTimeout(() => setCopiedPixKey(false), 2500);
   };
 
@@ -1318,9 +1318,10 @@ export const ClientStoreView: React.FC = () => {
                 {paymentMethod === 'PIX' && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold flex items-center gap-1">
+                      <span className="font-bold flex items-center gap-1.5">
                         <QrCode className="w-3.5 h-3.5 text-emerald-700" />
-                        Chave Pix: {activeSeller?.pixKey || paymentSettings.pixKey}
+                        <span>Chave Pix:</span>
+                        <span className="font-mono text-emerald-800 tracking-widest select-none font-bold">•••••••••</span>
                       </span>
                       <button
                         type="button"
@@ -1535,7 +1536,7 @@ export const ClientStoreView: React.FC = () => {
                       className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-all"
                     >
                       {copiedPixKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedPixKey ? 'Chave Pix Copiada!' : `Copiar Chave Pix (${activeSeller?.pixKey || paymentSettings.pixKey})`}</span>
+                      <span>{copiedPixKey ? 'Chave Pix Copiada com Sucesso!' : 'Copiar Chave Pix'}</span>
                     </button>
 
                     {/* Instant Simulation Action */}

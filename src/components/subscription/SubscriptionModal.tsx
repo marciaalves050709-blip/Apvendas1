@@ -60,6 +60,7 @@ export const SubscriptionModal: React.FC = () => {
   const [radarPulseCount, setRadarPulseCount] = useState(0);
   const [selectedBankId, setSelectedBankId] = useState<string>(paymentSettings.receivingBank || 'NUBANK');
   const [copiedAdminKey, setCopiedAdminKey] = useState(false);
+  const [copiedMasterKey, setCopiedMasterKey] = useState(false);
   const [forceShowRenewalPayment, setForceShowRenewalPayment] = useState(false);
 
   // Real-time Bank Alert state
@@ -331,6 +332,39 @@ export const SubscriptionModal: React.FC = () => {
                 </p>
               </div>
 
+              {/* Chave Mestra Exclusiva do Administrador (Visível somente no perfil de Márcia) */}
+              <div className="p-3.5 bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border border-amber-500/50 rounded-xl text-white space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                    Sua Chave Mestra de Administradora
+                  </span>
+                  <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-bold">
+                    Somente no seu usuário
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div>
+                    <span className="font-mono text-base font-black text-amber-300 tracking-wider">MARCIA2026</span>
+                    <p className="text-[10px] text-slate-300">
+                      Chave mestra privativa para liberar acesso completo em qualquer aparelho ou navegador.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('MARCIA2026');
+                      setCopiedMasterKey(true);
+                      setTimeout(() => setCopiedMasterKey(false), 2000);
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-black rounded-lg flex items-center gap-1 cursor-pointer transition-all shrink-0"
+                  >
+                    {copiedMasterKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedMasterKey ? 'Copiada!' : 'Copiar Chave Mestra'}</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Seus dados de recebimento Pix */}
               <div className="p-3.5 bg-slate-900 text-white rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
@@ -597,7 +631,7 @@ export const SubscriptionModal: React.FC = () => {
                           setActivationCode(e.target.value);
                           setCodeError('');
                         }}
-                        placeholder="Ex: LIBERAR2026 ou código de ativação"
+                        placeholder="Digite o código de ativação"
                         className="flex-1 px-4 py-3 bg-white border-2 border-slate-300 rounded-xl text-sm font-mono font-bold uppercase tracking-wider focus:outline-hidden focus:border-indigo-600 text-slate-900"
                       />
                       <button
@@ -612,10 +646,10 @@ export const SubscriptionModal: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-[11px] text-indigo-900 flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                     <p>
-                      Dica de liberação: Digite o código de ativação fornecido pela administradora ou <strong>LIBERAR2026</strong> para ativar imediatamente.
+                      Após realizar o pagamento via Pix de R$ 94,98, o radar bancário identifica automaticamente. Se preferir, insira o código de ativação enviado pela administradora.
                     </p>
                   </div>
                 </form>

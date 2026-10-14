@@ -495,7 +495,7 @@ export const AccessPaywall: React.FC = () => {
                     setAdminPass(e.target.value);
                     setAdminError('');
                   }}
-                  placeholder="Digite sua Senha Mestra (Ex: MARCIA2026)"
+                  placeholder="Digite sua senha de administradora"
                   className="w-full px-3 py-2 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono"
                   autoFocus
                 />

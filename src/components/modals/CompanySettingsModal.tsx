@@ -20,7 +20,9 @@ import {
   Users,
   Smartphone,
   Share2,
-  Lock
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { formatPhoneDisplay } from '../../utils/whatsappHelper';
@@ -62,6 +64,7 @@ export const CompanySettingsModal: React.FC = () => {
   const [city, setCity] = useState(paymentSettings.merchantCity || 'Barcarena PA');
   const [pixKey, setPixKey] = useState(paymentSettings.pixKey || '');
   const [pixKeyType, setPixKeyType] = useState(paymentSettings.pixKeyType || 'CNPJ');
+  const [showPixKeyInput, setShowPixKeyInput] = useState(false);
   const [selectedEmoji, setSelectedEmoji] = useState(currentCompany?.logoEmoji || '🏪');
 
   // Form State for creating a new company workspace
@@ -319,13 +322,23 @@ export const CompanySettingsModal: React.FC = () => {
                       <option value="EMAIL">E-mail</option>
                       <option value="RANDOM">Aleatória</option>
                     </select>
-                    <input
-                      type="text"
-                      placeholder="12.345.678/0001-90"
-                      value={pixKey}
-                      onChange={e => setPixKey(e.target.value)}
-                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
-                    />
+                    <div className="flex-1 relative">
+                      <input
+                        type={showPixKeyInput ? 'text' : 'password'}
+                        placeholder="12.345.678/0001-90"
+                        value={pixKey}
+                        onChange={e => setPixKey(e.target.value)}
+                        className="w-full pl-3.5 pr-9 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPixKeyInput(!showPixKeyInput)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+                        title={showPixKeyInput ? 'Ocultar Chave' : 'Mostrar Chave'}
+                      >
+                        {showPixKeyInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
