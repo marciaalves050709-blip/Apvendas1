@@ -111,7 +111,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
         merchantName: nameToUse,
         merchantCity: cityToUse,
         amount: 25.00, // Demo amount for testing
-        txId: 'TESTEVEND' + Math.floor(100 + Math.random() * 900),
+        txId: '***',
       });
 
       setPreviewPixPayload(pixObj.payload);

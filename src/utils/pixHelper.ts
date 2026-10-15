@@ -34,54 +34,137 @@ function calculateCRC16(payload: string): string {
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
+export function formatPixKeyForBACEN(pixKey: string, keyType?: string): string {
+  let clean = (pixKey || '').trim();
+  const digits = clean.replace(/\D/g, '');
+
+  // 1. Phone number (Brazil standard in BACEN requires E.164: +55 followed by DDD and 8-9 digits)
+  if (
+    keyType === 'PHONE' ||
+    clean.startsWith('+55') ||
+    (digits.length >= 10 && digits.length <= 11 && !clean.includes('@')) ||
+    (digits.startsWith('55') && (digits.length === 12 || digits.length === 13))
+  ) {
+    if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+      return `+${digits}`;
+    }
+    return `+55${digits}`;
+  }
+
+  // 2. CPF (11 digits, numbers only):
+  if (keyType === 'CPF' || (digits.length === 11 && !clean.includes('@'))) {
+    return digits;
+  }
+
+  // 3. CNPJ (14 digits, numbers only):
+  if (keyType === 'CNPJ' || digits.length === 14) {
+    return digits;
+  }
+
+  // 4. Email:
+  if (clean.includes('@')) {
+    return clean.toLowerCase();
+  }
+
+  // 5. EVP / Random Key (UUID):
+  return clean.toLowerCase();
+}
+
+export function sanitizeMerchantCity(rawCity: string): string {
+  if (!rawCity) return 'BARCARENA';
+  let c = rawCity
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+
+  // Strip state suffix like ' PA', ' - PA', '/PA'
+  c = c.replace(/[\s\-\/]+(PA|SP|RJ|MG|RS|PR|SC|BA|CE|PE|AM|GO|ES|DF|MT|MS|MA|RN|PB|AL|SE|PI|RO|TO|AC|AP|RR)$/i, '').trim();
+
+  // Keep only uppercase letters and spaces
+  c = c.replace(/[^A-Z\s]/g, '').replace(/\s+/g, ' ').trim();
+
+  // Max 15 characters per BACEN spec
+  c = c.substring(0, 15).trim();
+
+  return c || 'BARCARENA';
+}
+
+export function sanitizeMerchantName(rawName: string): string {
+  if (!rawName) return 'MARCIA ALVES';
+  let n = rawName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+
+  // Keep only letters, numbers and spaces
+  n = n.replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+  // Max 25 characters per BACEN spec
+  n = n.substring(0, 25).trim();
+
+  return n || 'MARCIA ALVES';
+}
+
 export function generatePixPayload(params: {
   pixKey: string;
-  merchantName: string;
-  merchantCity: string;
-  amount: number;
+  merchantName?: string;
+  merchantCity?: string;
+  amount?: number;
   txId?: string;
+  keyType?: string;
 }): { payload: string; txId: string } {
   const {
     pixKey,
-    merchantName = 'APP VENDAS',
-    merchantCity = 'BARCARENA PA',
-    amount,
-    txId = 'VEN' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+    merchantName = 'MARCIA ALVES',
+    merchantCity = 'BARCARENA',
+    amount = 0,
+    txId = '***',
+    keyType,
   } = params;
 
-  // Clean strings
-  const cleanKey = pixKey.trim();
-  const cleanName = merchantName.substring(0, 25).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-  const cleanCity = merchantCity.substring(0, 15).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-  const formattedAmount = amount.toFixed(2);
+  // Format key according to BACEN DICT standard (+55 for phones, numbers-only for CPF/CNPJ, lowercase for email)
+  const cleanKey = formatPixKeyForBACEN(pixKey, keyType);
+  const cleanName = sanitizeMerchantName(merchantName);
+  const cleanCity = sanitizeMerchantCity(merchantCity);
 
-  // Merchant Account Information
+  // For Static Pix without a commercial PSP billing API, BACEN mandates txId to be '***'
+  // When '***' is used, every banking app in Brazil accepts the Copia e Cola instantly!
+  const cleanTxId = (txId && txId !== '***' && /^[a-zA-Z0-9]{1,25}$/.test(txId)) ? txId : '***';
+
+  // Tag 26: Merchant Account Information
   const merchantAccountInfo =
     formatField('00', 'br.gov.bcb.pix') +
     formatField('01', cleanKey);
 
-  // Additional Data Field Template
-  const additionalDataField = formatField('05', txId);
+  // Tag 62: Additional Data Field (txId)
+  const additionalDataField = formatField('05', cleanTxId);
 
-  // Build raw payload without CRC
+  // Build raw payload without CRC (strictly complying with BACEN EMV BR Code standard)
   let rawPayload =
-    formatField('00', '01') + // Format indicator
-    formatField('26', merchantAccountInfo) +
-    formatField('52', '0000') + // Merchant category
-    formatField('53', '986') + // Currency BRL
-    formatField('54', formattedAmount) + // Amount
-    formatField('58', 'BR') + // Country
-    formatField('59', cleanName) + // Merchant name
-    formatField('60', cleanCity) + // City
-    formatField('62', additionalDataField) + // TxId
-    '6304'; // CRC16 placeholder
+    formatField('00', '01') + // Tag 00: Payload Format Indicator (01)
+    formatField('01', '11') + // Tag 01: Point of Initiation Method (11 = Static QR Code)
+    formatField('26', merchantAccountInfo) + // Tag 26: Merchant Account Information
+    formatField('52', '0000') + // Tag 52: Merchant Category Code (0000)
+    formatField('53', '986'); // Tag 53: Transaction Currency (986 = BRL)
+
+  // Tag 54: Transaction Amount (only include if > 0)
+  if (amount && amount > 0) {
+    rawPayload += formatField('54', amount.toFixed(2));
+  }
+
+  rawPayload +=
+    formatField('58', 'BR') + // Tag 58: Country Code (BR)
+    formatField('59', cleanName) + // Tag 59: Merchant Name (max 25)
+    formatField('60', cleanCity) + // Tag 60: Merchant City (max 15)
+    formatField('62', additionalDataField) + // Tag 62: Additional Data Template (txId)
+    '6304'; // Tag 63: CRC16 placeholder
 
   const crc = calculateCRC16(rawPayload);
   const payload = rawPayload + crc;
 
   return {
     payload,
-    txId,
+    txId: cleanTxId,
   };
 }
 
@@ -390,24 +473,23 @@ export const SUBSCRIPTION_CONFIG = {
   monthlyPrice: 94.98,
   pixKey: '91993192405',
   merchantName: 'MARCIA ALVES',
-  merchantCity: 'BARCARENA PA',
+  merchantCity: 'BARCARENA',
   adminEmail: 'marciaalves050709@gmail.com',
   planName: 'Plano Mensal Pro - Sistema de Vendas & Estoque',
 };
 
 export function generateSubscriptionPix(txIdSuffix?: string): { payload: string; txId: string; pixKey: string; amount: number; merchantName: string } {
-  const txId = 'ASSIN' + (txIdSuffix || Math.random().toString(36).substring(2, 8).toUpperCase());
   const pix = generatePixPayload({
     pixKey: SUBSCRIPTION_CONFIG.pixKey,
     merchantName: SUBSCRIPTION_CONFIG.merchantName,
     merchantCity: SUBSCRIPTION_CONFIG.merchantCity,
     amount: SUBSCRIPTION_CONFIG.monthlyPrice,
-    txId,
+    txId: '***',
   });
 
   return {
     payload: pix.payload,
-    txId: pix.txId,
+    txId: '***',
     pixKey: SUBSCRIPTION_CONFIG.pixKey,
     amount: SUBSCRIPTION_CONFIG.monthlyPrice,
     merchantName: SUBSCRIPTION_CONFIG.merchantName,

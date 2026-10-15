@@ -93,13 +93,12 @@ export const SubscriptionModal: React.FC = () => {
     if (!isSubscriptionModalOpen) return;
 
     try {
-      const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const pixResult = generatePixPayload({
         pixKey: SUBSCRIPTION_CONFIG.pixKey,
         merchantName: SUBSCRIPTION_CONFIG.merchantName,
         merchantCity: SUBSCRIPTION_CONFIG.merchantCity,
         amount: 94.98,
-        txId: generatedTxId,
+        txId: '***',
       });
 
       setPixPayloadCode(pixResult.payload);
@@ -116,7 +115,15 @@ export const SubscriptionModal: React.FC = () => {
         setPixQrDataUrl(url);
       });
     } catch {
-      setPixPayloadCode(`PIX-APPVENDAS-91993192405-94.98`);
+      // Safe fallback with standard payload
+      const fb = generatePixPayload({
+        pixKey: '91993192405',
+        merchantName: 'MARCIA ALVES',
+        merchantCity: 'BARCARENA',
+        amount: 94.98,
+        txId: '***',
+      });
+      setPixPayloadCode(fb.payload);
     }
   }, [isSubscriptionModalOpen]);
 

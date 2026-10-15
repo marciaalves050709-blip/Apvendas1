@@ -128,6 +128,8 @@ export const ClientStoreView: React.FC = () => {
   // Post-Order State
   const [completedOrder, setCompletedOrder] = useState<CustomerOrderData | null>(null);
   const [copiedPixKey, setCopiedPixKey] = useState(false);
+  const [pixPayloadCode, setPixPayloadCode] = useState<string>('');
+  const [copiedPayloadCode, setCopiedPayloadCode] = useState(false);
   const [copiedOrderText, setCopiedOrderText] = useState(false);
   const [pixQrDataUrl, setPixQrDataUrl] = useState<string>('');
   const [pixPaymentStatus, setPixPaymentStatus] = useState<'WAITING' | 'CONFIRMED'>('WAITING');
@@ -399,12 +401,14 @@ export const ClientStoreView: React.FC = () => {
     if (paymentMethod === 'PIX' && cartTotal > 0) {
       const pixObj = generatePixPayload({
         pixKey: activeSeller?.pixKey || paymentSettings.pixKey || '91993192405',
-        merchantName: (activeSeller?.merchantName || activeSeller?.name || paymentSettings.merchantName || 'APP DE VENDAS').toUpperCase(),
-        merchantCity: activeSeller?.merchantCity || paymentSettings.merchantCity || 'Barcarena PA',
+        merchantName: (activeSeller?.merchantName || activeSeller?.name || paymentSettings.merchantName || 'MARCIA ALVES').toUpperCase(),
+        merchantCity: activeSeller?.merchantCity || paymentSettings.merchantCity || 'BARCARENA',
         amount: cartTotal,
-        txId: 'PED' + Math.floor(1000 + Math.random() * 9000),
+        txId: '***',
+        keyType: activeSeller?.pixKeyType || paymentSettings.pixKeyType,
       });
 
+      setPixPayloadCode(pixObj.payload);
       QRCode.toDataURL(pixObj.payload, { width: 220, margin: 1 })
         .then(url => setPixQrDataUrl(url))
         .catch(() => setPixQrDataUrl(''));
@@ -490,12 +494,22 @@ export const ClientStoreView: React.FC = () => {
 
   // Copy Pix Key
   const handleCopyPix = () => {
-    const keyToCopy = activeSeller?.pixKey || paymentSettings.pixKey;
+    const keyToCopy = activeSeller?.pixKey || paymentSettings.pixKey || '91993192405';
     if (!keyToCopy) return;
     navigator.clipboard.writeText(keyToCopy);
     setCopiedPixKey(true);
-    showToast('info', 'Copiado!', 'Chave Pix copiada com sucesso para a área de transferência.');
+    showToast('info', 'Chave Copiada!', 'Chave Pix copiada com sucesso para a área de transferência.');
     setTimeout(() => setCopiedPixKey(false), 2500);
+  };
+
+  // Copy Full Pix Copia e Cola BR Code Payload
+  const handleCopyPayload = () => {
+    if (pixPayloadCode) {
+      navigator.clipboard.writeText(pixPayloadCode);
+      setCopiedPayloadCode(true);
+      showToast('success', 'Código Pix Copiado!', 'Cole no aplicativo do seu banco na opção Pix Copia e Cola.');
+      setTimeout(() => setCopiedPayloadCode(false), 2500);
+    }
   };
 
   // Copy Full Message
@@ -1531,7 +1545,19 @@ export const ClientStoreView: React.FC = () => {
                   )}
 
                   <div className="flex flex-col gap-2">
+                    {pixPayloadCode && (
+                      <button
+                        type="button"
+                        onClick={handleCopyPayload}
+                        className="py-3 px-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-all"
+                      >
+                        {copiedPayloadCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        <span>{copiedPayloadCode ? 'Código Copiado com Sucesso!' : 'Copiar Pix Copia e Cola'}</span>
+                      </button>
+                    )}
+
                     <button
+                      type="button"
                       onClick={handleCopyPix}
                       className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-all"
                     >

@@ -44,13 +44,12 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
   // Generate official Pix payload & QR Code on mount
   useEffect(() => {
     try {
-      const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const result = generatePixPayload({
         pixKey,
         merchantName,
         merchantCity: SUBSCRIPTION_CONFIG.merchantCity,
         amount: fixedAmount,
-        txId: generatedTxId,
+        txId: '***',
       });
 
       setPixPayload(result.payload);
@@ -67,7 +66,14 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         setQrDataUrl(url);
       });
     } catch {
-      setPixPayload(`PIX-APPVENDAS-91993192405-${fixedAmount}`);
+      const fb = generatePixPayload({
+        pixKey: '91993192405',
+        merchantName: 'MARCIA ALVES',
+        merchantCity: 'BARCARENA',
+        amount: fixedAmount,
+        txId: '***',
+      });
+      setPixPayload(fb.payload);
     }
   }, [fixedAmount, pixKey, merchantName]);
 

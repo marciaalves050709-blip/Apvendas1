@@ -85,13 +85,12 @@ export const AccessPaywall: React.FC = () => {
     if (!isBlocked) return;
 
     try {
-      const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const pixResult = generatePixPayload({
         pixKey: paymentSettings.pixKey || SUBSCRIPTION_CONFIG.pixKey || '91993192405',
-        merchantName: paymentSettings.merchantName || 'APP DE VENDAS SISTEMAS',
-        merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
+        merchantName: paymentSettings.merchantName || 'MARCIA ALVES',
+        merchantCity: paymentSettings.merchantCity || 'BARCARENA',
         amount: planPrice,
-        txId: generatedTxId,
+        txId: '***',
       });
 
       setPixPayloadCode(pixResult.payload);
