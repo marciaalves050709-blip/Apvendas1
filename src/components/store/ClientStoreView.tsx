@@ -398,7 +398,7 @@ export const ClientStoreView: React.FC = () => {
   useEffect(() => {
     if (paymentMethod === 'PIX' && cartTotal > 0) {
       const pixObj = generatePixPayload({
-        pixKey: activeSeller?.pixKey || paymentSettings.pixKey || '12.345.678/0001-90',
+        pixKey: activeSeller?.pixKey || paymentSettings.pixKey || '91993192405',
         merchantName: (activeSeller?.merchantName || activeSeller?.name || paymentSettings.merchantName || 'APP DE VENDAS').toUpperCase(),
         merchantCity: activeSeller?.merchantCity || paymentSettings.merchantCity || 'Barcarena PA',
         amount: cartTotal,

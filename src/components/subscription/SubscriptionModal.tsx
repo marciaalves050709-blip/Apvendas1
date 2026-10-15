@@ -88,7 +88,7 @@ export const SubscriptionModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [isSubscriptionModalOpen, isSubscribed]);
 
-  // Generate Pix Payload & QR Code for R$ 94,98 with Fixed Key 993192405
+  // Generate Pix Payload & QR Code for R$ 94,98 with Fixed Key 91993192405
   useEffect(() => {
     if (!isSubscriptionModalOpen) return;
 
@@ -116,7 +116,7 @@ export const SubscriptionModal: React.FC = () => {
         setPixQrDataUrl(url);
       });
     } catch {
-      setPixPayloadCode(`PIX-APPVENDAS-993192405-94.98`);
+      setPixPayloadCode(`PIX-APPVENDAS-91993192405-94.98`);
     }
   }, [isSubscriptionModalOpen]);
 

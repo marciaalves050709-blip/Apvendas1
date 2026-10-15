@@ -37,7 +37,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
 
-  const pixKey = SUBSCRIPTION_CONFIG.pixKey; // 993192405
+  const pixKey = SUBSCRIPTION_CONFIG.pixKey; // 91993192405
   const merchantName = SUBSCRIPTION_CONFIG.merchantName; // MARCIA ALVES
   const fixedAmount = planPrice || 94.98;
 
@@ -67,7 +67,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         setQrDataUrl(url);
       });
     } catch {
-      setPixPayload(`PIX-APPVENDAS-993192405-${fixedAmount}`);
+      setPixPayload(`PIX-APPVENDAS-91993192405-${fixedAmount}`);
     }
   }, [fixedAmount, pixKey, merchantName]);
 
@@ -80,7 +80,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
     return () => clearInterval(interval);
   }, [isIdentified]);
 
-  // Copy Pix Key (993192405)
+  // Copy Pix Key (91993192405)
   const handleCopyKey = () => {
     navigator.clipboard.writeText(pixKey);
     setCopiedKey(true);

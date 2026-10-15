@@ -87,7 +87,7 @@ export const AccessPaywall: React.FC = () => {
     try {
       const generatedTxId = 'ASSIN' + Math.random().toString(36).substring(2, 7).toUpperCase();
       const pixResult = generatePixPayload({
-        pixKey: paymentSettings.pixKey || '12.345.678/0001-90',
+        pixKey: paymentSettings.pixKey || SUBSCRIPTION_CONFIG.pixKey || '91993192405',
         merchantName: paymentSettings.merchantName || 'APP DE VENDAS SISTEMAS',
         merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
         amount: planPrice,
@@ -176,6 +176,7 @@ export const AccessPaywall: React.FC = () => {
     const raw = activationCode.trim();
     const clean = raw.toUpperCase();
     const validCodes = [
+      '91993192405',
       '993192405',
       '9498',
       'PAGO9498',

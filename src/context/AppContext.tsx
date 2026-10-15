@@ -192,7 +192,7 @@ export const ADMIN_CONFIG = {
   email: 'marciaalves050709@gmail.com',
   role: 'Administradora Mestra (Criadora)',
   masterCode: 'MARCIA2026',
-  pixKey: '993192405',
+  pixKey: '91993192405',
   monthlyPrice: 94.98,
 };
 
@@ -219,8 +219,8 @@ export const DEFAULT_SELLERS: SellerProfile[] = [
   {
     id: 'vendedor_principal',
     name: 'Márcia Alves',
-    whatsapp: '5511999998888',
-    pixKey: '993192405',
+    whatsapp: '5591993192405',
+    pixKey: '91993192405',
     pixKeyType: 'PHONE',
     merchantName: 'MARCIA ALVES',
     merchantCity: 'Barcarena PA',
@@ -230,11 +230,11 @@ export const DEFAULT_SELLERS: SellerProfile[] = [
 ];
 
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
-  pixKey: '993192405',
+  pixKey: '91993192405',
   pixKeyType: 'PHONE',
   merchantName: 'appvendas',
   merchantCity: 'Barcarena PA',
-  merchantWhatsapp: '5511999998888',
+  merchantWhatsapp: '5591993192405',
   receivingBank: 'NUBANK',
   cardProvider: 'STONE',
   autoPixDetection: true,
@@ -332,14 +332,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
+        const normKey = parsed.pixKey === '993192405' ? '91993192405' : (parsed.pixKey || '91993192405');
+        const normWhatsapp = (!parsed.merchantWhatsapp || parsed.merchantWhatsapp === '5511999998888') ? '5591993192405' : parsed.merchantWhatsapp;
         const normSellers: SellerProfile[] = (parsed.sellers && parsed.sellers.length > 0)
-          ? parsed.sellers.map((s: SellerProfile) => ({ ...s, merchantCity: sanitizeMerchantCity(s.merchantCity) }))
+          ? parsed.sellers.map((s: SellerProfile) => ({ 
+              ...s, 
+              pixKey: s.pixKey === '993192405' ? '91993192405' : (s.pixKey || normKey),
+              whatsapp: (!s.whatsapp || s.whatsapp === '5511999998888') ? normWhatsapp : s.whatsapp,
+              merchantCity: sanitizeMerchantCity(s.merchantCity) 
+            }))
           : [
               {
                 id: 'vendedor_principal',
                 name: 'Márcia Alves',
-                whatsapp: parsed.merchantWhatsapp || '5511999998888',
-                pixKey: parsed.pixKey || '993192405',
+                whatsapp: normWhatsapp,
+                pixKey: normKey,
                 pixKeyType: parsed.pixKeyType || 'PHONE',
                 merchantName: parsed.merchantName || 'MARCIA ALVES',
                 merchantCity: normCity,
@@ -351,6 +358,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...DEFAULT_PAYMENT_SETTINGS,
           ...parsed,
+          pixKey: normKey,
+          merchantWhatsapp: normWhatsapp,
           merchantCity: normCity,
           sellers: normSellers,
           activeSellerId: parsed.activeSellerId || normSellers[0]?.id || 'vendedor_principal',
@@ -651,6 +660,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'MARCIA2026',
       'ADMINMARCIA',
       'MARCIA0507',
+      '91993192405',
       '993192405',
       '9498',
       'PAGO9498',
@@ -932,8 +942,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {
         id: 'vendedor_principal',
         name: 'Márcia Alves',
-        whatsapp: paymentSettings.merchantWhatsapp || '5511999998888',
-        pixKey: paymentSettings.pixKey || '993192405',
+        whatsapp: paymentSettings.merchantWhatsapp || '5591993192405',
+        pixKey: paymentSettings.pixKey || '91993192405',
         pixKeyType: paymentSettings.pixKeyType || 'PHONE',
         merchantName: paymentSettings.merchantName || 'MARCIA ALVES',
         merchantCity: paymentSettings.merchantCity || 'Barcarena PA',

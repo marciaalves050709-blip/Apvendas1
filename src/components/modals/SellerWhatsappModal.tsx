@@ -101,7 +101,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
 
   // Generate Live QR Code Preview
   useEffect(() => {
-    const keyToUse = pixKey.trim() || '993192405';
+    const keyToUse = pixKey.trim() || '91993192405';
     const nameToUse = (merchantName.trim() || name.trim() || 'VENDEDOR').toUpperCase();
     const cityToUse = (merchantCity.trim() || 'Barcarena PA');
 
@@ -488,7 +488,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                     type={showPixKeyInput ? 'text' : 'password'}
                     required
                     placeholder={
-                      pixKeyType === 'PHONE' ? 'Ex: 993192405 ou 11999998888' :
+                      pixKeyType === 'PHONE' ? 'Ex: 91993192405 ou 11999998888' :
                       pixKeyType === 'CPF' ? 'Ex: 123.456.789-00' :
                       pixKeyType === 'EMAIL' ? 'Ex: seuemail@gmail.com' :
                       pixKeyType === 'CNPJ' ? 'Ex: 12.345.678/0001-90' : 'Chave aleatória EVP'

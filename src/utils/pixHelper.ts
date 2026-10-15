@@ -385,10 +385,10 @@ class SoundPlayer {
 
 export const sounds = new SoundPlayer();
 
-// Master Subscription Pix Configuration (Fixed as requested: R$ 94,98, Key: 993192405, Beneficiary: Marcia Alves)
+// Master Subscription Pix Configuration (Fixed as requested: R$ 94,98, Key: 91993192405, Beneficiary: Marcia Alves)
 export const SUBSCRIPTION_CONFIG = {
   monthlyPrice: 94.98,
-  pixKey: '993192405',
+  pixKey: '91993192405',
   merchantName: 'MARCIA ALVES',
   merchantCity: 'BARCARENA PA',
   adminEmail: 'marciaalves050709@gmail.com',
