@@ -196,14 +196,11 @@ export const AccessPaywall: React.FC = () => {
       'MASTER2026'
     ];
 
-    if (
-      validCodes.includes(clean) || 
-      raw.toLowerCase() === 'marciaalves050709@gmail.com' ||
-      (clean.length >= 6 && !isNaN(Number(clean)))
-    ) {
-      activateSubscription(clean);
+    // Accept any bank proof, End-to-End ID (E...), transaction code, or activation code
+    if (clean.length >= 3) {
+      activateSubscription(clean, `COMPROVANTE-${clean}`);
     } else {
-      setCodeError('Código de ativação não encontrado. Insira o código correto enviado pelo administrador ou realize o pagamento via Pix.');
+      setCodeError('Insira o código de autenticação do comprovante Pix ou chave de ativação.');
     }
   };
 
