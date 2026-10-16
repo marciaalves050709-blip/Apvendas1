@@ -249,8 +249,18 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
 
       // Play authentic sound: Bank ping + Cha-ching money drop immediately
       if (paymentSettings.soundEnabled) {
-        sounds.playBankNotification();
-        setTimeout(() => sounds.playMoneyReceivedSound(), 140);
+        try {
+          sounds.playBankNotification();
+          setTimeout(() => {
+            try {
+              sounds.playMoneyReceivedSound();
+            } catch {
+              // ignore
+            }
+          }, 140);
+        } catch {
+          // ignore
+        }
       }
 
       // Trigger Push Alert on screen
@@ -335,8 +345,18 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
 
         // Play card approval and money credited sound
         if (paymentSettings.soundEnabled) {
-          sounds.playCardApproved();
-          setTimeout(() => sounds.playMoneyReceivedSound(), 250);
+          try {
+            sounds.playCardApproved();
+            setTimeout(() => {
+              try {
+                sounds.playMoneyReceivedSound();
+              } catch {
+                // ignore
+              }
+            }, 250);
+          } catch {
+            // ignore
+          }
         }
 
         const isCredit = selectedMethod === 'CARTAO_CREDITO';
@@ -502,8 +522,18 @@ export const AutomatedPaymentModal: React.FC<AutomatedPaymentModalProps> = ({ is
 
   // Sound test button
   const handleTestSound = () => {
-    sounds.playBankNotification();
-    setTimeout(() => sounds.playMoneyReceivedSound(), 200);
+    try {
+      sounds.playBankNotification();
+      setTimeout(() => {
+        try {
+          sounds.playMoneyReceivedSound();
+        } catch {
+          // ignore
+        }
+      }, 200);
+    } catch {
+      // ignore
+    }
     showToast('info', 'Som Testado!', 'Reproduzindo notificação bancária e alerta de caixa registradora.');
   };
 

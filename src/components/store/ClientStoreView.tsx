@@ -169,8 +169,18 @@ export const ClientStoreView: React.FC = () => {
 
     // Play bank notification sound and money drop
     if (paymentSettings.soundEnabled) {
-      sounds.playBankNotification();
-      setTimeout(() => sounds.playMoneyReceivedSound(), 150);
+      try {
+        sounds.playBankNotification();
+        setTimeout(() => {
+          try {
+            sounds.playMoneyReceivedSound();
+          } catch {
+            // ignore
+          }
+        }, 150);
+      } catch {
+        // ignore
+      }
     }
 
     // Trigger visual confetti

@@ -98,7 +98,13 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
       // Play authentic audio effects & celebration confetti
       try {
         sounds.playBankNotification();
-        setTimeout(() => sounds.playMoneyReceivedSound(), 180);
+        setTimeout(() => {
+          try {
+            sounds.playMoneyReceivedSound();
+          } catch {
+            // ignore
+          }
+        }, 180);
         confetti({
           particleCount: 150,
           spread: 100,

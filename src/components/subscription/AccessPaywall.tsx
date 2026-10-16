@@ -135,7 +135,13 @@ export const AccessPaywall: React.FC = () => {
       // Play authentic sound effects
       try {
         sounds.playBankNotification();
-        setTimeout(() => sounds.playMoneyReceivedSound(), 180);
+        setTimeout(() => {
+          try {
+            sounds.playMoneyReceivedSound();
+          } catch {
+            // ignore
+          }
+        }, 180);
         confetti({
           particleCount: 130,
           spread: 100,

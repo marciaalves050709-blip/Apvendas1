@@ -693,7 +693,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Audio & Visual celebratory feedback
     try {
       sounds.playBankNotification();
-      setTimeout(() => sounds.playMoneyReceivedSound(), 300);
+      setTimeout(() => {
+        try {
+          sounds.playMoneyReceivedSound();
+        } catch {
+          // ignore
+        }
+      }, 300);
       confetti({
         particleCount: 120,
         spread: 100,
@@ -713,7 +719,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(
         'success',
         '🎉 Licença Renovada com Sucesso!',
-        `Acesso liberado até ${formatDay5Date(expiryDate)}! Renovação mensal todo dia 05 (${formatCurrency(subscription.planPrice)}/mês).`
+        `Acesso liberado até ${formatDay5Date(expiryDate)}! Renovação mensal todo dia 05 (${formatCurrency(subscription.planPrice || 94.98)}/mês).`
       );
     }
     return true;

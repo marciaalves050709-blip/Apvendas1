@@ -303,49 +303,57 @@ export const BANKS_LIST: BankConfig[] = [
   },
 ];
 
-// Audio Feedback System using Web Audio API
+// Audio Feedback System using Web Audio API (100% Crash-Proof)
 class SoundPlayer {
   private ctx: AudioContext | null = null;
 
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
+    try {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
       }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return this.ctx;
+    } catch {
+      return null;
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
-    return this.ctx;
   }
 
   // Bank App Notification Pop Ping
   playBankNotification(): void {
-    const ctx = this.getContext();
-    if (!ctx) return;
-
     try {
+      const ctx = this.getContext();
+      if (!ctx || ctx.state !== 'running') return;
+
       const now = ctx.currentTime;
-      // High-pitched double modern bell (880Hz -> 1760Hz)
       const freqs = [880, 1318.5, 1760];
       freqs.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
 
-        gain.gain.setValueAtTime(0, now + idx * 0.08);
-        gain.gain.linearRampToValueAtTime(0.22, now + idx * 0.08 + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+          // Web Audio API requires positive non-zero value before exponential ramp
+          gain.gain.setValueAtTime(0.001, now + idx * 0.08);
+          gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.08 + 0.02);
+          gain.gain.linearRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
 
-        osc.start(now + idx * 0.08);
-        osc.stop(now + idx * 0.08 + 0.28);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.28);
+        } catch {
+          // ignore individual node failure
+        }
       });
     } catch {
       // Audio context might be restricted
@@ -354,51 +362,60 @@ class SoundPlayer {
 
   // Money Received / Cash Register "Cha-ching" effect
   playMoneyReceivedSound(): void {
-    const ctx = this.getContext();
-    if (!ctx) return;
-
     try {
+      const ctx = this.getContext();
+      if (!ctx || ctx.state !== 'running') return;
+
       const now = ctx.currentTime;
       
       // Part 1: Ascending Major Arpeggio (C, E, G, C, E)
       const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
       notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
 
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, now + i * 0.06);
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + i * 0.06);
 
-        gain.gain.setValueAtTime(0, now + i * 0.06);
-        gain.gain.linearRampToValueAtTime(0.25, now + i * 0.06 + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.35);
+          gain.gain.setValueAtTime(0.001, now + i * 0.06);
+          gain.gain.linearRampToValueAtTime(0.22, now + i * 0.06 + 0.015);
+          gain.gain.linearRampToValueAtTime(0.001, now + i * 0.06 + 0.35);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
 
-        osc.start(now + i * 0.06);
-        osc.stop(now + i * 0.06 + 0.38);
+          osc.start(now + i * 0.06);
+          osc.stop(now + i * 0.06 + 0.38);
+        } catch {
+          // ignore
+        }
       });
 
       // Part 2: Metallic cash register bell resonance
       setTimeout(() => {
-        const ctxLater = this.getContext();
-        if (!ctxLater) return;
-        const t = ctxLater.currentTime;
-        const bellOsc = ctxLater.createOscillator();
-        const bellGain = ctxLater.createGain();
+        try {
+          const ctxLater = this.getContext();
+          if (!ctxLater || ctxLater.state !== 'running') return;
+          const t = ctxLater.currentTime;
+          const bellOsc = ctxLater.createOscillator();
+          const bellGain = ctxLater.createGain();
 
-        bellOsc.type = 'sine';
-        bellOsc.frequency.setValueAtTime(2093, t); // High C7 bell
+          bellOsc.type = 'sine';
+          bellOsc.frequency.setValueAtTime(2093, t);
 
-        bellGain.gain.setValueAtTime(0.2, t);
-        bellGain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+          bellGain.gain.setValueAtTime(0.001, t);
+          bellGain.gain.linearRampToValueAtTime(0.18, t + 0.02);
+          bellGain.gain.linearRampToValueAtTime(0.001, t + 0.55);
 
-        bellOsc.connect(bellGain);
-        bellGain.connect(ctxLater.destination);
+          bellOsc.connect(bellGain);
+          bellGain.connect(ctxLater.destination);
 
-        bellOsc.start(t);
-        bellOsc.stop(t + 0.62);
+          bellOsc.start(t);
+          bellOsc.stop(t + 0.58);
+        } catch {
+          // ignore
+        }
       }, 260);
     } catch {
       // Audio context might be restricted
@@ -407,15 +424,19 @@ class SoundPlayer {
 
   // Pix Success Chime (3 ascending tones)
   playPixSuccess(): void {
-    this.playMoneyReceivedSound();
+    try {
+      this.playMoneyReceivedSound();
+    } catch {
+      // ignore
+    }
   }
 
   // Card POS Beep
   playCardBeep(): void {
-    const ctx = this.getContext();
-    if (!ctx) return;
-
     try {
+      const ctx = this.getContext();
+      if (!ctx || ctx.state !== 'running') return;
+
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -423,8 +444,9 @@ class SoundPlayer {
       osc.type = 'square';
       osc.frequency.setValueAtTime(980, now);
 
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.12, now + 0.01);
+      gain.gain.linearRampToValueAtTime(0.001, now + 0.12);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -438,27 +460,31 @@ class SoundPlayer {
 
   // Card Approved 2-Beep Chime
   playCardApproved(): void {
-    const ctx = this.getContext();
-    if (!ctx) return;
-
     try {
+      const ctx = this.getContext();
+      if (!ctx || ctx.state !== 'running') return;
+
       const now = ctx.currentTime;
       [880, 1320].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
 
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.12);
 
-        gain.gain.setValueAtTime(0, now + idx * 0.12);
-        gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.12 + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.22);
+          gain.gain.setValueAtTime(0.001, now + idx * 0.12);
+          gain.gain.linearRampToValueAtTime(0.18, now + idx * 0.12 + 0.02);
+          gain.gain.linearRampToValueAtTime(0.001, now + idx * 0.12 + 0.22);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
 
-        osc.start(now + idx * 0.12);
-        osc.stop(now + idx * 0.12 + 0.25);
+          osc.start(now + idx * 0.12);
+          osc.stop(now + idx * 0.12 + 0.25);
+        } catch {
+          // ignore
+        }
       });
     } catch {
       // Ignore

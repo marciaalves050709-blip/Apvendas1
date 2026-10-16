@@ -167,6 +167,7 @@ export interface Customer {
   address?: string;
   city?: string;
   creditLimit?: number;
+  currentBalance?: number;
   totalPurchased: number;
   lastPurchaseDate?: string;
   notes?: string;
