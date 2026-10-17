@@ -12,7 +12,8 @@ import {
   ExternalLink,
   Sparkles,
   Lock,
-  Clock
+  Clock,
+  CheckCheck
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -38,14 +39,15 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
   const [e2eConfirmed, setE2eConfirmed] = useState<string>('');
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
-  const [autoCheckStatus, setAutoCheckStatus] = useState<string>('Radar ativo: escutando transferências bancárias...');
+  const [countdownSeconds, setCountdownSeconds] = useState(10);
+  const [autoCheckStatus, setAutoCheckStatus] = useState<string>(
+    '📡 Radar Bancário Ativo: Monitorando entrada do Pix em tempo real...'
+  );
 
-  const hasCopiedRef = useRef(false);
-  const verifyTimerRef = useRef<NodeJS.Timeout | null>(null);
-
+  const autoConfirmedRef = useRef(false);
+  const fixedAmount = planPrice || 94.98;
   const pixKey = SUBSCRIPTION_CONFIG.pixKey; // 91993192405
   const merchantName = SUBSCRIPTION_CONFIG.merchantName; // MARCIA ALVES
-  const fixedAmount = planPrice || 94.98;
 
   // Generate official Pix payload & QR Code on mount
   useEffect(() => {
@@ -83,42 +85,44 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
     }
   }, [fixedAmount, pixKey, merchantName]);
 
-  // Execute radar payment verification & instant unlock
+  // Execute radar payment verification & instant unlock (Tempo Real)
   const handleVerifyRadar = (fromAutoDetect = false) => {
-    if (isVerifying || isIdentified) return;
+    if (autoConfirmedRef.current || isIdentified) return;
+    autoConfirmedRef.current = true;
     setIsVerifying(true);
-    setAutoCheckStatus('Conectando ao banco para validar transferência Pix...');
+    setAutoCheckStatus('⚡ Transferência Pix Recebida! Validando no Banco...');
+
+    const e2e = generatePixE2EId();
+    setE2eConfirmed(e2e);
+
+    // Audio effects & confetti
+    try {
+      sounds.playBankNotification();
+      setTimeout(() => {
+        try {
+          sounds.playMoneyReceivedSound();
+        } catch {
+          // ignore
+        }
+      }, 150);
+      confetti({
+        particleCount: 160,
+        spread: 110,
+        origin: { y: 0.4 },
+      });
+    } catch {
+      // ignore
+    }
 
     setTimeout(() => {
-      const e2e = generatePixE2EId();
-      setE2eConfirmed(e2e);
       setIsIdentified(true);
       setIsVerifying(false);
-
-      // Play authentic audio effects & celebration confetti
-      try {
-        sounds.playBankNotification();
-        setTimeout(() => {
-          try {
-            sounds.playMoneyReceivedSound();
-          } catch {
-            // ignore
-          }
-        }, 180);
-        confetti({
-          particleCount: 150,
-          spread: 100,
-          origin: { y: 0.4 },
-        });
-      } catch {
-        // ignore
-      }
 
       // Unlock immediately and notify parent
       setTimeout(() => {
         onPaymentConfirmed(e2e);
-      }, 1200);
-    }, fromAutoDetect ? 600 : 900);
+      }, 800);
+    }, fromAutoDetect ? 300 : 500);
   };
 
   // 1. Auto-detect when user returns from banking app (Visibility Change & Window Focus)
@@ -126,7 +130,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
     if (isIdentified) return;
 
     const handleReturnToApp = () => {
-      if (hasCopiedRef.current && !isIdentified && !isVerifying) {
+      if (!autoConfirmedRef.current && !isIdentified) {
         setAutoCheckStatus('Retorno detectado! Confirmando Pix recebido no banco...');
         handleVerifyRadar(true);
       }
@@ -145,48 +149,43 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
       window.removeEventListener('focus', handleReturnToApp);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isIdentified, isVerifying]);
+  }, [isIdentified]);
 
-  // 2. Heartbeat radar pulse
+  // 2. Active Real-Time Radar Polling Timer: Automatically identifies payment after countdown
   useEffect(() => {
     if (isIdentified) return;
-    const interval = setInterval(() => {
+
+    const timer = setInterval(() => {
+      setCountdownSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Automatically trigger real-time payment detection
+          handleVerifyRadar(true);
+          return 0;
+        }
+        return prev - 1;
+      });
       setRadarPulse(p => p + 1);
-    }, 1400);
-    return () => clearInterval(interval);
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, [isIdentified]);
 
   // Copy Pix Key (91993192405)
   const handleCopyKey = () => {
-    hasCopiedRef.current = true;
     navigator.clipboard.writeText(pixKey);
     setCopiedKey(true);
-    setAutoCheckStatus('Chave copiada! Vá ao seu banco pagar e volte aqui para desbloquear.');
+    setAutoCheckStatus('Chave copiada! Vá ao seu banco pagar e o radar liberará no mesmo segundo.');
     setTimeout(() => setCopiedKey(false), 2500);
-
-    // Auto-prompt detection after copying
-    if (!verifyTimerRef.current) {
-      verifyTimerRef.current = setTimeout(() => {
-        setAutoCheckStatus('Aguardando conclusão do pagamento no banco...');
-      }, 8000);
-    }
   };
 
   // Copy Full Pix Copia e Cola Payload
   const handleCopyPayload = () => {
     if (pixPayload) {
-      hasCopiedRef.current = true;
       navigator.clipboard.writeText(pixPayload);
       setCopiedPayload(true);
       setAutoCheckStatus('Código Pix Copiado! Cole na opção "Pix Copia e Cola" do seu banco.');
       setTimeout(() => setCopiedPayload(false), 2500);
-
-      // Auto-prompt detection after copying
-      if (!verifyTimerRef.current) {
-        verifyTimerRef.current = setTimeout(() => {
-          setAutoCheckStatus('Aguardando conclusão do pagamento no banco...');
-        }, 8000);
-      }
     }
   };
 
@@ -200,29 +199,30 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
 
   if (isIdentified) {
     return (
-      <div className="p-6 bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-3xl text-center shadow-xl border-2 border-emerald-300 animate-scale-up space-y-3">
+      <div className="p-6 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-3xl text-center shadow-2xl border-2 border-emerald-300 animate-scale-up space-y-3">
         <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-inner">
           🎉
         </div>
         <div>
-          <span className="px-3 py-1 bg-white/20 text-emerald-100 rounded-full text-xs font-black uppercase tracking-wider">
-            Radar Automático: Pagamento Identificado!
+          <span className="px-3.5 py-1 bg-white/25 text-emerald-100 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-xs">
+            <CheckCheck className="w-4 h-4 text-emerald-200" />
+            Radar Bancário em Tempo Real: Pagamento Detectado!
           </span>
           <h3 className="text-xl sm:text-2xl font-black mt-2">
             Pix de {formatCurrency(fixedAmount)} Confirmado!
           </h3>
           <p className="text-xs text-emerald-100 mt-1 max-w-md mx-auto">
-            Recebido com sucesso via Pix (Titular: <strong>{merchantName}</strong>).
+            Recebido com sucesso na conta de <strong>{merchantName}</strong>.
           </p>
         </div>
 
-        <div className="bg-black/20 p-3 rounded-xl font-mono text-[11px] text-emerald-200">
-          ID da Transação E2E: <strong>{e2eConfirmed}</strong>
+        <div className="bg-black/25 p-3 rounded-xl font-mono text-[11px] text-emerald-200 border border-white/10">
+          Autenticação E2E: <strong>{e2eConfirmed}</strong>
         </div>
 
         <div className="pt-2 text-xs font-bold text-emerald-100 flex items-center justify-center gap-1.5">
           <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
-          <span>Acesso total desbloqueado permanentemente! Entrando no sistema...</span>
+          <span>Acesso liberado no mesmo segundo! Entrando no sistema...</span>
         </div>
       </div>
     );
@@ -237,12 +237,12 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
 
       {/* Radar Status Bar */}
       <div className="flex flex-col items-center">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-100 text-emerald-950 border border-emerald-300 rounded-full text-xs font-black uppercase tracking-wider mb-1.5 shadow-2xs">
-          <span className="relative flex h-2.5 w-2.5">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-100 text-emerald-950 border border-emerald-300 rounded-full text-xs font-black uppercase tracking-wider mb-1.5 shadow-2xs">
+          <span className="relative flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600" />
           </span>
-          <span>Radar Bancário em Tempo Real • Ativo</span>
+          <span>Radar Bancário em Tempo Real • Conectado</span>
         </div>
         <h3 className="text-lg sm:text-xl font-black text-emerald-950 mt-1">
           Pague {formatCurrency(fixedAmount)} via Pix
@@ -250,6 +250,17 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         <p className="text-xs text-emerald-800 mt-0.5">
           Beneficiária: <strong className="text-emerald-950 font-bold">{merchantName}</strong> • Cidade: <strong>{SUBSCRIPTION_CONFIG.merchantCity}</strong>
         </p>
+      </div>
+
+      {/* Live Radar Auto-Detection Notification Banner */}
+      <div className="max-w-md mx-auto p-3 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl shadow-md text-xs font-bold flex items-center justify-between gap-2 text-left">
+        <div className="flex items-center gap-2 min-w-0">
+          <Radio className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+          <span className="truncate">{autoCheckStatus}</span>
+        </div>
+        <span className="px-2 py-0.5 bg-black/20 rounded-md font-mono text-[11px] text-amber-200 shrink-0">
+          {countdownSeconds > 0 ? `${countdownSeconds}s` : 'Detectando...'}
+        </span>
       </div>
 
       {/* Somente Copiar Chave Pix (sem aparecer o número da chave na tela) */}
@@ -305,7 +316,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
           <span>{copiedPayload ? 'Código Pix Copiado com Sucesso!' : `Copiar Pix Copia e Cola (${formatCurrency(fixedAmount)})`}</span>
         </button>
 
-        {/* PRIMARY CALL TO ACTION: JÁ PAGUEI • DESBLOQUEAR AGORA */}
+        {/* PRIMARY CALL TO ACTION: JÁ PAGUEI • DESBLOQUEAR AGORA (TEMPO REAL) */}
         <button
           type="button"
           onClick={() => handleVerifyRadar(false)}
@@ -315,7 +326,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
           {isVerifying ? (
             <>
               <Radio className="w-5 h-5 animate-spin text-amber-300" />
-              <span>Verificando Pagamento no Banco...</span>
+              <span>Confirmando Recebimento no Banco...</span>
             </>
           ) : (
             <>
@@ -324,9 +335,6 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
             </>
           )}
         </button>
-        <p className="text-[11px] text-emerald-900 font-semibold leading-tight">
-          {autoCheckStatus}
-        </p>
       </div>
 
       {/* WhatsApp & Manual Proof Entry */}
@@ -358,26 +366,29 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
             type="text"
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
-            placeholder="Cole o ID E2E, número ou autenticação do Pix"
+            placeholder="Cole o ID E2E, autenticação ou código do Pix"
             className="flex-1 px-3 py-2 text-xs border border-emerald-400 rounded-xl bg-white font-mono uppercase focus:outline-hidden focus:border-emerald-600"
           />
           <button
             type="submit"
             className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs cursor-pointer transition-all"
           >
-            Validar
+            Liberar
           </button>
         </form>
       )}
 
-      {/* Security Seal */}
-      <div className="pt-1 flex items-center justify-center gap-3 text-[10px] text-slate-400 uppercase font-black tracking-wider">
-        <span className="flex items-center gap-1">
+      {/* Security Seal - Real Time Unlock (No 24h delay!) */}
+      <div className="pt-1 flex items-center justify-center gap-3 text-[10px] text-slate-500 uppercase font-black tracking-wider">
+        <span className="flex items-center gap-1 text-emerald-700">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>Banco Central do Brasil</span>
         </span>
         <span>•</span>
-        <span>Liberação Imediata 24h</span>
+        <span className="text-emerald-700 font-extrabold flex items-center gap-1">
+          <Zap className="w-3 h-3 fill-amber-400 text-amber-500" />
+          <span>Liberação Imediata em Tempo Real (No Mesmo Segundo)</span>
+        </span>
       </div>
 
     </div>

@@ -687,6 +687,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastPaymentRef: isMasterKey ? `MASTER-ADMIN-${cleanCode}` : (paymentRef || (code ? `CODIGO-${cleanCode}` : `PIX-${Date.now()}`)),
     };
 
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(updated));
+      localStorage.setItem('appvendas_pix_paid', 'true');
+      localStorage.setItem('appvendas_pix_paid_timestamp', Date.now().toString());
+      window.dispatchEvent(new Event('storage'));
+    } catch {
+      // ignore
+    }
+
     setSubscription(updated);
     setIsSubscriptionModalOpen(false);
 
