@@ -1,5 +1,5 @@
 // appvendas Service Worker (PWA)
-const CACHE_NAME = 'appvendas-pwa-v8';
+const CACHE_NAME = 'appvendas-pwa-v9';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
