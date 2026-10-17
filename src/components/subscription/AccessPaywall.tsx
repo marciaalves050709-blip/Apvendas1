@@ -243,24 +243,6 @@ export const AccessPaywall: React.FC = () => {
     return (
     <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-6 overflow-y-auto">
       <div className="w-full max-w-2xl bg-white h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:rounded-3xl shadow-2xl border-0 sm:border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col">
-        
-        {/* Administrator Instant Release Header Bar */}
-        <div className="bg-amber-100 border-b border-amber-300 px-4 py-2.5 flex items-center justify-between text-xs text-amber-950 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-base">👑</span>
-            <span className="font-bold">
-              É a administradora {adminConfig.name}?
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setAdminMode()}
-            className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs shadow-xs cursor-pointer active:scale-95 transition-all"
-          >
-            Liberar Acesso Grátis (Admin)
-          </button>
-        </div>
-
         {/* Paywall Header */}
         <div className="bg-gradient-to-r from-rose-900 via-rose-950 to-slate-900 text-white p-5 sm:p-6 text-center relative shrink-0">
           <div className="w-12 h-12 bg-rose-600/30 border-2 border-rose-400/50 rounded-2xl flex items-center justify-center mx-auto mb-2.5 shadow-lg backdrop-blur-md">
@@ -449,17 +431,17 @@ export const AccessPaywall: React.FC = () => {
 
         {/* Paywall Footer */}
         <div className="p-3.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <span>{paymentSettings.merchantName || 'Sistema'} • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
+          <span>{paymentSettings.merchantName || 'Sistema'} • Liberação Imediata via Pix</span>
           
-          {/* Master Owner Security Access */}
+          {/* Discrete Master Security Access */}
           <button
             type="button"
             onClick={() => setShowAdminLogin(true)}
-            className="text-[11px] font-bold text-slate-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-2xs transition-all"
-            title="Acesso exclusivo da proprietária e administradora Márcia"
+            className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-2xs transition-all"
+            title="Chave de Ativação"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Permissão do Administrador</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
+            <span>Chave de Ativação</span>
           </button>
         </div>
 
@@ -470,11 +452,11 @@ export const AccessPaywall: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                    👑
+                    🔑
                   </div>
                   <div>
-                    <h4 className="font-black text-sm text-slate-900">Acesso Mestre do Dono</h4>
-                    <p className="text-[10px] text-slate-500">Márcia (marciaalves050709@gmail.com)</p>
+                    <h4 className="font-black text-sm text-slate-900">Chave de Ativação do Sistema</h4>
+                    <p className="text-[10px] text-slate-500">Validação de licença</p>
                   </div>
                 </div>
                 <button

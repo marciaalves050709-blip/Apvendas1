@@ -652,7 +652,7 @@ export const ClientStoreView: React.FC = () => {
 
           {/* Footer signature */}
           <div className="text-center py-2.5 sm:py-3 text-[11px] text-slate-400 font-medium border-t border-slate-100 bg-slate-50">
-            Criado por <strong className="text-slate-600 font-bold">Marcia Alves</strong>
+            {currentCompany?.name || 'Loja Virtual'} • Atendimento Direto no WhatsApp
           </div>
         </div>
       </div>
@@ -1025,9 +1025,9 @@ export const ClientStoreView: React.FC = () => {
 
           {/* Footer Signature */}
           <div className="mt-10 pt-6 pb-4 text-center border-t border-slate-200">
-            <p className="text-xs font-bold text-slate-700">App vendas</p>
+            <p className="text-xs font-bold text-slate-700">{currentCompany?.name || 'Loja Virtual'}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Criado por <strong className="text-slate-600 font-bold">Marcia Alves</strong>
+              Catálogo de Produtos & Pedidos Rápidos via WhatsApp
             </p>
           </div>
         </div>

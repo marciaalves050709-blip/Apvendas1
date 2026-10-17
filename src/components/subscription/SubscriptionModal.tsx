@@ -690,7 +690,7 @@ export const SubscriptionModal: React.FC = () => {
 
         {/* Modal Footer */}
         <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <span>Garantia de satisfação • Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
+          <span>Garantia de satisfação • Suporte & Ativação Imediata</span>
           <button
             type="button"
             onClick={() => setIsSubscriptionModalOpen(false)}

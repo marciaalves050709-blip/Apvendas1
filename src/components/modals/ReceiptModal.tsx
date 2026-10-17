@@ -47,7 +47,6 @@ export const ReceiptModal: React.FC = () => {
       sale.change ? `TROCO: ${formatCurrency(sale.change)}` : '',
       '========================================',
       '   Obrigado pela preferência! Volte sempre.',
-      '          Criado por Marcia Alves',
       '========================================',
     ].filter(Boolean).join('\n');
 
@@ -207,7 +206,6 @@ export const ReceiptModal: React.FC = () => {
               </div>
               <span className="text-[9px] text-slate-400 mt-1 tracking-widest">{sale.code}</span>
               <p className="text-[10px] text-slate-500 mt-2 italic">Obrigado pela preferência!</p>
-              <p className="text-[9px] text-slate-400 mt-1 font-sans">Criado por Marcia Alves</p>
             </div>
           </div>
         </div>

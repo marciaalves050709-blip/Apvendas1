@@ -218,11 +218,11 @@ export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
 export const DEFAULT_SELLERS: SellerProfile[] = [
   {
     id: 'vendedor_principal',
-    name: 'Márcia Alves',
-    whatsapp: '5591993192405',
-    pixKey: '91993192405',
+    name: 'Atendente',
+    whatsapp: '',
+    pixKey: '',
     pixKeyType: 'PHONE',
-    merchantName: 'MARCIA ALVES',
+    merchantName: 'Minha Empresa',
     merchantCity: 'Barcarena PA',
     receivingBank: 'NUBANK',
     isDefault: true,
@@ -230,11 +230,11 @@ export const DEFAULT_SELLERS: SellerProfile[] = [
 ];
 
 const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
-  pixKey: '91993192405',
+  pixKey: '',
   pixKeyType: 'PHONE',
-  merchantName: 'appvendas',
+  merchantName: 'Minha Empresa',
   merchantCity: 'Barcarena PA',
-  merchantWhatsapp: '5591993192405',
+  merchantWhatsapp: '',
   receivingBank: 'NUBANK',
   cardProvider: 'STONE',
   autoPixDetection: true,
@@ -262,7 +262,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // If stored as Marcia Alves for a regular client, sanitize to user's own store
+          return parsed.map(c => ({
+            ...c,
+            ownerName: c.ownerName === 'Marcia Alves' ? 'Meu Usuário' : (c.ownerName || 'Meu Usuário'),
+            email: c.email === 'marciaalves050709@gmail.com' ? '' : (c.email || '')
+          }));
         }
       }
     } catch {
@@ -280,11 +285,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const initialCompany: CompanyAccount = {
       id: DEFAULT_COMPANY_ID,
-      name: legacySettings?.merchantName || 'appvendas',
-      slug: (legacySettings?.merchantName || 'appvendas').toLowerCase().replace(/\s+/g, '-'),
-      ownerName: ADMIN_CONFIG.name,
-      phone: legacySettings?.merchantWhatsapp || '5511999998888',
-      email: ADMIN_CONFIG.email,
+      name: legacySettings?.merchantName || 'Minha Loja',
+      slug: (legacySettings?.merchantName || 'minha-loja').toLowerCase().replace(/\s+/g, '-'),
+      ownerName: 'Meu Usuário',
+      phone: legacySettings?.merchantWhatsapp || '',
+      email: '',
       category: 'Comércio & Serviços',
       logoEmoji: '🏪',
       createdAt: new Date().toISOString()
@@ -306,11 +311,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Active Company Object
   const currentCompany = companies.find(c => c.id === activeCompanyId) || companies[0] || {
     id: DEFAULT_COMPANY_ID,
-    name: 'appvendas',
-    slug: 'appvendas',
-    ownerName: ADMIN_CONFIG.name,
-    phone: '5511999998888',
-    email: ADMIN_CONFIG.email,
+    name: 'Minha Loja',
+    slug: 'minha-loja',
+    ownerName: 'Meu Usuário',
+    phone: '',
+    email: '',
     category: 'Comércio & Serviços',
     logoEmoji: '🏪',
     createdAt: new Date().toISOString()
@@ -332,23 +337,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
-        const normKey = parsed.pixKey === '993192405' ? '91993192405' : (parsed.pixKey || '91993192405');
-        const normWhatsapp = (!parsed.merchantWhatsapp || parsed.merchantWhatsapp === '5511999998888') ? '5591993192405' : parsed.merchantWhatsapp;
+        const normKey = parsed.pixKey || '';
+        const normWhatsapp = parsed.merchantWhatsapp || '';
+        const normMerchant = (parsed.merchantName === 'MARCIA ALVES' || parsed.merchantName === 'appvendas' || !parsed.merchantName)
+          ? currentCompany.name
+          : parsed.merchantName;
+
         const normSellers: SellerProfile[] = (parsed.sellers && parsed.sellers.length > 0)
           ? parsed.sellers.map((s: SellerProfile) => ({ 
               ...s, 
-              pixKey: s.pixKey === '993192405' ? '91993192405' : (s.pixKey || normKey),
-              whatsapp: (!s.whatsapp || s.whatsapp === '5511999998888') ? normWhatsapp : s.whatsapp,
+              name: (s.name === 'Márcia Alves' || s.name === 'Marcia Alves') ? 'Atendente' : s.name,
+              merchantName: (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'Márcia Alves') ? normMerchant : (s.merchantName || normMerchant),
+              pixKey: s.pixKey || normKey,
+              whatsapp: s.whatsapp || normWhatsapp,
               merchantCity: sanitizeMerchantCity(s.merchantCity) 
             }))
           : [
               {
                 id: 'vendedor_principal',
-                name: 'Márcia Alves',
+                name: 'Atendente',
                 whatsapp: normWhatsapp,
                 pixKey: normKey,
                 pixKeyType: parsed.pixKeyType || 'PHONE',
-                merchantName: parsed.merchantName || 'MARCIA ALVES',
+                merchantName: normMerchant,
                 merchantCity: normCity,
                 receivingBank: parsed.receivingBank || 'NUBANK',
                 isDefault: true,
@@ -361,6 +372,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           pixKey: normKey,
           merchantWhatsapp: normWhatsapp,
           merchantCity: normCity,
+          merchantName: normMerchant,
           sellers: normSellers,
           activeSellerId: parsed.activeSellerId || normSellers[0]?.id || 'vendedor_principal',
         };
@@ -485,15 +497,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Administrator identification:
-  // Marcia Alves can activate admin mode with her master credentials/button.
-  // Defaults to false so client users and unpaid stores are properly blocked.
+  // Strictly defaults to FALSE so client users ALWAYS enter DIRECTLY into their own user account.
+  // Márcia Alves can explicitly activate admin mode via URL parameter (?admin=marcia or ?admin=marcia2026)
+  // or by typing the master key MARCIA2026 in the activation dialog.
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('appvendas_is_admin');
-      if (saved !== null) {
-        return saved === 'true';
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const adminParam = urlParams?.get('admin')?.toLowerCase();
+      if (adminParam === 'marcia2026' || adminParam === 'marcia') {
+        sessionStorage.setItem('appvendas_admin_session', 'active');
+        return true;
       }
-      return false; // Regular users and unpaid clients must not be granted admin automatically
+
+      // Check session storage (tied to browser tab/session only if explicitly logged in with master code)
+      const sessionAuth = sessionStorage.getItem('appvendas_admin_session');
+      if (sessionAuth === 'active') {
+        return true;
+      }
+
+      // Clean up legacy persistent localStorage keys from earlier tests so clients are NEVER stuck in admin
+      localStorage.removeItem('appvendas_admin_session');
+      localStorage.removeItem('appvendas_is_admin');
+      return false;
     } catch {
       return false;
     }
@@ -501,7 +526,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     try {
-      localStorage.setItem('appvendas_is_admin', isAdmin ? 'true' : 'false');
+      if (isAdmin) {
+        sessionStorage.setItem('appvendas_admin_session', 'active');
+        localStorage.setItem('appvendas_is_admin', 'true');
+      } else {
+        sessionStorage.removeItem('appvendas_admin_session');
+        localStorage.removeItem('appvendas_admin_session');
+        localStorage.setItem('appvendas_is_admin', 'false');
+      }
     } catch {
       // ignore
     }
@@ -511,23 +543,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
-      const isSavedAdmin = localStorage.getItem('appvendas_is_admin') === 'true';
       if (saved) {
         const parsed = JSON.parse(saved);
-        // If not authenticated as admin, discard any cached master admin ref so unpaid users get blocked
-        if (!isSavedAdmin && parsed.lastPaymentRef?.includes('MASTER-ADMIN')) {
+        // If not authenticated as admin, discard any cached master admin ref so client users have their own trial / plan
+        if (!isAdmin && parsed.lastPaymentRef?.includes('MASTER-ADMIN')) {
           return DEFAULT_SUBSCRIPTION;
         }
         return { 
           ...DEFAULT_SUBSCRIPTION, 
           ...parsed,
           trialDurationDays: (parsed.trialDurationDays === 5 || !parsed.trialDurationDays) ? 2 : parsed.trialDurationDays,
-          planPrice: (parsed.planPrice === 58.94 || !parsed.planPrice) ? 94.98 : parsed.planPrice
+          planPrice: 94.98
         };
-      }
-      // If admin, initialize immediately with lifetime free subscription
-      if (isSavedAdmin) {
-        return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
       }
       return DEFAULT_SUBSCRIPTION;
     } catch {
@@ -628,6 +655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setAdminMode = () => {
     setIsAdmin(true);
     try {
+      sessionStorage.setItem('appvendas_admin_session', 'active');
       localStorage.setItem('appvendas_is_admin', 'true');
     } catch {
       // ignore
@@ -639,6 +667,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setClientTestMode = () => {
     setIsAdmin(false);
     try {
+      sessionStorage.removeItem('appvendas_admin_session');
+      localStorage.removeItem('appvendas_admin_session');
       localStorage.setItem('appvendas_is_admin', 'false');
     } catch {
       // ignore
@@ -649,31 +679,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSubscribed: false,
     };
     setSubscription(clientTrial);
-    showToast('info', '📱 Modo Cliente Ativado', 'Visualizando como cliente/lojista (com teste de 2 dias e cobrança de R$ 94,98).');
+    showToast('info', '📱 Modo Cliente Ativado', 'Você está no modo exclusivo de cliente/lojista.');
   };
 
   const activateSubscription = (code?: string, paymentRef?: string): boolean => {
     const rawInput = (code || '').trim();
     const cleanCode = rawInput.toUpperCase();
+    
+    // ONLY Márcia's private secret passwords give administrator status
     const isMasterKey = [
-      'MARCIA',
       'MARCIA2026',
       'ADMINMARCIA',
-      'MARCIA0507',
-      '91993192405',
-      '993192405',
-      '9498',
-      'PAGO9498',
-      'PAGO94',
-      'MESTRA94',
-      'MESTRA58',
-      'MARCIAALVES050709@GMAIL.COM',
-      'MASTER2026',
-      'VIP2026'
+      'MARCIA0507'
     ].includes(cleanCode) || rawInput.toLowerCase() === 'marciaalves050709@gmail.com';
 
+    if (isMasterKey) {
+      setIsAdmin(true);
+      try {
+        sessionStorage.setItem('appvendas_admin_session', 'active');
+        localStorage.setItem('appvendas_is_admin', 'true');
+      } catch {
+        // ignore
+      }
+    }
+
     const nowIso = new Date().toISOString();
-    // Master Admin gets lifetime access until year 2099; regular subscriptions expire on Day 5 of the next billing cycle
+    // Master Admin gets lifetime access until year 2099; regular clients get monthly cycle renewed
     const expiryDate = isMasterKey 
       ? new Date('2099-12-31T23:59:59.000Z')
       : calculateNextDay5Expiry(new Date(), true);

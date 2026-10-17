@@ -34,6 +34,7 @@ export const Sidebar: React.FC = () => {
     resetAllData,
     subscription,
     isSubscribed,
+    isAdmin,
     isTrialActive,
     trialDaysRemaining,
     isDueWarningActive,
@@ -321,43 +322,56 @@ export const Sidebar: React.FC = () => {
         <PWAInstallButton variant="sidebar" />
       </nav>
 
-      {/* Bottom User Bar */}
-      <div className="p-4 border-t border-slate-100 bg-white space-y-2.5">
+      {/* Bottom User Bar: Displays the Client's Own User Account */}
+      <div className="p-3.5 border-t border-slate-100 bg-white space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 font-black text-xs shrink-0 shadow-2xs">
-              👑
+          <button
+            type="button"
+            onClick={() => setIsCompanyModalOpen(true)}
+            className="flex items-center gap-2.5 min-w-0 text-left hover:bg-slate-50 p-1 -m-1 rounded-xl transition-all cursor-pointer group flex-1"
+            title="Clique para editar seu perfil de usuário ou nome da empresa"
+          >
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 shadow-2xs ${
+              isAdmin 
+                ? 'bg-amber-100 border border-amber-300 text-amber-800' 
+                : 'bg-indigo-100 border border-indigo-200 text-indigo-700'
+            }`}>
+              {isAdmin ? '👑' : currentCompany?.logoEmoji || '👤'}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-black text-slate-900 truncate">Marcia Alves</p>
-                <span className="text-[9px] bg-amber-100 text-amber-800 font-black px-1.5 py-0.2 rounded">ADMIN</span>
+                <p className="text-xs font-black text-slate-900 truncate">
+                  {isAdmin ? 'Marcia Alves' : (currentCompany?.ownerName || currentCompany?.name || 'Meu Usuário')}
+                </p>
+                <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
+                  isAdmin 
+                    ? 'bg-amber-100 text-amber-800' 
+                    : isSubscribed
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-indigo-100 text-indigo-800'
+                }`}>
+                  {isAdmin ? 'ADMIN' : isSubscribed ? 'PRO' : 'LOJISTA'}
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <p className="text-[10px] text-emerald-700 font-semibold truncate">
-                  Acesso Vitalício Gratuito
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  isAdmin || isSubscribed ? 'bg-emerald-500' : 'bg-amber-500'
+                }`} />
+                <p className="text-[10px] text-slate-500 font-semibold truncate">
+                  {isAdmin 
+                    ? 'Administrador Mestre' 
+                    : isSubscribed 
+                    ? 'Licença Pro Ativa' 
+                    : `Teste: ${trialDaysRemaining}d restantes`}
                 </p>
               </div>
             </div>
-          </div>
-
-          <button
-            onClick={() => {
-              if (confirm('Deseja reiniciar os dados de demonstração? Isso restaurará o estoque e vendas iniciais mantendo seu acesso vitalício.')) {
-                resetAllData();
-              }
-            }}
-            title="Restaurar dados de teste"
-            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Creator signature */}
+        {/* System Version & Company Name */}
         <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Criado por <strong className="text-slate-700 font-bold">Marcia Alves</strong></span>
+          <span className="truncate font-semibold text-slate-600">{currentCompany?.name || 'appvendas'}</span>
           <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">v1.0</span>
         </div>
       </div>

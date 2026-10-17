@@ -59,7 +59,7 @@ export const CompanySettingsModal: React.FC = () => {
 
   // Form State for editing current company
   const [name, setName] = useState(currentCompany?.name || paymentSettings.merchantName || 'Minha Empresa');
-  const [ownerName, setOwnerName] = useState(currentCompany?.ownerName || 'Administrador');
+  const [ownerName, setOwnerName] = useState(currentCompany?.ownerName || 'Meu Usuário');
   const [phone, setPhone] = useState(paymentSettings.merchantWhatsapp || '');
   const [city, setCity] = useState(paymentSettings.merchantCity || 'Barcarena PA');
   const [pixKey, setPixKey] = useState(paymentSettings.pixKey || '');
@@ -88,7 +88,7 @@ export const CompanySettingsModal: React.FC = () => {
     // Update Company metadata
     updateCurrentCompany({
       name: trimmed,
-      ownerName: ownerName.trim() || 'Administrador',
+      ownerName: ownerName.trim() || 'Meu Usuário',
       phone: phone.trim(),
       logoEmoji: selectedEmoji
     });
@@ -426,30 +426,32 @@ export const CompanySettingsModal: React.FC = () => {
                 <p className="text-[11px] text-slate-500 leading-relaxed">
                   Cobrança de {formatCurrency(subscription.planPrice || 94.98)}/mês todo dia 05. Usuários que não pagarem têm o acesso suspenso imediatamente.
                 </p>
-                <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      blockUnpaidUser();
-                      setIsCompanyModalOpen(false);
-                    }}
-                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Bloquear Esta Empresa (Não Pagou)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      activateSubscription();
-                      showToast('success', 'Acesso Confirmado', 'Empresa liberada com sucesso.');
-                    }}
-                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirmar Pagamento Realizado</span>
-                  </button>
-                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        blockUnpaidUser();
+                        setIsCompanyModalOpen(false);
+                      }}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Bloquear Esta Empresa (Não Pagou)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        activateSubscription();
+                        showToast('success', 'Acesso Confirmado', 'Empresa liberada com sucesso.');
+                      }}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Confirmar Pagamento Realizado</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}
@@ -502,7 +504,7 @@ export const CompanySettingsModal: React.FC = () => {
                             )}
                           </div>
                           <p className="text-xs text-slate-500 truncate mt-0.5">
-                            Dono: <strong>{comp.ownerName || 'Administrador'}</strong> {comp.phone ? `• ${formatPhoneDisplay(comp.phone)}` : ''}
+                            Dono: <strong>{comp.ownerName || 'Usuário'}</strong> {comp.phone ? `• ${formatPhoneDisplay(comp.phone)}` : ''}
                           </p>
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                             ID: {comp.id} • Criada em: {new Date(comp.createdAt).toLocaleDateString('pt-BR')}
