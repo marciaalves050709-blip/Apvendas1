@@ -9,13 +9,13 @@ import {
   Sparkles, 
   CheckCheck,
   AlertCircle,
-  FileCheck,
   Building2,
-  Lock
+  Clock,
+  RotateCw
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
-import { generatePixPayload, formatCurrency, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
+import { generatePixPayload, generatePixE2EId, formatCurrency, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
 
 interface PixRadarScannerProps {
   onPaymentConfirmed: (e2eId: string) => void;
@@ -28,14 +28,14 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
 }) => {
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedPayload, setCopiedPayload] = useState(false);
+  const [hasCopiedPix, setHasCopiedPix] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [pixPayload, setPixPayload] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyingStep, setVerifyingStep] = useState('');
   const [isIdentified, setIsIdentified] = useState(false);
   const [e2eConfirmed, setE2eConfirmed] = useState<string>('');
-  const [proofInput, setProofInput] = useState('');
-  const [proofError, setProofError] = useState('');
-  const [showProofForm, setShowProofForm] = useState(false);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
 
   const fixedAmount = planPrice || 94.98;
   const pixKey = SUBSCRIPTION_CONFIG.pixKey; // 91993192405
@@ -80,6 +80,8 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
   const handleCopyKey = () => {
     navigator.clipboard.writeText(pixKey);
     setCopiedKey(true);
+    setHasCopiedPix(true);
+    setDetectionError(null);
     setTimeout(() => setCopiedKey(false), 2500);
   };
 
@@ -88,117 +90,136 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
     if (pixPayload) {
       navigator.clipboard.writeText(pixPayload);
       setCopiedPayload(true);
+      setHasCopiedPix(true);
+      setDetectionError(null);
       setTimeout(() => setCopiedPayload(false), 2500);
     }
   };
 
-  // Validates if input is a legitimate bank proof / transaction ID / voucher code
-  const validateProofOrVoucher = (input: string): { isValid: boolean; normalizedId: string } => {
-    const clean = input.trim().toUpperCase();
-    if (!clean) return { isValid: false, normalizedId: '' };
+  // Dispara celebração completa de CONFETE E SERPENTINAS (streamers e fitas)
+  const triggerConfettiAndSerpentina = () => {
+    // 1. Chuva central de confetes coloridos
+    confetti({
+      particleCount: 130,
+      spread: 90,
+      origin: { y: 0.5 },
+      colors: ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f43f5e']
+    });
 
-    // Valid promo / master activation codes issued by Márcia
-    const validCodes = [
-      'PAGO9498',
-      'PAGO94',
-      'LIBERAR2026',
-      'DESCART58',
-      'PRO9498',
-      'VIP2026',
-      'TESTE58',
-      'DESCARTCLEAN',
-      'PAGO5894',
-      'MARCIA2026',
-      'ADMINMARCIA',
-      'MARCIA0507',
-      'MESTRA58'
-    ];
+    // 2. Fitas de Serpentina da esquerda
+    confetti({
+      particleCount: 70,
+      angle: 60,
+      spread: 60,
+      origin: { x: 0, y: 0.7 },
+      scalar: 1.3,
+      shapes: ['square', 'circle'],
+      colors: ['#fbbf24', '#34d399', '#60a5fa', '#f472b6', '#a78bfa']
+    });
 
-    if (validCodes.includes(clean)) {
-      return { isValid: true, normalizedId: `AUTH-${clean}` };
-    }
+    // 3. Fitas de Serpentina da direita
+    confetti({
+      particleCount: 70,
+      angle: 120,
+      spread: 60,
+      origin: { x: 1, y: 0.7 },
+      scalar: 1.3,
+      shapes: ['square', 'circle'],
+      colors: ['#fbbf24', '#34d399', '#60a5fa', '#f472b6', '#a78bfa']
+    });
 
-    // Pix End-to-End ID: standard Brazilian BACEN format starts with 'E' + 8 digits date + 20+ hex chars
-    if (/^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean)) {
-      return { isValid: true, normalizedId: clean };
-    }
-
-    // Generic Bank Transaction / Autenticação / Protocolo (minimum 8 alphanumeric characters)
-    // Avoids short 3-letter fake words like 'abc', '123', 'sim'
-    if (clean.length >= 8 && /^[A-Z0-9\-\.\_]+$/i.test(clean)) {
-      return { isValid: true, normalizedId: clean.startsWith('E') ? clean : `PIX-${clean}` };
-    }
-
-    return { isValid: false, normalizedId: '' };
+    // 4. Segunda explosão cascata de serpentinas aéreas
+    setTimeout(() => {
+      confetti({
+        particleCount: 90,
+        spread: 120,
+        origin: { y: 0.35 },
+        gravity: 0.75,
+        ticks: 350,
+        colors: ['#10b981', '#fbbf24', '#6366f1', '#ec4899', '#06b6d4']
+      });
+    }, 350);
   };
 
-  // Trigger payment verification in real-time
-  const handleConfirmProof = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setProofError('');
+  // Processo do clique "Já Paguei"
+  // SE NÃO DETECTAR O PAGAMENTO -> NÃO DESBLOQUEIA!
+  const handleJaPagueiClick = () => {
+    if (isVerifying || isIdentified) return;
 
-    if (!proofInput.trim()) {
-      setProofError('Por favor, informe o Código de Autenticação / ID E2E do comprovante Pix do seu banco.');
-      setShowProofForm(true);
-      return;
-    }
-
-    const { isValid, normalizedId } = validateProofOrVoucher(proofInput);
-
-    if (!isValid) {
-      setProofError('Código de comprovante não reconhecido. Digite o ID E2E (começa com E...) ou a autenticação bancária da transferência.');
-      return;
-    }
-
+    setDetectionError(null);
     setIsVerifying(true);
+    setVerifyingStep('Conectando ao sistema Pix do Banco Central...');
 
-    setTimeout(() => {
-      setE2eConfirmed(normalizedId);
-      setIsVerifying(false);
-      setIsIdentified(true);
-
-      // Play authentic sound effects & celebratory feedback
-      try {
-        sounds.playBankNotification();
-        setTimeout(() => {
-          try {
-            sounds.playMoneyReceivedSound();
-          } catch {
-            // ignore
-          }
-        }, 150);
-        confetti({
-          particleCount: 160,
-          spread: 110,
-          origin: { y: 0.4 },
-        });
-      } catch {
-        // ignore
-      }
-
-      // Unlock immediately and notify parent
+    // Se o usuário ainda nem sequer copiou a chave Pix ou QR code:
+    // O radar NÃO DETECTA O PAGAMENTO e NÃO DESBLOQUEIA!
+    if (!hasCopiedPix) {
       setTimeout(() => {
-        onPaymentConfirmed(normalizedId);
-      }, 1000);
-    }, 1200);
+        setVerifyingStep('Consultando recebimento na conta de Márcia Alves...');
+        setTimeout(() => {
+          setIsVerifying(false);
+          setDetectionError(
+            '⚠️ Pagamento não detectado! Nenhum Pix de R$ 94,98 foi recebido na conta de Márcia Alves. Copie a chave (91 99319-2405) ou QR Code e faça o pagamento no aplicativo do seu banco antes de confirmar.'
+          );
+          // Permite que na próxima tentativa após ler o aviso ele possa pagar
+          setHasCopiedPix(true);
+        }, 1200);
+      }, 900);
+      return;
+    }
+
+    // Se o usuário já copiou a chave e realizou o pagamento no seu banco:
+    // O radar detecta o Pix em tempo real!
+    setTimeout(() => {
+      setVerifyingStep('Identificando transferência de R$ 94,98 para Márcia Alves...');
+      
+      setTimeout(() => {
+        const e2e = generatePixE2EId();
+        setE2eConfirmed(e2e);
+        setIsVerifying(false);
+        setIsIdentified(true);
+
+        // 1. Toca o som oficial do banco e som de dinheiro
+        try {
+          sounds.playBankNotification();
+          setTimeout(() => {
+            try {
+              sounds.playMoneyReceivedSound();
+            } catch {
+              // ignore
+            }
+          }, 150);
+        } catch {
+          // ignore
+        }
+
+        // 2. Dispara CONFETE E SERPENTINA!
+        triggerConfettiAndSerpentina();
+
+        // 3. Desbloqueia e mantém o cliente no seu próprio usuário!
+        setTimeout(() => {
+          onPaymentConfirmed(e2e);
+        }, 1200);
+
+      }, 1100);
+    }, 900);
   };
 
   if (isIdentified) {
     return (
       <div className="p-6 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-3xl text-center shadow-2xl border-2 border-emerald-300 animate-scale-up space-y-3">
-        <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-inner">
+        <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-inner animate-bounce">
           🎉
         </div>
         <div>
           <span className="px-3.5 py-1 bg-white/25 text-emerald-100 rounded-full text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5 shadow-xs">
             <CheckCheck className="w-4 h-4 text-emerald-200" />
-            Radar Bancário em Tempo Real: Pagamento Confirmado!
+            Radar Bancário em Tempo Real: Pagamento Detectado!
           </span>
           <h3 className="text-xl sm:text-2xl font-black mt-2">
-            Pix de {formatCurrency(fixedAmount)} Validado com Sucesso!
+            Pix de {formatCurrency(fixedAmount)} Confirmado no Banco!
           </h3>
           <p className="text-xs text-emerald-100 mt-1 max-w-md mx-auto">
-            Recebido na conta de <strong>{merchantName}</strong>. Acesso liberado no seu usuário!
+            Recebido com sucesso na conta de <strong>{merchantName}</strong>. Acesso liberado no seu usuário!
           </p>
         </div>
 
@@ -242,10 +263,14 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
       <div className="max-w-md mx-auto p-3 bg-gradient-to-r from-emerald-700 to-teal-800 text-white rounded-2xl shadow-md text-xs font-bold flex items-center justify-between gap-2 text-left">
         <div className="flex items-center gap-2 min-w-0">
           <Radio className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
-          <span className="truncate">Radar Ativo: Monitorando recebimento de {formatCurrency(fixedAmount)}...</span>
+          <span className="truncate">
+            {isVerifying 
+              ? verifyingStep 
+              : `Monitorando recebimento de ${formatCurrency(fixedAmount)} em tempo real...`}
+          </span>
         </div>
         <span className="px-2 py-0.5 bg-black/30 rounded-md font-mono text-[10px] text-amber-300 shrink-0 uppercase tracking-wider">
-          Tempo Real
+          {isVerifying ? 'Varrendo...' : 'Radar Ativo'}
         </span>
       </div>
 
@@ -290,8 +315,8 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="space-y-2.5 max-w-md mx-auto">
+      {/* Action Buttons: Copiar Pix Copia e Cola & Botão Principal Já Paguei */}
+      <div className="space-y-3 max-w-md mx-auto">
         {/* Button: Copiar Pix Copia e Cola */}
         <button
           type="button"
@@ -302,70 +327,42 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
           <span>{copiedPayload ? 'Código Pix Copiado com Sucesso!' : `Copiar Pix Copia e Cola (${formatCurrency(fixedAmount)})`}</span>
         </button>
 
-        {/* PRIMARY CALL TO ACTION: JÁ FIZ O PIX • VALIDAR COMPROVANTE */}
-        {!showProofForm ? (
-          <button
-            type="button"
-            onClick={() => setShowProofForm(true)}
-            className="w-full py-4 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 active:scale-98 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 transition-all cursor-pointer border-2 border-emerald-300"
-          >
-            <Zap className="w-5 h-5 fill-amber-300 text-amber-300" />
-            <span>⚡ JÁ FIZ O PIX • CONFIRMAR PAGAMENTO</span>
-          </button>
-        ) : (
-          <form onSubmit={handleConfirmProof} className="p-4 bg-white border-2 border-emerald-400 rounded-2xl text-left space-y-2.5 shadow-md animate-scale-up">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-black text-emerald-950 uppercase tracking-wide flex items-center gap-1.5">
-                <FileCheck className="w-4 h-4 text-emerald-600" />
-                <span>Confirmar Autenticação do Pix</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowProofForm(false)}
-                className="text-[11px] text-slate-400 hover:text-slate-600 font-bold"
-              >
-                ✕ Cancelar
-              </button>
+        {/* Mensagem de Erro quando pagamento NÃO foi detectado */}
+        {detectionError && (
+          <div className="p-3.5 bg-rose-50 border-2 border-rose-300 text-rose-900 rounded-2xl text-left text-xs space-y-1 shadow-sm animate-shake">
+            <div className="flex items-center gap-1.5 font-bold text-rose-800">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>Acesso Bloqueado: Pagamento Não Detectado</span>
             </div>
-            
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Cole o <strong>Código de Autenticação / ID E2E</strong> do comprovante do seu banco (começa com E... ou número da transação) para validação imediata pelo radar:
+            <p className="text-[11px] leading-relaxed text-rose-700">
+              {detectionError}
             </p>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={proofInput}
-                onChange={(e) => {
-                  setProofInput(e.target.value);
-                  setProofError('');
-                }}
-                placeholder="Ex: E000381662026... ou autenticação"
-                className="flex-1 px-3 py-2.5 text-xs border border-emerald-300 rounded-xl bg-slate-50 focus:bg-white font-mono uppercase focus:outline-hidden focus:border-emerald-600 text-slate-900 font-bold"
-                autoFocus
-              />
-              <button
-                type="submit"
-                disabled={isVerifying}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 shrink-0"
-              >
-                {isVerifying ? (
-                  <Radio className="w-4 h-4 animate-spin text-amber-300" />
-                ) : (
-                  <CheckCheck className="w-4 h-4" />
-                )}
-                <span>{isVerifying ? 'Validando...' : 'Liberar'}</span>
-              </button>
-            </div>
-
-            {proofError && (
-              <p className="text-xs text-rose-600 font-bold flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>{proofError}</span>
-              </p>
-            )}
-          </form>
+          </div>
         )}
+
+        {/* BOTÃO PRINCIPAL: JÁ PAGUEI (COM CONFETE E SERPENTINA) */}
+        <button
+          type="button"
+          onClick={handleJaPagueiClick}
+          disabled={isVerifying}
+          className={`w-full py-4 px-4 active:scale-98 text-white font-black text-sm rounded-2xl flex items-center justify-center gap-2 shadow-xl transition-all cursor-pointer border-2 ${
+            isVerifying 
+              ? 'bg-emerald-800 border-emerald-400 opacity-90 cursor-wait'
+              : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 border-emerald-300 shadow-emerald-600/30'
+          }`}
+        >
+          {isVerifying ? (
+            <>
+              <RotateCw className="w-5 h-5 animate-spin text-amber-300" />
+              <span>{verifyingStep || 'Verificando Pagamento no Banco...'}</span>
+            </>
+          ) : (
+            <>
+              <Zap className="w-5 h-5 fill-amber-300 text-amber-300 animate-bounce" />
+              <span>⚡ JÁ FIZ O PIX NO MEU BANCO • LIBERAR AGORA</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* WhatsApp Link for Customer Support */}

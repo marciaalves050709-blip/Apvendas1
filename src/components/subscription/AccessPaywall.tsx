@@ -44,26 +44,8 @@ export const AccessPaywall: React.FC = () => {
 
   const isBlocked = Boolean(!isAdmin && !isMasterAdmin && !isAccessAllowed);
 
-  const [copiedPix, setCopiedPix] = useState(false);
-  const [pixQrDataUrl, setPixQrDataUrl] = useState<string>('');
-  const [pixPayloadCode, setPixPayloadCode] = useState<string>('');
-  const [pixTxId, setPixTxId] = useState<string>('');
-  const [activationCode, setActivationCode] = useState('');
-  const [codeError, setCodeError] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [showCodeInput, setShowCodeInput] = useState(false);
   const [radarPulseCount, setRadarPulseCount] = useState(0);
   const [selectedBankId, setSelectedBankId] = useState<string>(paymentSettings.receivingBank || 'NUBANK');
-
-  // Real-time Bank Alert state
-  const [bankAlert, setBankAlert] = useState<{
-    visible: boolean;
-    bankName: string;
-    bankTag: string;
-    amount: number;
-    time: string;
-    e2eId: string;
-  } | null>(null);
 
   const planPrice = subscription.planPrice || 94.98;
 
@@ -80,131 +62,16 @@ export const AccessPaywall: React.FC = () => {
     return () => clearInterval(interval);
   }, [isBlocked]);
 
-  // Generate Validated Pix Payload (EMVCo / BR Code standard with CRC16)
-  useEffect(() => {
-    if (!isBlocked) return;
-
-    try {
-      const pixResult = generatePixPayload({
-        pixKey: paymentSettings.pixKey || SUBSCRIPTION_CONFIG.pixKey || '91993192405',
-        merchantName: paymentSettings.merchantName || 'MARCIA ALVES',
-        merchantCity: paymentSettings.merchantCity || 'BARCARENA',
-        amount: planPrice,
-        txId: '***',
-      });
-
-      setPixPayloadCode(pixResult.payload);
-      setPixTxId(pixResult.txId);
-
-      QRCode.toDataURL(pixResult.payload, {
-        width: 280,
-        margin: 1.5,
-        color: {
-          dark: '#0f172a',
-          light: '#ffffff',
-        },
-      }).then(url => {
-        setPixQrDataUrl(url);
-      });
-    } catch {
-      setPixPayloadCode(`PIX-DESCARTCLEAN-${planPrice}`);
-    }
-  }, [isBlocked, planPrice, paymentSettings]);
-
   // Only render if access is blocked (either trial expired or Day 5 passed without payment)
   if (!isBlocked) {
     return null;
   }
 
-  const handleCopyPix = () => {
-    if (pixPayloadCode) {
-      navigator.clipboard.writeText(pixPayloadCode);
-      setCopiedPix(true);
-      setTimeout(() => setCopiedPix(false), 2500);
-    }
-  };
-
-  // Trigger Instant Bank Notification & Unlock Access
-  const handleValidateAndConfirmBankPayment = () => {
-    setIsVerifying(true);
-
-    setTimeout(() => {
-      const e2e = generatePixE2EId();
-      const nowTime = new Date().toLocaleTimeString('pt-BR');
-
-      // Play authentic sound effects
-      try {
-        sounds.playBankNotification();
-        setTimeout(() => {
-          try {
-            sounds.playMoneyReceivedSound();
-          } catch {
-            // ignore
-          }
-        }, 180);
-        confetti({
-          particleCount: 130,
-          spread: 100,
-          origin: { y: 0.4 },
-        });
-      } catch {
-        // ignore
-      }
-
-      // Display Instant Real-Time Bank Notification Banner
-      setBankAlert({
-        visible: true,
-        bankName: currentBank.name,
-        bankTag: currentBank.shortName,
-        amount: planPrice,
-        time: nowTime,
-        e2eId: e2e,
-      });
-
-      setIsVerifying(false);
-
-      // Unlock system after showing the alert
-      setTimeout(() => {
-        activateSubscription(undefined, `PIX-E2E-${e2e}`);
-      }, 1400);
-
-    }, 1000);
-  };
-
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPass, setAdminPass] = useState('');
   const [adminError, setAdminError] = useState('');
 
-  const handleApplyCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCodeError('');
-    const raw = activationCode.trim();
-    const clean = raw.toUpperCase();
-    const validCodes = [
-      'PAGO9498',
-      'PAGO94',
-      'LIBERAR2026',
-      'DESCART58',
-      'PRO9498',
-      'VIP2026',
-      'TESTE58',
-      'DESCARTCLEAN',
-      'PAGO5894',
-      'MARCIA2026',
-      'ADMINMARCIA',
-      'MARCIA0507',
-      'MESTRA58'
-    ];
 
-    const isE2E = /^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean);
-    const isBankAuth = clean.length >= 8 && /^[A-Z0-9\-\.\_]+$/i.test(clean) && !['TESTE', 'SENHA', 'PAGO', 'GRATIS', 'LIVRE'].includes(clean);
-
-    if (validCodes.includes(clean) || isE2E || isBankAuth) {
-      activateSubscription(clean, `COMPROVANTE-${clean}`);
-    } else {
-      setCodeError('Código ou comprovante inválido. Insira a autenticação E2E do comprovante Pix do seu banco ou uma chave de ativação válida.');
-    }
-  };
 
   const handleAdminBypass = (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,7 +189,7 @@ export const AccessPaywall: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <div className={`w-3 h-3 rounded-full ${
-                  bankAlert ? 'bg-emerald-500' : radarPulseCount % 2 === 0 ? 'bg-indigo-600 scale-125' : 'bg-amber-500 scale-95'
+                  radarPulseCount % 2 === 0 ? 'bg-indigo-600 scale-125' : 'bg-amber-500 scale-95'
                 } transition-transform duration-300`} />
                 <span className="text-xs font-black text-indigo-950 uppercase tracking-wide flex items-center gap-1">
                   <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
@@ -352,25 +219,6 @@ export const AccessPaywall: React.FC = () => {
             </p>
           </div>
 
-          {/* Instant Bank Notification Alert Display */}
-          {bankAlert && bankAlert.visible && (
-            <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl text-left shadow-xl border-2 border-emerald-400 animate-scale-up space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-md flex items-center gap-1.5">
-                  <Bell className="w-3.5 h-3.5 text-amber-300 animate-bounce" />
-                  Alerta Bancário em Tempo Real ({bankAlert.bankTag})
-                </span>
-                <span className="text-[11px] opacity-90 font-mono">{bankAlert.time}</span>
-              </div>
-              <p className="font-black text-sm pt-0.5">
-                🎉 Transferência Pix de {formatCurrency(bankAlert.amount)} Recebida no {bankAlert.bankTag}!
-              </p>
-              <p className="text-xs text-emerald-100">
-                O pagamento foi identificado com sucesso. Código E2E: <strong className="font-mono text-[10px]">{bankAlert.e2eId}</strong>. Liberando acesso ao sistema...
-              </p>
-            </div>
-          )}
-
           {/* Validated Pix Payment Box with Real-time Radar */}
           <PixRadarScanner 
             onPaymentConfirmed={(e2e) => {
@@ -378,47 +226,6 @@ export const AccessPaywall: React.FC = () => {
             }}
             planPrice={planPrice}
           />
-
-          <div className="pt-1 flex items-center justify-end">
-            <button
-              type="button"
-              onClick={() => setShowCodeInput(!showCodeInput)}
-              className="text-xs text-slate-500 hover:text-indigo-600 font-bold flex items-center gap-1 underline cursor-pointer"
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>{showCodeInput ? 'Ocultar código manual' : 'Tenho um código de liberação manual'}</span>
-            </button>
-          </div>
-
-          {/* Toggleable Activation Code Form */}
-          {showCodeInput && (
-            <form onSubmit={handleApplyCode} className="p-4 bg-indigo-50/80 border-2 border-indigo-200 rounded-2xl space-y-2.5 animate-scale-up">
-              <label className="block text-xs font-black uppercase text-indigo-950">
-                Inserir Código de Desbloqueio
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={activationCode}
-                  onChange={e => {
-                    setActivationCode(e.target.value);
-                    setCodeError('');
-                  }}
-                  placeholder="Ex: DESCART58 ou LIBERAR2026"
-                  className="flex-1 px-3 py-2.5 bg-white border border-indigo-300 rounded-xl text-xs font-mono font-bold uppercase tracking-wider text-slate-900 focus:outline-hidden focus:border-indigo-600"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
-                >
-                  Liberar
-                </button>
-              </div>
-              {codeError && (
-                <p className="text-xs text-rose-600 font-bold">{codeError}</p>
-              )}
-            </form>
-          )}
 
         </div>
 

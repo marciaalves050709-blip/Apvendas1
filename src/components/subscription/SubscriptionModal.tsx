@@ -589,44 +589,28 @@ export const SubscriptionModal: React.FC = () => {
           {(!isSubscribed || isDueWarningActive || isBlockedDueToDay5 || forceShowRenewalPayment) && (
             <div className="space-y-4 pt-2 border-t border-slate-100">
               
-              {/* Tab Selector: Pix vs Activation Code */}
-              <div className="flex bg-slate-100 p-1 rounded-xl">
+              {/* Pix Radar Scanner Direct Action */}
+              <PixRadarScanner 
+                onPaymentConfirmed={(e2e) => {
+                  activateSubscription(undefined, `PIX-RADAR-${e2e}`);
+                }}
+                planPrice={planPrice}
+              />
+
+              {/* Discrete Manual Code Option */}
+              <div className="pt-1 text-center">
                 <button
                   type="button"
-                  onClick={() => setSelectedTab('PIX')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    selectedTab === 'PIX'
-                      ? 'bg-white text-indigo-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>Pagar via Pix ({formatCurrency(planPrice)})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTab('CODE')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    selectedTab === 'CODE'
-                      ? 'bg-white text-indigo-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  onClick={() => setSelectedTab(selectedTab === 'CODE' ? 'PIX' : 'CODE')}
+                  className="text-xs text-slate-400 hover:text-indigo-600 font-semibold underline cursor-pointer inline-flex items-center gap-1"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
-                  <span>Tenho um Código de Liberação</span>
+                  <span>{selectedTab === 'CODE' ? 'Voltar para pagamento Pix' : 'Inserir código de ativação manual'}</span>
                 </button>
               </div>
 
-              {selectedTab === 'PIX' ? (
-                <PixRadarScanner 
-                  onPaymentConfirmed={(e2e) => {
-                    activateSubscription(undefined, `PIX-RADAR-${e2e}`);
-                  }}
-                  planPrice={planPrice}
-                />
-              ) : (
-                /* Activation Code Form */
-                <form onSubmit={handleApplyCode} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
+              {selectedTab === 'CODE' && (
+                <form onSubmit={handleApplyCode} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3 animate-scale-up">
                   <div>
                     <label className="block text-xs font-black uppercase text-slate-700 mb-1">
                       Código de Ativação / Licença
@@ -649,19 +633,12 @@ export const SubscriptionModal: React.FC = () => {
                         type="submit"
                         className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
                       >
-                        Ativar Licença
+                        Ativar
                       </button>
                     </div>
                     {codeError && (
                       <p className="text-xs text-rose-600 font-bold mt-2">{codeError}</p>
                     )}
-                  </div>
-                  
-                  <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-[11px] text-indigo-900 flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <p>
-                      Após realizar o pagamento via Pix de R$ 94,98, o radar bancário identifica automaticamente. Se preferir, insira o código de ativação enviado pela administradora.
-                    </p>
                   </div>
                 </form>
               )}
