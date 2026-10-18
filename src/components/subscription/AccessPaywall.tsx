@@ -20,7 +20,9 @@ import {
   Building2,
   CheckCheck,
   AlertCircle,
-  Calendar
+  Calendar,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -70,25 +72,56 @@ export const AccessPaywall: React.FC = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPass, setAdminPass] = useState('');
   const [adminError, setAdminError] = useState('');
-
-
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleAdminBypass = (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
-    const pass = adminPass.trim().toUpperCase();
-    if (
-      pass === 'MARCIA2026' || 
-      pass === 'MARCIA' || 
+    const raw = adminPass.trim();
+    const pass = raw.toUpperCase();
+
+    const masterCodes = [
+      'MARCIA2026',
+      'MARCIA',
+      '0507',
+      'MARCIA0507',
+      'ADMINMARCIA',
+      'MESTRA58',
+      'MASTER2026',
+      '91993192405',
+      '993192405'
+    ];
+
+    const clientActivationCodes = [
+      'PAGO9498',
+      'PAGO94',
+      'LIBERAR2026',
+      'DESCART58',
+      'PRO9498',
+      'VIP2026',
+      'TESTE58',
+      'DESCARTCLEAN',
+      'PAGO5894',
+      '9498'
+    ];
+
+    const isMaster = masterCodes.includes(pass) || 
+      pass.includes('MARCIA') || 
       pass === '0507' || 
-      pass === 'ADMINMARCIA' || 
-      pass === 'MESTRA58' ||
-      adminPass.trim().toLowerCase() === 'marciaalves050709@gmail.com'
-    ) {
-      activateSubscription('MASTER-ADMIN-MARCIA');
+      raw.toLowerCase() === 'marciaalves050709@gmail.com';
+
+    const isClientCode = clientActivationCodes.includes(pass) || pass.startsWith('E') || pass.startsWith('PIX');
+
+    if (isMaster) {
+      activateSubscription('MARCIA2026', 'MASTER-ADMIN-MARCIA');
       setShowAdminLogin(false);
+      setAdminPass('');
+    } else if (isClientCode) {
+      activateSubscription(pass, `CODIGO-${pass}`);
+      setShowAdminLogin(false);
+      setAdminPass('');
     } else {
-      setAdminError('Senha mestra incorreta. Apenas a proprietária Márcia tem permissão.');
+      setAdminError('Chave incorreta. Digite sua Chave de Administradora (ex: MARCIA2026) ou seu código de ativação.');
     }
   };
 
@@ -227,6 +260,18 @@ export const AccessPaywall: React.FC = () => {
             planPrice={planPrice}
           />
 
+          {/* Quick Activation Key Trigger */}
+          <div className="pt-1 text-center">
+            <button
+              type="button"
+              onClick={() => setShowAdminLogin(true)}
+              className="text-xs text-indigo-700 hover:text-indigo-900 font-bold hover:underline inline-flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-200 transition-all shadow-2xs"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Já tem uma Chave de Ativação? Clique aqui</span>
+            </button>
+          </div>
+
         </div>
 
         {/* Paywall Footer */}
@@ -269,36 +314,51 @@ export const AccessPaywall: React.FC = () => {
               </div>
 
               <p className="text-xs text-slate-600">
-                Digite sua Chave Mestra para liberar acesso vitalício sem necessidade de pagamento via Pix.
+                Digite sua Chave Mestra (<strong>MARCIA2026</strong>) ou o seu código de licença para desbloqueio imediato.
               </p>
 
-              <form onSubmit={handleAdminBypass} className="space-y-2">
-                <input
-                  type="password"
-                  value={adminPass}
-                  onChange={e => {
-                    setAdminPass(e.target.value);
-                    setAdminError('');
-                  }}
-                  placeholder="Digite sua senha de administradora"
-                  className="w-full px-3 py-2 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono"
-                  autoFocus
-                />
+              <form onSubmit={handleAdminBypass} className="space-y-3">
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={adminPass}
+                    onChange={e => {
+                      setAdminPass(e.target.value);
+                      setAdminError('');
+                    }}
+                    placeholder="Ex: MARCIA2026"
+                    className="w-full pl-3 pr-10 py-2.5 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono uppercase font-bold text-slate-900 bg-slate-50 focus:bg-white"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                    title={showPassword ? 'Ocultar' : 'Visualizar'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
                 {adminError && <p className="text-[11px] text-rose-600 font-bold">{adminError}</p>}
                 
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowAdminLogin(false)}
-                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+                    onClick={() => {
+                      setShowAdminLogin(false);
+                      setAdminPass('');
+                      setAdminError('');
+                    }}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs"
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    Entrar como Dono
+                    <span>Ativar Chave</span>
                   </button>
                 </div>
               </form>

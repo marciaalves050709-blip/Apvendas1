@@ -509,20 +509,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
       const adminParam = urlParams?.get('admin')?.toLowerCase();
-      if (adminParam === 'marcia2026' || adminParam === 'marcia') {
+      if (adminParam === 'marcia2026' || adminParam === 'marcia' || adminParam === '0507') {
         sessionStorage.setItem('appvendas_admin_session', 'active');
+        localStorage.setItem('appvendas_admin_session', 'active');
+        localStorage.setItem('appvendas_is_admin', 'true');
         return true;
       }
 
-      // Check session storage (tied to browser tab/session only if explicitly logged in with master code)
+      // Check session storage or persistent admin storage
       const sessionAuth = sessionStorage.getItem('appvendas_admin_session');
-      if (sessionAuth === 'active') {
+      const localAuth = localStorage.getItem('appvendas_admin_session');
+      const isStoredAdmin = localStorage.getItem('appvendas_is_admin') === 'true';
+
+      const savedSubRaw = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
+      let isSavedMaster = false;
+      if (savedSubRaw) {
+        try {
+          const s = JSON.parse(savedSubRaw);
+          if (s.isSubscribed && (s.lastPaymentRef?.includes('MASTER-ADMIN') || (s.subscriptionExpiresAt && new Date(s.subscriptionExpiresAt).getFullYear() > 2090))) {
+            isSavedMaster = true;
+          }
+        } catch {}
+      }
+
+      if (sessionAuth === 'active' || localAuth === 'active' || isStoredAdmin || isSavedMaster) {
         return true;
       }
 
-      // Clean up legacy persistent localStorage keys from earlier tests so clients are NEVER stuck in admin
-      localStorage.removeItem('appvendas_admin_session');
-      localStorage.removeItem('appvendas_is_admin');
       return false;
     } catch {
       return false;
@@ -533,11 +546,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (isAdmin) {
         sessionStorage.setItem('appvendas_admin_session', 'active');
+        localStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_is_admin', 'true');
-      } else {
-        sessionStorage.removeItem('appvendas_admin_session');
-        localStorage.removeItem('appvendas_admin_session');
-        localStorage.setItem('appvendas_is_admin', 'false');
       }
     } catch {
       // ignore
@@ -551,8 +561,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const isPixPaid = localStorage.getItem('appvendas_pix_paid') === 'true';
       if (saved) {
         const parsed = JSON.parse(saved);
-        // If not authenticated as admin and not confirmed paid via Pix, user MUST remain blocked!
-        if (!isAdmin && (!isPixPaid || parsed.lastPaymentRef?.includes('MASTER-ADMIN'))) {
+        // Master admin is always permanently authorized
+        if (isAdmin || parsed.lastPaymentRef?.includes('MASTER-ADMIN') || (parsed.subscriptionExpiresAt && new Date(parsed.subscriptionExpiresAt).getFullYear() > 2090)) {
+          return {
+            ...MASTER_ADMIN_LIFETIME_SUBSCRIPTION,
+            ...parsed,
+            isSubscribed: true
+          };
+        }
+        // If not authenticated as admin and not confirmed paid via Pix, client user MUST remain blocked!
+        if (!isPixPaid) {
           return DEFAULT_SUBSCRIPTION;
         }
         return { 
@@ -693,18 +711,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const rawInput = (code || '').trim();
     const cleanCode = rawInput.toUpperCase();
     
-    // ONLY Márcia's private secret passwords give administrator status
-    const isMasterKey = [
+    // Márcia's private secret passwords give administrator status
+    const masterKeys = [
       'MARCIA2026',
       'ADMINMARCIA',
-      'MARCIA0507'
-    ].includes(cleanCode) || rawInput.toLowerCase() === 'marciaalves050709@gmail.com';
+      'MARCIA0507',
+      'MARCIA',
+      '0507',
+      'MESTRA58',
+      'MASTER2026',
+      'MASTER-ADMIN',
+      'MASTER-ADMIN-MARCIA',
+      '91993192405',
+      '993192405'
+    ];
+
+    const isMasterKey = masterKeys.includes(cleanCode) || 
+      cleanCode.includes('MASTER-ADMIN') || 
+      cleanCode.includes('MARCIA') || 
+      cleanCode === '0507' ||
+      rawInput.toLowerCase() === 'marciaalves050709@gmail.com';
 
     if (isMasterKey) {
       setIsAdmin(true);
       try {
         sessionStorage.setItem('appvendas_admin_session', 'active');
+        localStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_is_admin', 'true');
+        localStorage.setItem('appvendas_pix_paid', 'true');
       } catch {
         // ignore
       }

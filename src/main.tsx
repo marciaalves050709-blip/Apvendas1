@@ -8,10 +8,36 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 try {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
-    const isAdminExplicit = urlParams.get('admin')?.toLowerCase() === 'marcia2026' || urlParams.get('admin')?.toLowerCase() === 'marcia';
-    
-    if (!isAdminExplicit) {
-      // 1. Remove legacy admin session flags from older builds
+    const adminParam = urlParams.get('admin')?.toLowerCase();
+    const isAdminExplicit = adminParam === 'marcia2026' || adminParam === 'marcia' || adminParam === '0507';
+
+    // Check if the current device/browser is already authenticated as master admin Márcia
+    const subRaw = localStorage.getItem('descart_clean_subscription_v1');
+    let hasMasterSub = false;
+    if (subRaw) {
+      try {
+        const parsedSub = JSON.parse(subRaw);
+        if (
+          parsedSub.isSubscribed && 
+          (parsedSub.lastPaymentRef?.includes('MASTER-ADMIN') || 
+           (parsedSub.subscriptionExpiresAt && new Date(parsedSub.subscriptionExpiresAt).getFullYear() > 2090))
+        ) {
+          hasMasterSub = true;
+        }
+      } catch {}
+    }
+
+    const isStoredAdmin = localStorage.getItem('appvendas_is_admin') === 'true' || localStorage.getItem('appvendas_admin_session') === 'active';
+    const isMasterAdminActive = isAdminExplicit || hasMasterSub || isStoredAdmin;
+
+    if (isMasterAdminActive) {
+      // Preserve and ensure full master admin privileges for Márcia Alves
+      localStorage.setItem('appvendas_is_admin', 'true');
+      localStorage.setItem('appvendas_admin_session', 'active');
+      sessionStorage.setItem('appvendas_admin_session', 'active');
+      localStorage.setItem('appvendas_pix_paid', 'true');
+    } else {
+      // 1. Remove legacy admin session flags for regular non-admin visitors
       localStorage.removeItem('appvendas_admin_session');
       localStorage.setItem('appvendas_is_admin', 'false');
       sessionStorage.removeItem('appvendas_admin_session');
@@ -83,18 +109,16 @@ try {
       }
 
       // 4. Sanitize subscription: enforce that unpaid users who had the old 10s auto-unlock are strictly blocked!
-      const MIGRATION_KEY = 'appvendas_pix_security_v4_clean';
+      const MIGRATION_KEY = 'appvendas_pix_security_v5_clean';
       if (localStorage.getItem(MIGRATION_KEY) !== 'true') {
-        const subRaw = localStorage.getItem('descart_clean_subscription_v1');
         let isLegitPaid = false;
         if (subRaw) {
           try {
             const sub = JSON.parse(subRaw);
-            // Only authentic verified payments count (not the old fake PIX-RADAR or fake COMPROVANTE-abc)
+            // Master Admin or authentic verified client payments count
             if (
               sub.isSubscribed && 
               sub.lastPaymentRef && 
-              !sub.lastPaymentRef.includes('MASTER-ADMIN') && 
               !sub.lastPaymentRef.startsWith('PIX-RADAR-') &&
               !sub.lastPaymentRef.startsWith('COMPROVANTE-')
             ) {

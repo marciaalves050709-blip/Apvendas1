@@ -200,10 +200,16 @@ export const SubscriptionModal: React.FC = () => {
       'TESTE58',
       'DESCARTCLEAN',
       'PAGO5894',
+      '9498',
       'MARCIA2026',
       'ADMINMARCIA',
       'MARCIA0507',
-      'MESTRA58'
+      'MARCIA',
+      '0507',
+      'MESTRA58',
+      'MASTER2026',
+      '91993192405',
+      '993192405'
     ];
 
     const isE2E = /^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean);
