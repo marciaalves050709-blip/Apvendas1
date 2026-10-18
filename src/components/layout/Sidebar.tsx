@@ -341,7 +341,7 @@ export const Sidebar: React.FC = () => {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="text-xs font-black text-slate-900 truncate">
-                  {isAdmin ? 'Marcia Alves' : (currentCompany?.ownerName || currentCompany?.name || 'Meu Usuário')}
+                  {isAdmin ? 'Marcia Alves' : (currentCompany?.ownerName && currentCompany?.ownerName !== 'Meu Usuário' && currentCompany?.ownerName !== 'Administrador' ? currentCompany.ownerName : (currentCompany?.name || 'Lojista'))}
                 </p>
                 <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
                   isAdmin 

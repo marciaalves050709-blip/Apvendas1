@@ -265,8 +265,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // If stored as Marcia Alves for a regular client, sanitize to user's own store
           return parsed.map(c => ({
             ...c,
-            name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || !c.name) ? 'Minha Empresa' : c.name,
-            ownerName: (c.ownerName === 'Marcia Alves' || c.ownerName === 'MARCIA ALVES' || c.ownerName === 'Administrador' || !c.ownerName) ? 'Meu Usuário' : c.ownerName,
+            name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || !c.name) ? 'Minha Loja' : c.name,
+            ownerName: (c.ownerName === 'Marcia Alves' || c.ownerName === 'MARCIA ALVES' || c.ownerName === 'Administrador' || c.ownerName === 'Meu Usuário' || !c.ownerName) ? 'Lojista' : c.ownerName,
             email: c.email === 'marciaalves050709@gmail.com' ? '' : (c.email || '')
           }));
         }
@@ -285,14 +285,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })();
 
     const initialName = (legacySettings?.merchantName === 'MARCIA ALVES' || legacySettings?.merchantName === 'appvendas' || !legacySettings?.merchantName)
-      ? 'Minha Empresa'
+      ? 'Minha Loja'
       : legacySettings.merchantName;
 
     const initialCompany: CompanyAccount = {
       id: DEFAULT_COMPANY_ID,
       name: initialName,
       slug: initialName.toLowerCase().replace(/\s+/g, '-'),
-      ownerName: 'Meu Usuário',
+      ownerName: 'Lojista',
       phone: legacySettings?.merchantWhatsapp || '',
       email: '',
       category: 'Comércio & Serviços',
@@ -316,9 +316,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Active Company Object
   const currentCompany = companies.find(c => c.id === activeCompanyId) || companies[0] || {
     id: DEFAULT_COMPANY_ID,
-    name: 'Minha Empresa',
-    slug: 'minha-empresa',
-    ownerName: 'Meu Usuário',
+    name: 'Minha Loja',
+    slug: 'minha-loja',
+    ownerName: 'Lojista',
     phone: '',
     email: '',
     category: 'Comércio & Serviços',
@@ -705,6 +705,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         sessionStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_is_admin', 'true');
+      } catch {
+        // ignore
+      }
+    } else {
+      // Regular client payment: strictly keep client mode, client user and client company!
+      setIsAdmin(false);
+      try {
+        sessionStorage.removeItem('appvendas_admin_session');
+        localStorage.removeItem('appvendas_admin_session');
+        localStorage.setItem('appvendas_is_admin', 'false');
       } catch {
         // ignore
       }

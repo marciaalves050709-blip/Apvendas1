@@ -16,7 +16,7 @@ try {
       localStorage.setItem('appvendas_is_admin', 'false');
       sessionStorage.removeItem('appvendas_admin_session');
 
-      // 2. Sanitize companies list in localStorage so existing users don't see Marcia Alves as company owner
+      // 2. Sanitize companies list in localStorage so clients have their own store and are not named 'Meu Usuário' or 'Marcia Alves'
       const companiesRaw = localStorage.getItem('appvendas_companies_list_v1');
       if (companiesRaw) {
         try {
@@ -27,12 +27,12 @@ try {
               let updatedOwner = c.ownerName;
               let updatedName = c.name;
               let updatedEmail = c.email;
-              if (c.ownerName === 'Marcia Alves' || c.ownerName === 'Administrador' || !c.ownerName) {
-                updatedOwner = 'Meu Usuário';
+              if (c.ownerName === 'Marcia Alves' || c.ownerName === 'Administrador' || c.ownerName === 'Meu Usuário' || !c.ownerName) {
+                updatedOwner = 'Lojista';
                 changed = true;
               }
               if (c.name === 'appvendas' || !c.name) {
-                updatedName = 'Minha Empresa';
+                updatedName = 'Minha Loja';
                 changed = true;
               }
               if (c.email === 'marciaalves050709@gmail.com') {
@@ -56,14 +56,14 @@ try {
           const s = JSON.parse(raw);
           let changed = false;
           if (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'appvendas') {
-            s.merchantName = 'Minha Empresa';
+            s.merchantName = 'Minha Loja';
             changed = true;
           }
           if (Array.isArray(s.sellers)) {
             s.sellers = s.sellers.map((sel: any) => {
-              if (sel.name === 'Márcia Alves' || sel.name === 'Marcia Alves') {
+              if (sel.name === 'Márcia Alves' || sel.name === 'Marcia Alves' || sel.name === 'Meu Usuário') {
                 changed = true;
-                return { ...sel, name: 'Atendente', merchantName: 'Minha Empresa' };
+                return { ...sel, name: 'Atendente', merchantName: 'Minha Loja' };
               }
               return sel;
             });
@@ -82,22 +82,43 @@ try {
         }
       }
 
-      // 4. Sanitize subscription: enforce that unpaid users remain strictly blocked
-      const isPixPaid = localStorage.getItem('appvendas_pix_paid') === 'true';
-      const subRaw = localStorage.getItem('descart_clean_subscription_v1');
-      if (subRaw) {
-        try {
-          const sub = JSON.parse(subRaw);
-          // If not confirmed paid via Pix and not master admin, lock access immediately
-          if (!isPixPaid || sub.lastPaymentRef?.includes('MASTER-ADMIN')) {
-            sub.isSubscribed = false;
-            sub.trialDurationDays = 0;
-            sub.subscriptionExpiresAt = '';
-            sub.lastPaymentRef = '';
-            localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(sub));
-            localStorage.removeItem('appvendas_pix_paid');
-          }
-        } catch {}
+      // 4. Sanitize subscription: enforce that unpaid users who had the old 10s auto-unlock are strictly blocked!
+      const MIGRATION_KEY = 'appvendas_pix_security_v4_clean';
+      if (localStorage.getItem(MIGRATION_KEY) !== 'true') {
+        const subRaw = localStorage.getItem('descart_clean_subscription_v1');
+        let isLegitPaid = false;
+        if (subRaw) {
+          try {
+            const sub = JSON.parse(subRaw);
+            // Only authentic verified payments count (not the old fake PIX-RADAR or fake COMPROVANTE-abc)
+            if (
+              sub.isSubscribed && 
+              sub.lastPaymentRef && 
+              !sub.lastPaymentRef.includes('MASTER-ADMIN') && 
+              !sub.lastPaymentRef.startsWith('PIX-RADAR-') &&
+              !sub.lastPaymentRef.startsWith('COMPROVANTE-')
+            ) {
+              isLegitPaid = true;
+            }
+          } catch {}
+        }
+
+        if (!isLegitPaid) {
+          // Unpaid users must be strictly blocked until real payment confirmation!
+          localStorage.removeItem('appvendas_pix_paid');
+          localStorage.removeItem('appvendas_pix_paid_timestamp');
+          const blockedSub = {
+            isSubscribed: false,
+            trialStartDate: new Date().toISOString(),
+            trialDurationDays: 0,
+            planPrice: 94.98,
+            planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
+            subscriptionExpiresAt: '',
+            lastPaymentRef: ''
+          };
+          localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(blockedSub));
+        }
+        localStorage.setItem(MIGRATION_KEY, 'true');
       }
     }
   }

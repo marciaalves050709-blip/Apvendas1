@@ -181,32 +181,28 @@ export const AccessPaywall: React.FC = () => {
     const raw = activationCode.trim();
     const clean = raw.toUpperCase();
     const validCodes = [
-      '91993192405',
-      '993192405',
-      '9498',
       'PAGO9498',
       'PAGO94',
-      'MESTRA94',
-      'DESCART58', 
-      'PAGO5894', 
-      'LIBERAR2026', 
-      'TESTE58', 
-      'DESCARTCLEAN', 
-      'PRO58', 
+      'LIBERAR2026',
+      'DESCART58',
+      'PRO9498',
       'VIP2026',
-      'MARCIA',
+      'TESTE58',
+      'DESCARTCLEAN',
+      'PAGO5894',
       'MARCIA2026',
       'ADMINMARCIA',
       'MARCIA0507',
-      'MESTRA58',
-      'MASTER2026'
+      'MESTRA58'
     ];
 
-    // Accept any bank proof, End-to-End ID (E...), transaction code, or activation code
-    if (clean.length >= 3) {
+    const isE2E = /^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean);
+    const isBankAuth = clean.length >= 8 && /^[A-Z0-9\-\.\_]+$/i.test(clean) && !['TESTE', 'SENHA', 'PAGO', 'GRATIS', 'LIVRE'].includes(clean);
+
+    if (validCodes.includes(clean) || isE2E || isBankAuth) {
       activateSubscription(clean, `COMPROVANTE-${clean}`);
     } else {
-      setCodeError('Insira o código de autenticação do comprovante Pix ou chave de ativação.');
+      setCodeError('Código ou comprovante inválido. Insira a autenticação E2E do comprovante Pix do seu banco ou uma chave de ativação válida.');
     }
   };
 
