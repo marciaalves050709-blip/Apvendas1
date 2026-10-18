@@ -42,7 +42,7 @@ export const AccessPaywall: React.FC = () => {
     isAccessAllowed
   } = useApp();
 
-  const isBlocked = Boolean(!isAdmin && !isMasterAdmin && (!isAccessAllowed || isTrialExpired || isBlockedDueToDay5));
+  const isBlocked = Boolean(!isAdmin && !isMasterAdmin && !isAccessAllowed);
 
   const [copiedPix, setCopiedPix] = useState(false);
   const [pixQrDataUrl, setPixQrDataUrl] = useState<string>('');
@@ -230,12 +230,9 @@ export const AccessPaywall: React.FC = () => {
   };
 
   const handleSendWhatsAppProof = () => {
-    const rawPhone = paymentSettings.merchantWhatsapp || '5511999998888';
-    const cleanPhone = rawPhone.replace(/\D/g, '');
+    const cleanPhone = '5591993192405';
     const message = encodeURIComponent(
-      isBlockedDueToDay5
-        ? `Olá! Meu sistema foi bloqueado devido ao vencimento do dia 05 e realizei o pagamento via Pix da mensalidade de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
-        : `Olá! Meu período de teste de 2 dias do App de vendas acabou e realizei o pagamento via Pix de ${formatCurrency(planPrice)} no ${currentBank.shortName}. Segue comprovante para liberar meu acesso!`
+      `Olá Márcia! Realizei o pagamento via Pix da assinatura do App de Vendas no valor de ${formatCurrency(planPrice)}. Segue meu comprovante para confirmação!`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };

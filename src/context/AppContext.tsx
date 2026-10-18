@@ -210,7 +210,7 @@ export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
 export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
   isSubscribed: false,
   trialStartDate: new Date().toISOString(),
-  trialDurationDays: 2,
+  trialDurationDays: 0,
   planPrice: 94.98,
   planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
 };
@@ -265,7 +265,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // If stored as Marcia Alves for a regular client, sanitize to user's own store
           return parsed.map(c => ({
             ...c,
-            ownerName: c.ownerName === 'Marcia Alves' ? 'Meu Usuário' : (c.ownerName || 'Meu Usuário'),
+            name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || !c.name) ? 'Minha Empresa' : c.name,
+            ownerName: (c.ownerName === 'Marcia Alves' || c.ownerName === 'MARCIA ALVES' || c.ownerName === 'Administrador' || !c.ownerName) ? 'Meu Usuário' : c.ownerName,
             email: c.email === 'marciaalves050709@gmail.com' ? '' : (c.email || '')
           }));
         }
@@ -283,10 +284,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     })();
 
+    const initialName = (legacySettings?.merchantName === 'MARCIA ALVES' || legacySettings?.merchantName === 'appvendas' || !legacySettings?.merchantName)
+      ? 'Minha Empresa'
+      : legacySettings.merchantName;
+
     const initialCompany: CompanyAccount = {
       id: DEFAULT_COMPANY_ID,
-      name: legacySettings?.merchantName || 'Minha Loja',
-      slug: (legacySettings?.merchantName || 'minha-loja').toLowerCase().replace(/\s+/g, '-'),
+      name: initialName,
+      slug: initialName.toLowerCase().replace(/\s+/g, '-'),
       ownerName: 'Meu Usuário',
       phone: legacySettings?.merchantWhatsapp || '',
       email: '',
@@ -311,8 +316,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Active Company Object
   const currentCompany = companies.find(c => c.id === activeCompanyId) || companies[0] || {
     id: DEFAULT_COMPANY_ID,
-    name: 'Minha Loja',
-    slug: 'minha-loja',
+    name: 'Minha Empresa',
+    slug: 'minha-empresa',
     ownerName: 'Meu Usuário',
     phone: '',
     email: '',
@@ -539,20 +544,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isAdmin]);
 
-  // Subscription & 2-Day Free Trial state
+  // Subscription state (Unpaid users are strictly blocked until Pix payment)
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
+      const isPixPaid = localStorage.getItem('appvendas_pix_paid') === 'true';
       if (saved) {
         const parsed = JSON.parse(saved);
-        // If not authenticated as admin, discard any cached master admin ref so client users have their own trial / plan
-        if (!isAdmin && parsed.lastPaymentRef?.includes('MASTER-ADMIN')) {
+        // If not authenticated as admin and not confirmed paid via Pix, user MUST remain blocked!
+        if (!isAdmin && (!isPixPaid || parsed.lastPaymentRef?.includes('MASTER-ADMIN'))) {
           return DEFAULT_SUBSCRIPTION;
         }
         return { 
           ...DEFAULT_SUBSCRIPTION, 
           ...parsed,
-          trialDurationDays: (parsed.trialDurationDays === 5 || !parsed.trialDurationDays) ? 2 : parsed.trialDurationDays,
+          trialDurationDays: 0,
           planPrice: 94.98
         };
       }
@@ -586,7 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Derived Trial & Subscription status
   const trialStartMs = new Date(subscription.trialStartDate || Date.now()).getTime();
-  const trialDurationMs = (subscription.trialDurationDays || 2) * 24 * 60 * 60 * 1000;
+  const trialDurationMs = (subscription.trialDurationDays || 0) * 24 * 60 * 60 * 1000;
   const trialEndMs = trialStartMs + trialDurationMs;
   const msRemaining = Math.max(0, trialEndMs - currentTimeMs);
 
@@ -621,11 +627,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Administrator is ALWAYS subscribed and NEVER expired (100% exempt from charges)
   const isSubscribed = Boolean(isAdmin || isSubscribedValid);
-  const isTrialActive = !isAdmin && !isMasterAdmin && !subscription.isSubscribed && msRemaining > 0;
-  const isTrialExpired = !isAdmin && !isMasterAdmin && !subscription.isSubscribed && msRemaining <= 0;
+  const isTrialActive = false; // No free unauthenticated trial: payment required for access
+  const isTrialExpired = !isAdmin && !isMasterAdmin && !subscription.isSubscribed;
   
-  // Total access allowed: Admin OR Valid Subscribed OR Active Trial (NOT expired & NOT blocked due to Day 5)
-  const isAccessAllowed = Boolean(isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5) || isTrialActive);
+  // Total access allowed: Admin OR Valid Subscribed (NOT blocked due to Day 5)
+  // If user has not paid (isSubscribed is false), access is strictly blocked!
+  const isAccessAllowed = Boolean(isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5));
 
   // Days remaining calculation:
   const trialDaysRemaining = isAdmin ? 999 : Math.floor(msRemaining / (24 * 60 * 60 * 1000));
@@ -987,11 +994,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return [
       {
         id: 'vendedor_principal',
-        name: 'Márcia Alves',
-        whatsapp: paymentSettings.merchantWhatsapp || '5591993192405',
-        pixKey: paymentSettings.pixKey || '91993192405',
+        name: 'Atendente',
+        whatsapp: paymentSettings.merchantWhatsapp || '',
+        pixKey: paymentSettings.pixKey || '',
         pixKeyType: paymentSettings.pixKeyType || 'PHONE',
-        merchantName: paymentSettings.merchantName || 'MARCIA ALVES',
+        merchantName: paymentSettings.merchantName || currentCompany.name || 'Minha Empresa',
         merchantCity: paymentSettings.merchantCity || 'Barcarena PA',
         receivingBank: paymentSettings.receivingBank || 'NUBANK',
         isDefault: true,

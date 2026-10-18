@@ -82,15 +82,20 @@ try {
         }
       }
 
-      // 4. Sanitize subscription if it was set to master admin by mistake on a client device
+      // 4. Sanitize subscription: enforce that unpaid users remain strictly blocked
+      const isPixPaid = localStorage.getItem('appvendas_pix_paid') === 'true';
       const subRaw = localStorage.getItem('descart_clean_subscription_v1');
       if (subRaw) {
         try {
           const sub = JSON.parse(subRaw);
-          if (sub.lastPaymentRef?.includes('MASTER-ADMIN')) {
-            sub.lastPaymentRef = 'PRO-CLIENTE';
-            sub.planPrice = 94.98;
+          // If not confirmed paid via Pix and not master admin, lock access immediately
+          if (!isPixPaid || sub.lastPaymentRef?.includes('MASTER-ADMIN')) {
+            sub.isSubscribed = false;
+            sub.trialDurationDays = 0;
+            sub.subscriptionExpiresAt = '';
+            sub.lastPaymentRef = '';
             localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(sub));
+            localStorage.removeItem('appvendas_pix_paid');
           }
         } catch {}
       }
