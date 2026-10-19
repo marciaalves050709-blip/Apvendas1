@@ -151,6 +151,8 @@ interface AppContextType {
   simulateDay5Warning: () => void;
   simulateDay5Blocked: () => void;
   blockUnpaidUser: () => void;
+  isTestBlockMode: boolean;
+  exitTestBlockMode: () => void;
   renewSubscription: () => void;
 
   // Multi-Company & Infinite Users Workspaces
@@ -501,6 +503,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // Simulation test block mode for the administrator to test unpaid blocking
+  const [isTestBlockMode, setIsTestBlockMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('appvendas_test_block_active') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   // Administrator identification:
   // Strictly defaults to FALSE so client users ALWAYS enter DIRECTLY into their own user account.
   // Márcia Alves can explicitly activate admin mode via URL parameter (?admin=marcia or ?admin=marcia2026)
@@ -508,12 +519,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-      const adminParam = urlParams?.get('admin')?.toLowerCase();
+      const adminParam = urlParams?.get('admin')?.toLowerCase() || urlParams?.get('chave')?.toLowerCase() || urlParams?.get('key')?.toLowerCase();
       if (adminParam === 'marcia2026' || adminParam === 'marcia' || adminParam === '0507') {
+        localStorage.removeItem('appvendas_test_block_active');
         sessionStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_is_admin', 'true');
         return true;
+      }
+
+      // If test block mode is active, administrator is testing unpaid user blocking
+      if (localStorage.getItem('appvendas_test_block_active') === 'true') {
+        return false;
       }
 
       // Check session storage or persistent admin storage
@@ -544,7 +561,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     try {
-      if (isAdmin) {
+      if (!isTestBlockMode && isAdmin) {
         sessionStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_is_admin', 'true');
@@ -552,11 +569,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {
       // ignore
     }
-  }, [isAdmin]);
+  }, [isAdmin, isTestBlockMode]);
 
   // Subscription state (Unpaid users are strictly blocked until Pix payment)
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
+      // If in test block mode, initialize directly as blocked
+      if (localStorage.getItem('appvendas_test_block_active') === 'true') {
+        return {
+          ...DEFAULT_SUBSCRIPTION,
+          isSubscribed: false,
+          trialDurationDays: 0,
+        };
+      }
+
       const saved = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
       const isPixPaid = localStorage.getItem('appvendas_pix_paid') === 'true';
       if (saved) {
@@ -588,10 +614,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Keep administrator exempt from all charges and permanently active
   useEffect(() => {
-    if (isAdmin && (!subscription.isSubscribed || subscription.lastPaymentRef !== 'MASTER-ADMIN-MARCIA')) {
+    if (!isTestBlockMode && isAdmin && (!subscription.isSubscribed || subscription.lastPaymentRef !== 'MASTER-ADMIN-MARCIA')) {
       setSubscription(MASTER_ADMIN_LIFETIME_SUBSCRIPTION);
     }
-  }, [isAdmin, subscription.isSubscribed, subscription.lastPaymentRef]);
+  }, [isTestBlockMode, isAdmin, subscription.isSubscribed, subscription.lastPaymentRef]);
 
   // Current timestamp clock for live countdown
   const [currentTimeMs, setCurrentTimeMs] = useState<number>(Date.now());
@@ -649,8 +675,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isTrialExpired = !isAdmin && !isMasterAdmin && !subscription.isSubscribed;
   
   // Total access allowed: Admin OR Valid Subscribed (NOT blocked due to Day 5)
-  // If user has not paid (isSubscribed is false), access is strictly blocked!
-  const isAccessAllowed = Boolean(isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5));
+  // When in test block mode or user has not paid (isSubscribed is false), access is strictly blocked!
+  const isAccessAllowed = Boolean(!isTestBlockMode && (isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5)));
 
   // Days remaining calculation:
   const trialDaysRemaining = isAdmin ? 999 : Math.floor(msRemaining / (24 * 60 * 60 * 1000));
@@ -678,10 +704,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const nextDueDateDay5 = nextDueDateFormatted;
 
   const setAdminMode = () => {
+    setIsTestBlockMode(false);
     setIsAdmin(true);
     try {
+      localStorage.removeItem('appvendas_test_block_active');
       sessionStorage.setItem('appvendas_admin_session', 'active');
+      localStorage.setItem('appvendas_admin_session', 'active');
       localStorage.setItem('appvendas_is_admin', 'true');
+      localStorage.setItem('appvendas_pix_paid', 'true');
     } catch {
       // ignore
     }
@@ -709,7 +739,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activateSubscription = (code?: string, paymentRef?: string): boolean => {
     const rawInput = (code || '').trim();
-    const cleanCode = rawInput.toUpperCase();
+    // Normalize string: remove spaces, hyphens, dots, parentheses
+    const cleanCode = rawInput.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
     
     // Márcia's private secret passwords give administrator status
     const masterKeys = [
@@ -720,21 +751,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       '0507',
       'MESTRA58',
       'MASTER2026',
-      'MASTER-ADMIN',
-      'MASTER-ADMIN-MARCIA',
+      'MASTERADMIN',
+      'MASTERADMINMARCIA',
+      'MARCIAALVES',
       '91993192405',
       '993192405'
     ];
 
     const isMasterKey = masterKeys.includes(cleanCode) || 
-      cleanCode.includes('MASTER-ADMIN') || 
+      cleanCode.includes('MASTERADMIN') || 
       cleanCode.includes('MARCIA') || 
       cleanCode === '0507' ||
-      rawInput.toLowerCase() === 'marciaalves050709@gmail.com';
+      rawInput.toLowerCase().includes('marciaalves');
 
     if (isMasterKey) {
+      setIsTestBlockMode(false);
       setIsAdmin(true);
       try {
+        localStorage.removeItem('appvendas_test_block_active');
         sessionStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_is_admin', 'true');
@@ -744,11 +778,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } else {
       // Regular client payment: strictly keep client mode, client user and client company!
+      setIsTestBlockMode(false);
       setIsAdmin(false);
       try {
+        localStorage.removeItem('appvendas_test_block_active');
         sessionStorage.removeItem('appvendas_admin_session');
         localStorage.removeItem('appvendas_admin_session');
         localStorage.setItem('appvendas_is_admin', 'false');
+        localStorage.setItem('appvendas_pix_paid', 'true');
       } catch {
         // ignore
       }
@@ -766,7 +803,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSubscribed: true,
       activatedAt: nowIso,
       subscriptionExpiresAt: expiryIso,
-      lastPaymentRef: isMasterKey ? `MASTER-ADMIN-${cleanCode}` : (paymentRef || (code ? `CODIGO-${cleanCode}` : `PIX-${Date.now()}`)),
+      lastPaymentRef: isMasterKey ? `MASTER-ADMIN-${cleanCode || 'MARCIA2026'}` : (paymentRef || (code ? `CODIGO-${cleanCode}` : `PIX-${Date.now()}`)),
     };
 
     try {
@@ -781,7 +818,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSubscription(updated);
     setIsSubscriptionModalOpen(false);
 
-    // Audio & Visual celebratory feedback
+    // Audio & Visual celebratory feedback: Confetti & Serpentina + Bank Sound
     try {
       sounds.playBankNotification();
       setTimeout(() => {
@@ -790,9 +827,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch {
           // ignore
         }
-      }, 300);
+      }, 250);
       confetti({
-        particleCount: 120,
+        particleCount: 130,
         spread: 100,
         origin: { y: 0.4 },
       });
@@ -803,13 +840,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isMasterKey) {
       showToast(
         'success',
-        '👑 Chave Mestra Reconhecida!',
-        'Acesso Vitalício de Administrador Márcia liberado permanentemente sem expiração.'
+        '👑 Chave Mestra Reconhecida com Sucesso!',
+        'Acesso Vitalício de Administradora Márcia liberado permanentemente sem expiração nem mensalidade.'
       );
     } else {
       showToast(
         'success',
-        '🎉 Licença Renovada com Sucesso!',
+        '🎉 Licença Liberada com Sucesso!',
         `Acesso liberado até ${formatDay5Date(expiryDate)}! Renovação mensal todo dia 05 (${formatCurrency(subscription.planPrice || 94.98)}/mês).`
       );
     }
@@ -854,11 +891,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('error', '⛔ Bloqueio Ativado: Dia 05 Vencido', 'Dia 05 ultrapassado sem pagamento. O aplicativo foi bloqueado imediatamente!');
   };
 
+  // Immediate block for testing unpaid user experience from inside admin
   const blockUnpaidUser = () => {
-    // Blocks user immediately due to non-payment
+    setIsTestBlockMode(true);
     setIsAdmin(false);
     try {
-      localStorage.setItem('appvendas_is_admin', 'false');
+      localStorage.setItem('appvendas_test_block_active', 'true');
+      localStorage.removeItem('appvendas_pix_paid');
     } catch {
       // ignore
     }
@@ -866,14 +905,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated: SubscriptionState = {
       ...subscription,
       isSubscribed: false,
-      trialDurationDays: 2,
+      trialDurationDays: 0,
       trialStartDate: expiredPast,
       subscriptionExpiresAt: expiredPast,
       lastPaymentRef: undefined,
     };
     setSubscription(updated);
     setCurrentTimeMs(Date.now());
-    showToast('error', '⛔ Acesso Bloqueado por Não Pagamento', 'O usuário foi bloqueado imediatamente por falta de pagamento!');
+    showToast('error', '⛔ Modo Teste de Bloqueio Ativado', 'O sistema foi bloqueado imediatamente! Este é o bloqueio total que o usuário não pago vê.');
+  };
+
+  // Exit testing block mode and return to admin
+  const exitTestBlockMode = () => {
+    setIsTestBlockMode(false);
+    try {
+      localStorage.removeItem('appvendas_test_block_active');
+    } catch {
+      // ignore
+    }
+    setAdminMode();
+    showToast('success', '👑 Teste Encerrado', 'Você retornou ao seu painel de administradora com acesso vitalício!');
   };
 
   const resetTrial = () => {
@@ -1994,6 +2045,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         simulateDay5Warning,
         simulateDay5Blocked,
         blockUnpaidUser,
+        isTestBlockMode,
+        exitTestBlockMode,
         renewSubscription,
         // Multi-Company & Infinite Users
         companyName,

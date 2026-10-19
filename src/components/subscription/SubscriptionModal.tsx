@@ -187,9 +187,31 @@ export const SubscriptionModal: React.FC = () => {
   const handleApplyCode = (e: React.FormEvent) => {
     e.preventDefault();
     setCodeError('');
-    const clean = activationCode.trim().toUpperCase();
+    const raw = activationCode.trim();
+    const clean = raw.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
 
     // Accepted valid codes
+    const masterCodes = [
+      'MARCIA2026',
+      'ADMINMARCIA',
+      'MARCIA0507',
+      'MARCIA',
+      '0507',
+      'MESTRA58',
+      'MASTER2026',
+      'MASTERADMIN',
+      'MASTERADMINMARCIA',
+      'MARCIAALVES',
+      '91993192405',
+      '993192405'
+    ];
+
+    const isMaster = masterCodes.includes(clean) || 
+      clean.includes('MASTERADMIN') || 
+      clean.includes('MARCIA') || 
+      clean === '0507' || 
+      raw.toLowerCase().includes('marciaalves');
+
     const validCodes = [
       'PAGO9498',
       'PAGO94',
@@ -200,23 +222,18 @@ export const SubscriptionModal: React.FC = () => {
       'TESTE58',
       'DESCARTCLEAN',
       'PAGO5894',
-      '9498',
-      'MARCIA2026',
-      'ADMINMARCIA',
-      'MARCIA0507',
-      'MARCIA',
-      '0507',
-      'MESTRA58',
-      'MASTER2026',
-      '91993192405',
-      '993192405'
+      '9498'
     ];
 
     const isE2E = /^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean);
     const isBankAuth = clean.length >= 8 && /^[A-Z0-9\-\.\_]+$/i.test(clean) && !['TESTE', 'SENHA', 'PAGO', 'GRATIS', 'LIVRE'].includes(clean);
 
-    if (validCodes.includes(clean) || isE2E || isBankAuth) {
+    if (isMaster) {
+      activateSubscription('MARCIA2026', 'MASTER-ADMIN-MARCIA');
+      setActivationCode('');
+    } else if (validCodes.includes(clean) || isE2E || isBankAuth) {
       activateSubscription(clean, `COMPROVANTE-${clean}`);
+      setActivationCode('');
     } else {
       setCodeError('Código ou comprovante inválido. Insira a autenticação E2E do comprovante Pix do seu banco ou uma chave de ativação válida.');
     }

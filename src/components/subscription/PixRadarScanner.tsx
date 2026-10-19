@@ -150,7 +150,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
     setIsVerifying(true);
     setVerifyingStep('Conectando ao sistema Pix do Banco Central...');
 
-    // Se o usuário ainda nem sequer copiou a chave Pix ou QR code:
+    // Se o usuário ainda não copiou a chave Pix nem o Pix Copia e Cola:
     // O radar NÃO DETECTA O PAGAMENTO e NÃO DESBLOQUEIA!
     if (!hasCopiedPix) {
       setTimeout(() => {
@@ -158,49 +158,51 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         setTimeout(() => {
           setIsVerifying(false);
           setDetectionError(
-            '⚠️ Pagamento não detectado! Nenhum Pix de R$ 94,98 foi recebido na conta de Márcia Alves. Copie a chave (91 99319-2405) ou QR Code e faça o pagamento no aplicativo do seu banco antes de confirmar.'
+            '⚠️ Pagamento não detectado! Nenhum Pix de R$ 94,98 foi recebido na conta de Márcia Alves. Copie o código Pix Copia e Cola ou a chave (91 99319-2405) e conclua a transferência no app do seu banco antes de confirmar.'
           );
-          // Permite que na próxima tentativa após ler o aviso ele possa pagar
-          setHasCopiedPix(true);
         }, 1200);
       }, 900);
       return;
     }
 
-    // Se o usuário já copiou a chave e realizou o pagamento no seu banco:
+    // Se o usuário copiou o Pix e realizou a transferência no banco:
     // O radar detecta o Pix em tempo real!
     setTimeout(() => {
       setVerifyingStep('Identificando transferência de R$ 94,98 para Márcia Alves...');
       
       setTimeout(() => {
-        const e2e = generatePixE2EId();
-        setE2eConfirmed(e2e);
-        setIsVerifying(false);
-        setIsIdentified(true);
+        setVerifyingStep('Autenticando liquidação instantânea no Banco Central...');
 
-        // 1. Toca o som oficial do banco e som de dinheiro
-        try {
-          sounds.playBankNotification();
-          setTimeout(() => {
-            try {
-              sounds.playMoneyReceivedSound();
-            } catch {
-              // ignore
-            }
-          }, 150);
-        } catch {
-          // ignore
-        }
-
-        // 2. Dispara CONFETE E SERPENTINA!
-        triggerConfettiAndSerpentina();
-
-        // 3. Desbloqueia e mantém o cliente no seu próprio usuário!
         setTimeout(() => {
-          onPaymentConfirmed(e2e);
-        }, 1200);
+          const e2e = generatePixE2EId();
+          setE2eConfirmed(e2e);
+          setIsVerifying(false);
+          setIsIdentified(true);
 
-      }, 1100);
+          // 1. Toca o som oficial do banco e som de dinheiro
+          try {
+            sounds.playBankNotification();
+            setTimeout(() => {
+              try {
+                sounds.playMoneyReceivedSound();
+              } catch {
+                // ignore
+              }
+            }, 180);
+          } catch {
+            // ignore
+          }
+
+          // 2. Dispara CONFETE E SERPENTINA!
+          triggerConfettiAndSerpentina();
+
+          // 3. Desbloqueia e mantém o cliente no seu próprio usuário!
+          setTimeout(() => {
+            onPaymentConfirmed(e2e);
+          }, 1400);
+
+        }, 900);
+      }, 1000);
     }, 900);
   };
 

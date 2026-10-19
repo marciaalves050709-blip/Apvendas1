@@ -8,8 +8,14 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 try {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
-    const adminParam = urlParams.get('admin')?.toLowerCase();
+    const adminParam = urlParams.get('admin')?.toLowerCase() || urlParams.get('chave')?.toLowerCase() || urlParams.get('key')?.toLowerCase();
     const isAdminExplicit = adminParam === 'marcia2026' || adminParam === 'marcia' || adminParam === '0507';
+    const isTestBlockActive = localStorage.getItem('appvendas_test_block_active') === 'true';
+
+    // If explicit admin URL is provided, always cancel test block and activate admin
+    if (isAdminExplicit) {
+      localStorage.removeItem('appvendas_test_block_active');
+    }
 
     // Check if the current device/browser is already authenticated as master admin Márcia
     const subRaw = localStorage.getItem('descart_clean_subscription_v1');
@@ -28,7 +34,7 @@ try {
     }
 
     const isStoredAdmin = localStorage.getItem('appvendas_is_admin') === 'true' || localStorage.getItem('appvendas_admin_session') === 'active';
-    const isMasterAdminActive = isAdminExplicit || hasMasterSub || isStoredAdmin;
+    const isMasterAdminActive = (isAdminExplicit || ((hasMasterSub || isStoredAdmin) && !isTestBlockActive));
 
     if (isMasterAdminActive) {
       // Preserve and ensure full master admin privileges for Márcia Alves
@@ -109,7 +115,7 @@ try {
       }
 
       // 4. Sanitize subscription: enforce that unpaid users who had the old 10s auto-unlock are strictly blocked!
-      const MIGRATION_KEY = 'appvendas_pix_security_v5_clean';
+      const MIGRATION_KEY = 'appvendas_pix_security_v7_unpaid_blocked';
       if (localStorage.getItem(MIGRATION_KEY) !== 'true') {
         let isLegitPaid = false;
         if (subRaw) {

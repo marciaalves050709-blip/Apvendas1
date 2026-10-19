@@ -38,10 +38,16 @@ export const TrialBanner: React.FC = () => {
     simulateDay5Warning,
     simulateDay5Blocked,
     blockUnpaidUser,
+    isTestBlockMode,
     renewSubscription
   } = useApp();
 
   const [showSimMenu, setShowSimMenu] = useState(false);
+
+  // If in test block mode, do not render banner - AccessPaywall handles test block
+  if (isTestBlockMode) {
+    return null;
+  }
 
   // Administrator View: Completely exempt from charges and countdowns
   if (isMasterAdmin || isAdmin) {
@@ -82,11 +88,11 @@ export const TrialBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => blockUnpaidUser()}
-              className="p-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/40 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 bg-rose-500/30 hover:bg-rose-500/45 text-rose-100 border border-rose-400/60 rounded-lg text-[11px] font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
               title="Testar bloqueio imediato de usuário que não pagou"
             >
               <Lock className="w-3.5 h-3.5 text-rose-300" />
-              <span className="hidden sm:inline">Testar Bloqueio (Não Pagou)</span>
+              <span>Testar Bloqueio (Não Pagou)</span>
             </button>
 
             {/* Test Client Mode Toggle */}

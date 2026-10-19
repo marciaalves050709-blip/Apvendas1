@@ -32,10 +32,11 @@ const MainLayout: React.FC = () => {
     setIsSellerWhatsappModalOpen,
     isAccessAllowed,
     isAdmin,
-    isMasterAdmin
+    isMasterAdmin,
+    isTestBlockMode
   } = useApp();
 
-  const isBlocked = Boolean(!isAdmin && !isMasterAdmin && !isAccessAllowed);
+  const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
 
   // Keyboard shortcut support (F2 for POS) - disabled when blocked
   useEffect(() => {

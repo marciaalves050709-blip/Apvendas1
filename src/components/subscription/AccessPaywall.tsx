@@ -41,10 +41,12 @@ export const AccessPaywall: React.FC = () => {
     resetTrial,
     nextDueDateFormatted,
     paymentSettings,
-    isAccessAllowed
+    isAccessAllowed,
+    isTestBlockMode,
+    exitTestBlockMode
   } = useApp();
 
-  const isBlocked = Boolean(!isAdmin && !isMasterAdmin && !isAccessAllowed);
+  const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
 
   const [radarPulseCount, setRadarPulseCount] = useState(0);
   const [selectedBankId, setSelectedBankId] = useState<string>(paymentSettings.receivingBank || 'NUBANK');
@@ -64,7 +66,7 @@ export const AccessPaywall: React.FC = () => {
     return () => clearInterval(interval);
   }, [isBlocked]);
 
-  // Only render if access is blocked (either trial expired or Day 5 passed without payment)
+  // Only render if access is blocked (either test block, trial expired or Day 5 passed without payment)
   if (!isBlocked) {
     return null;
   }
@@ -78,7 +80,8 @@ export const AccessPaywall: React.FC = () => {
     e.preventDefault();
     setAdminError('');
     const raw = adminPass.trim();
-    const pass = raw.toUpperCase();
+    // Normalize string: remove spaces, hyphens, dots, parentheses
+    const pass = raw.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
 
     const masterCodes = [
       'MARCIA2026',
@@ -88,40 +91,26 @@ export const AccessPaywall: React.FC = () => {
       'ADMINMARCIA',
       'MESTRA58',
       'MASTER2026',
+      'MASTERADMIN',
+      'MASTERADMINMARCIA',
+      'MARCIAALVES',
       '91993192405',
       '993192405'
     ];
 
-    const clientActivationCodes = [
-      'PAGO9498',
-      'PAGO94',
-      'LIBERAR2026',
-      'DESCART58',
-      'PRO9498',
-      'VIP2026',
-      'TESTE58',
-      'DESCARTCLEAN',
-      'PAGO5894',
-      '9498'
-    ];
-
     const isMaster = masterCodes.includes(pass) || 
+      pass.includes('MASTERADMIN') || 
       pass.includes('MARCIA') || 
       pass === '0507' || 
-      raw.toLowerCase() === 'marciaalves050709@gmail.com';
-
-    const isClientCode = clientActivationCodes.includes(pass) || pass.startsWith('E') || pass.startsWith('PIX');
+      raw.toLowerCase().includes('marciaalves');
 
     if (isMaster) {
+      exitTestBlockMode();
       activateSubscription('MARCIA2026', 'MASTER-ADMIN-MARCIA');
       setShowAdminLogin(false);
       setAdminPass('');
-    } else if (isClientCode) {
-      activateSubscription(pass, `CODIGO-${pass}`);
-      setShowAdminLogin(false);
-      setAdminPass('');
     } else {
-      setAdminError('Chave incorreta. Digite sua Chave de Administradora (ex: MARCIA2026) ou seu código de ativação.');
+      setAdminError('Chave incorreta. Digite sua Chave de Administradora para liberar o acesso.');
     }
   };
 
@@ -133,9 +122,28 @@ export const AccessPaywall: React.FC = () => {
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
-    return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-white h-[100dvh] sm:h-auto sm:max-h-[94dvh] sm:rounded-3xl shadow-2xl border-0 sm:border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col">
+  return (
+    <div className="fixed inset-0 z-[9999] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-0 sm:p-6 overflow-y-auto">
+      {/* Test Block Mode Banner for Admin */}
+      {isTestBlockMode && (
+        <div className="w-full max-w-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2.5 sm:rounded-t-2xl text-xs font-black flex flex-col sm:flex-row items-center justify-between gap-2 shadow-lg shrink-0 border-b-2 border-amber-300">
+          <div className="flex items-center gap-2">
+            <span className="p-1 bg-black/20 rounded text-sm">🧪</span>
+            <span>
+              MODO TESTE DE BLOQUEIO (ADMINISTRADORA): Este é o bloqueio total que o usuário não pago vê.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={exitTestBlockMode}
+            className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-amber-300 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-md shrink-0"
+          >
+            <span>← Sair do Teste e Voltar ao Administrador</span>
+          </button>
+        </div>
+      )}
+
+      <div className={`w-full max-w-2xl bg-white h-[100dvh] sm:h-auto sm:max-h-[94dvh] ${isTestBlockMode ? 'sm:rounded-b-3xl' : 'sm:rounded-3xl'} shadow-2xl border-0 sm:border-2 border-rose-400 overflow-hidden my-auto animate-scale-up flex flex-col`}>
         {/* Paywall Header */}
         <div className="bg-gradient-to-r from-rose-900 via-rose-950 to-slate-900 text-white p-5 sm:p-6 text-center relative shrink-0">
           <div className="w-12 h-12 bg-rose-600/30 border-2 border-rose-400/50 rounded-2xl flex items-center justify-center mx-auto mb-2.5 shadow-lg backdrop-blur-md">
@@ -260,33 +268,21 @@ export const AccessPaywall: React.FC = () => {
             planPrice={planPrice}
           />
 
-          {/* Quick Activation Key Trigger */}
-          <div className="pt-1 text-center">
-            <button
-              type="button"
-              onClick={() => setShowAdminLogin(true)}
-              className="text-xs text-indigo-700 hover:text-indigo-900 font-bold hover:underline inline-flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-200 transition-all shadow-2xs"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Já tem uma Chave de Ativação? Clique aqui</span>
-            </button>
-          </div>
-
         </div>
 
         {/* Paywall Footer */}
         <div className="p-3.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
           <span>{paymentSettings.merchantName || 'Sistema'} • Liberação Imediata via Pix</span>
           
-          {/* Discrete Master Security Access */}
+          {/* Discrete Administrator Access Link */}
           <button
             type="button"
             onClick={() => setShowAdminLogin(true)}
-            className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-2xs transition-all"
-            title="Chave de Ativação"
+            className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer transition-colors"
+            title="Acesso da Administradora"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
-            <span>Chave de Ativação</span>
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span>Acesso da Administradora</span>
           </button>
         </div>
 
@@ -296,25 +292,25 @@ export const AccessPaywall: React.FC = () => {
             <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border-2 border-indigo-500 animate-scale-up space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
-                    🔑
+                  <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
+                    👑
                   </div>
                   <div>
-                    <h4 className="font-black text-sm text-slate-900">Chave de Ativação do Sistema</h4>
-                    <p className="text-[10px] text-slate-500">Validação de licença</p>
+                    <h4 className="font-black text-sm text-slate-900">Acesso da Administradora</h4>
+                    <p className="text-[10px] text-slate-500">Márcia Alves</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowAdminLogin(false)}
-                  className="text-slate-400 hover:text-slate-700 font-bold p-1"
+                  className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
               <p className="text-xs text-slate-600">
-                Digite sua Chave Mestra (<strong>MARCIA2026</strong>) ou o seu código de licença para desbloqueio imediato.
+                Digite sua Chave Mestra de Administradora para liberar o acesso vitalício.
               </p>
 
               <form onSubmit={handleAdminBypass} className="space-y-3">
@@ -326,7 +322,7 @@ export const AccessPaywall: React.FC = () => {
                       setAdminPass(e.target.value);
                       setAdminError('');
                     }}
-                    placeholder="Ex: MARCIA2026"
+                    placeholder="Sua Chave Mestra"
                     className="w-full pl-3 pr-10 py-2.5 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono uppercase font-bold text-slate-900 bg-slate-50 focus:bg-white"
                     autoFocus
                   />
@@ -358,7 +354,7 @@ export const AccessPaywall: React.FC = () => {
                     type="submit"
                     className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <span>Ativar Chave</span>
+                    <span>Entrar como Administradora</span>
                   </button>
                 </div>
               </form>
