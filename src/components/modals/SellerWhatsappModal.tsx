@@ -488,7 +488,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                     type={showPixKeyInput ? 'text' : 'password'}
                     required
                     placeholder={
-                      pixKeyType === 'PHONE' ? 'Ex: 91993192405 ou 11999998888' :
+                      pixKeyType === 'PHONE' ? 'Ex: (11) 99999-8888' :
                       pixKeyType === 'CPF' ? 'Ex: 123.456.789-00' :
                       pixKeyType === 'EMAIL' ? 'Ex: seuemail@gmail.com' :
                       pixKeyType === 'CNPJ' ? 'Ex: 12.345.678/0001-90' : 'Chave aleatória EVP'

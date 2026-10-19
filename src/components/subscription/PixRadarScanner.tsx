@@ -158,7 +158,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         setTimeout(() => {
           setIsVerifying(false);
           setDetectionError(
-            '⚠️ Pagamento não detectado! Nenhum Pix de R$ 94,98 foi recebido na conta de Márcia Alves. Copie o código Pix Copia e Cola ou a chave (91 99319-2405) e conclua a transferência no app do seu banco antes de confirmar.'
+            '⚠️ Pagamento não detectado! Nenhum Pix de R$ 94,98 foi recebido na conta de Márcia Alves. Copie a Chave Pix ou o código Pix Copia e Cola nos botões acima e conclua o pagamento no aplicativo do seu banco antes de confirmar.'
           );
         }, 1200);
       }, 900);
@@ -276,30 +276,30 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         </span>
       </div>
 
-      {/* Chave Pix Celular */}
+      {/* Chave Pix Oculta (Apenas para copiar, sem exibir o número) */}
       <div className="max-w-md mx-auto p-3.5 bg-white rounded-2xl border-2 border-emerald-200 shadow-xs flex items-center justify-between gap-3">
         <div className="text-left min-w-0">
-          <span className="text-[10px] uppercase font-bold text-slate-400 block">Chave Pix Celular:</span>
+          <span className="text-[10px] uppercase font-bold text-slate-400 block">Chave Pix da Assinatura:</span>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="font-mono text-sm sm:text-base font-bold text-slate-700 select-all">
-              91 99319-2405
+            <span className="font-mono text-base font-black text-slate-400 tracking-widest select-none">
+              •••••••••••••
             </span>
             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
               Márcia Alves
             </span>
           </div>
           <span className="text-[10px] text-slate-500 block mt-0.5">
-            Copie a chave para transferir pelo app do seu banco
+            Chave oculta por segurança • Clique ao lado para copiar
           </span>
         </div>
         <button
           type="button"
           onClick={handleCopyKey}
           className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0"
-          title="Copiar chave Pix diretamente"
+          title="Copiar Chave Pix"
         >
           {copiedKey ? <Check className="w-4 h-4 text-amber-300" /> : <Copy className="w-4 h-4" />}
-          <span>{copiedKey ? 'Copiada!' : 'Copiar Chave'}</span>
+          <span>{copiedKey ? 'Chave Copiada!' : 'Copiar Chave Pix'}</span>
         </button>
       </div>
 
@@ -378,7 +378,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
           className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline inline-flex items-center gap-1.5 cursor-pointer bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
         >
           <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Enviar comprovante para Márcia Alves no WhatsApp (91 99319-2405)</span>
+          <span>Enviar comprovante para Márcia Alves no WhatsApp</span>
         </button>
       </div>
 
