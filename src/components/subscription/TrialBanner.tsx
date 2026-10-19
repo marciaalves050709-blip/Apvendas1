@@ -81,7 +81,7 @@ export const TrialBanner: React.FC = () => {
               onClick={() => setIsSubscriptionModalOpen(true)}
               className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
             >
-              <span>Minha Licença Mestra</span>
+              <span>Minha Assinatura</span>
             </button>
 
             {/* Test Unpaid Blocking Action */}

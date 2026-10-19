@@ -192,7 +192,7 @@ export const getTenantKey = (baseKey: string, companyId: string) => {
 export const ADMIN_CONFIG = {
   name: 'Marcia Alves',
   email: 'marciaalves050709@gmail.com',
-  role: 'Administradora Mestra (Criadora)',
+  role: 'Administradora',
   masterCode: 'MARCIA2026',
   pixKey: '91993192405',
   monthlyPrice: 94.98,
@@ -203,7 +203,7 @@ export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
   trialStartDate: new Date('2026-01-01T00:00:00.000Z').toISOString(),
   trialDurationDays: 9999,
   planPrice: 94.98,
-  planName: 'Licença Mestra Vitalícia (Isenta de Cobrança)',
+  planName: 'Plano Pro Vitalício (Isento de Cobrança)',
   activatedAt: new Date().toISOString(),
   subscriptionExpiresAt: new Date('2099-12-31T23:59:59.000Z').toISOString(),
   lastPaymentRef: 'MASTER-ADMIN-MARCIA',
@@ -840,8 +840,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (isMasterKey) {
       showToast(
         'success',
-        '👑 Chave Mestra Reconhecida com Sucesso!',
-        'Acesso Vitalício de Administradora Márcia liberado permanentemente sem expiração nem mensalidade.'
+        '👑 Acesso Liberado com Sucesso!',
+        'Acesso Vitalício confirmado permanentemente sem mensalidade.'
       );
     } else {
       showToast(

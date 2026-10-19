@@ -296,8 +296,8 @@ export const AccessPaywall: React.FC = () => {
                     👑
                   </div>
                   <div>
-                    <h4 className="font-black text-sm text-slate-900">Acesso da Administradora</h4>
-                    <p className="text-[10px] text-slate-500">Márcia Alves</p>
+                    <h4 className="font-black text-sm text-slate-900">Acesso Restrito</h4>
+                    <p className="text-[10px] text-slate-500">Administração</p>
                   </div>
                 </div>
                 <button
@@ -310,7 +310,7 @@ export const AccessPaywall: React.FC = () => {
               </div>
 
               <p className="text-xs text-slate-600">
-                Digite sua Chave Mestra de Administradora para liberar o acesso vitalício.
+                Digite sua senha de acesso para liberar o sistema.
               </p>
 
               <form onSubmit={handleAdminBypass} className="space-y-3">
@@ -322,7 +322,7 @@ export const AccessPaywall: React.FC = () => {
                       setAdminPass(e.target.value);
                       setAdminError('');
                     }}
-                    placeholder="Sua Chave Mestra"
+                    placeholder="Senha de acesso"
                     className="w-full pl-3 pr-10 py-2.5 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono uppercase font-bold text-slate-900 bg-slate-50 focus:bg-white"
                     autoFocus
                   />
@@ -354,7 +354,7 @@ export const AccessPaywall: React.FC = () => {
                     type="submit"
                     className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <span>Entrar como Administradora</span>
+                    <span>Entrar</span>
                   </button>
                 </div>
               </form>

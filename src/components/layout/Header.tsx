@@ -120,7 +120,7 @@ export const Header: React.FC = () => {
           }`}
           title={
             isMasterAdmin || isAdmin
-              ? 'Licença Mestra de Administradora (Isenta de Cobrança)'
+              ? 'Plano Pro Vitalício (Isento de Cobrança)'
               : isDueWarningActive
               ? `Mensalidade vence dia 05 (${nextDueDateFormatted}). Clique para renovar!`
               : 'Ver status da licença'
