@@ -114,20 +114,15 @@ try {
         }
       }
 
-      // 4. Sanitize subscription: enforce that unpaid users who had the old 10s auto-unlock are strictly blocked!
-      const MIGRATION_KEY = 'appvendas_pix_security_v7_unpaid_blocked';
+      // 4. Sanitize subscription: ensure unpaid users are blocked, but ANY user who paid via Pix is recognized and granted access!
+      const MIGRATION_KEY = 'appvendas_pix_security_v8_realtime_access';
       if (localStorage.getItem(MIGRATION_KEY) !== 'true') {
-        let isLegitPaid = false;
+        const isPixPaidStored = localStorage.getItem('appvendas_pix_paid') === 'true';
+        let isLegitPaid = isPixPaidStored;
         if (subRaw) {
           try {
             const sub = JSON.parse(subRaw);
-            // Master Admin or authentic verified client payments count
-            if (
-              sub.isSubscribed && 
-              sub.lastPaymentRef && 
-              !sub.lastPaymentRef.startsWith('PIX-RADAR-') &&
-              !sub.lastPaymentRef.startsWith('COMPROVANTE-')
-            ) {
+            if (sub.isSubscribed && sub.lastPaymentRef) {
               isLegitPaid = true;
             }
           } catch {}
@@ -147,6 +142,9 @@ try {
             lastPaymentRef: ''
           };
           localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(blockedSub));
+        } else {
+          // Ensure paid flag is preserved
+          localStorage.setItem('appvendas_pix_paid', 'true');
         }
         localStorage.setItem(MIGRATION_KEY, 'true');
       }
