@@ -5,7 +5,7 @@ import { PWAInstallModal } from './PWAInstallModal';
 import confetti from 'canvas-confetti';
 
 export const MobileInstallBanner: React.FC = () => {
-  const { isInstalled, isInstallable, install } = usePWAInstall();
+  const { isInstalled, isInstallable, isIOS, install } = usePWAInstall();
   const [dismissed, setDismissed] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
@@ -59,19 +59,19 @@ export const MobileInstallBanner: React.FC = () => {
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white px-3 py-2 border-b border-indigo-700/60 flex items-center justify-between gap-2 shadow-xs shrink-0 select-none">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center text-indigo-200 shrink-0">
-            <Smartphone className="w-4 h-4 text-emerald-400" />
+            <Smartphone className={`w-4 h-4 ${isIOS ? 'text-blue-300' : 'text-emerald-400'}`} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-xs text-white truncate">
-                Instalar Aplicativo no Celular
+                {isIOS ? 'Instalar no iPhone' : 'Instalar Aplicativo no Celular'}
               </span>
               <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.2 rounded hidden sm:inline">
-                Grátis
+                {isIOS ? 'Tela Cheia' : 'Grátis'}
               </span>
             </div>
             <p className="text-[10px] text-indigo-200 truncate">
-              Abra em tela cheia direto da sua tela inicial
+              {isIOS ? 'Adicione à Tela de Início em 2 toques' : 'Abra em tela cheia direto da sua tela inicial'}
             </p>
           </div>
         </div>
@@ -80,10 +80,14 @@ export const MobileInstallBanner: React.FC = () => {
           <button
             type="button"
             onClick={handleAction}
-            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs rounded-lg shadow-xs flex items-center gap-1 transition-all cursor-pointer"
+            className={`px-2.5 py-1 ${
+              isIOS 
+                ? 'bg-blue-600 hover:bg-blue-700' 
+                : 'bg-emerald-500 hover:bg-emerald-600'
+            } active:scale-95 text-white font-black text-xs rounded-lg shadow-xs flex items-center gap-1 transition-all cursor-pointer`}
           >
             <Download className="w-3 h-3" />
-            <span>Instalar</span>
+            <span>{isIOS ? 'Instalar no iPhone' : 'Instalar'}</span>
           </button>
 
           <button

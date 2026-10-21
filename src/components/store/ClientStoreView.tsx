@@ -574,6 +574,10 @@ export const ClientStoreView: React.FC = () => {
               <Package className="w-3.5 h-3.5" />
               <span>✏️ Ver Produtos pra Atualizar no Estoque</span>
             </button>
+
+            <div className="pt-1 flex items-center justify-center">
+              <PWAInstallButton />
+            </div>
           </div>
 
           {/* Form Content */}

@@ -73,7 +73,8 @@ export function usePWAInstall() {
     // 3. Detect device type & in-app browsers
     if (typeof window !== 'undefined' && window.navigator) {
       const ua = window.navigator.userAgent.toLowerCase();
-      setIsIOS(/iphone|ipad|ipod/.test(ua));
+      const isIOSDevice = /iphone|ipad|ipod/.test(ua) || (ua.includes('macintosh') && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1);
+      setIsIOS(isIOSDevice);
       setIsAndroid(/android/.test(ua));
       setIsInAppBrowser(/fban|fbav|instagram|whatsapp|micromessenger|tiktok|line\//.test(ua));
     }
@@ -133,19 +134,36 @@ export function usePWAInstall() {
 
   /**
    * Fast, non-blocking install action:
-   * - Immediately triggers native install prompt if available without freezing the UI thread.
-   * - Uses Android Chrome Intent to escape restrictive webviews (WhatsApp/Instagram) and install cleanly.
-   * - Never leaves the UI in an infinite loading/spinning state.
+   * - Immediately triggers native install prompt on Android/Desktop.
+   * - On iPhone/iPad, opens the native iOS Share Sheet with "Adicionar à Tela de Início".
+   * - Uses Android Chrome Intent to escape restrictive webviews (WhatsApp/Instagram).
    */
   const install = async (): Promise<InstallResult> => {
     if (isStandalone) {
       return { success: true, action: 'already_installed' };
     }
 
+    // 1. If on iOS (iPhone/iPad): Trigger native Share Sheet if available
+    if (isIOS) {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && !isInAppBrowser) {
+        try {
+          await navigator.share({
+            title: 'appvendas - PDV e Estoque',
+            text: 'Toque em "Adicionar à Tela de Início" para instalar o appvendas no seu iPhone!',
+            url: window.location.href,
+          });
+          return { success: true, action: 'ios_share' };
+        } catch {
+          return { success: false, action: 'modal' };
+        }
+      }
+      return { success: false, action: 'modal' };
+    }
+
     // Try to get available prompt
     const promptToUse = deferredPrompt || globalPrompt || (typeof window !== 'undefined' ? window.__PWA_INSTALL_PROMPT__ : null);
 
-    // 1. If native prompt is ready: FIRE IMMEDIATELY without blocking
+    // 2. If native prompt is ready (Android/Chrome): FIRE IMMEDIATELY
     if (promptToUse) {
       try {
         promptToUse.prompt();
@@ -175,7 +193,7 @@ export function usePWAInstall() {
       }
     }
 
-    // 2. If inside an in-app browser on Android (e.g. WhatsApp, Instagram, Telegram)
+    // 3. If inside an in-app browser on Android (e.g. WhatsApp, Instagram, Telegram)
     if (isInAppBrowser && isAndroid) {
       try {
         const fullUrl = new URL(window.location.href);
@@ -188,7 +206,7 @@ export function usePWAInstall() {
       }
     }
 
-    // 3. Fallback: return modal action immediately without blocking or waiting
+    // 4. Fallback: return modal action immediately without blocking or waiting
     return { success: false, action: 'modal' };
   };
 

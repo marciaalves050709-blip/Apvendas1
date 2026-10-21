@@ -63,7 +63,7 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
         },
       }).then(url => {
         setQrDataUrl(url);
-      });
+      }).catch(() => {});
     } catch {
       const fb = generatePixPayload({
         pixKey: '91993192405',

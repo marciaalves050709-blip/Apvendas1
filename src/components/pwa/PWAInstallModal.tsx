@@ -18,6 +18,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { AlertTriangle, Compass } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import confetti from 'canvas-confetti';
 
@@ -206,34 +207,78 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
               ) : isIOS ? (
                 /* 2. iOS Safari Flow */
                 <div className="space-y-3">
+                  {isInAppBrowser && (
+                    <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-2xl text-amber-950 text-xs space-y-2 text-left">
+                      <div className="flex items-center gap-2 font-black text-amber-900">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Você está dentro do WhatsApp ou Instagram</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        No iPhone, a Apple só permite instalar aplicativos diretamente pelo <strong>Safari</strong>:
+                      </p>
+                      <div className="space-y-1.5 text-[11px] text-amber-900 font-semibold bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <p>1. Toque nos <strong>3 pontinhos •••</strong> ou no ícone da bússola 🧭 no canto do WhatsApp.</p>
+                        <p>2. Selecione <strong>"Abrir no Safari"</strong>.</p>
+                        <p>3. No Safari, você poderá adicionar à Tela de Início em 1 toque!</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        <span>{copiedLink ? 'Link Copiado! Cole no Safari' : 'Copiar Link para colar no Safari'}</span>
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleIosShare}
-                    className="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-slate-900 hover:from-indigo-700 hover:to-slate-950 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 hover:from-blue-700 hover:to-indigo-700 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all border-2 border-blue-400"
                   >
-                    <Share className="w-5 h-5 text-indigo-300" />
-                    <span>Abrir Menu de Instalação (iPhone)</span>
+                    <Share className="w-5 h-5 text-blue-200" />
+                    <span>Abrir Menu Compartilhar do iPhone</span>
                   </button>
 
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2.5">
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2.5 text-left">
                     <span className="font-black text-slate-900 block text-xs">
-                      Como instalar no iPhone (Safari):
+                      Instalação no iPhone em 3 passos simples:
                     </span>
-                    <div className="space-y-2 text-slate-700 text-[11px]">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">1</span>
-                        <span>Toque no botão <strong>Compartilhar ⎋</strong> na barra inferior do Safari.</span>
+                    <div className="space-y-2.5 text-slate-700 text-[11px]">
+                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-xl border border-slate-200">
+                        <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">1</span>
+                        <span>Toque no botão <strong>Compartilhar [↑]</strong> na barra inferior do Safari.</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">2</span>
-                        <span>Role para baixo e toque em <strong>"Adicionar à Tela de Início" ➕</strong>.</span>
+                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-xl border border-slate-200">
+                        <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">2</span>
+                        <span>Role a lista e toque em <strong>"Adicionar à Tela de Início" ➕</strong>.</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">3</span>
-                        <span>Toque em <strong>"Adicionar"</strong> no canto superior direito!</span>
+                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-xl border border-slate-200">
+                        <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">3</span>
+                        <span>Toque em <strong>"Adicionar"</strong> no topo direito da tela.</span>
                       </div>
                     </div>
                   </div>
+
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 font-bold flex items-center justify-center gap-1.5 text-center">
+                    <span>👇 O botão de Compartilhar [↑] fica bem aqui embaixo na barra do Safari</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.setItem('appvendas_pwa_installed', 'true');
+                        confetti({ particleCount: 80, spread: 80, origin: { y: 0.5 } });
+                      } catch {}
+                      onClose();
+                    }}
+                    className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Já Adicionei à Tela de Início!</span>
+                  </button>
                 </div>
               ) : (
                 /* 3. Computer / Preview / QR Code Flow */

@@ -26,6 +26,9 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
+import { Smartphone } from 'lucide-react';
+import { usePWAInstall } from '../../hooks/usePWAInstall';
+import { PWAInstallModal } from '../pwa/PWAInstallModal';
 
 export const AccessPaywall: React.FC = () => {
   const {
@@ -47,6 +50,9 @@ export const AccessPaywall: React.FC = () => {
   } = useApp();
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
+
+  const { isInstalled, isIOS } = usePWAInstall();
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
   const [radarPulseCount, setRadarPulseCount] = useState(0);
   const [selectedBankId, setSelectedBankId] = useState<string>(paymentSettings.receivingBank || 'NUBANK');
@@ -181,6 +187,21 @@ export const AccessPaywall: React.FC = () => {
               </>
             )}
           </p>
+
+          {/* Direct Install Button for iPhone / Mobile Users */}
+          {!isInstalled && (
+            <div className="pt-3 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => setShowInstallModal(true)}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 active:scale-95 text-white border border-white/30 rounded-xl text-xs font-black flex items-center gap-2 shadow-xs transition-all cursor-pointer backdrop-blur-xs"
+                title={isIOS ? "Instalar aplicativo diretamente no iPhone" : "Instalar aplicativo no celular"}
+              >
+                <Smartphone className={`w-4 h-4 ${isIOS ? 'text-blue-300' : 'text-emerald-300'}`} />
+                <span>{isIOS ? '📲 Instalar no iPhone (Adicionar à Tela de Início)' : '📲 Instalar Aplicativo no Celular'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Paywall Body */}
@@ -363,6 +384,9 @@ export const AccessPaywall: React.FC = () => {
         )}
 
       </div>
+
+      {/* In-App Direct Installation Modal for iPhone / Mobile */}
+      <PWAInstallModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
     </div>
   );
 };

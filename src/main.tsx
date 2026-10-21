@@ -115,7 +115,7 @@ try {
       }
 
       // 4. Sanitize subscription: ensure unpaid users are blocked, but ANY user who paid via Pix is recognized and granted access!
-      const MIGRATION_KEY = 'appvendas_pix_security_v8_realtime_access';
+      const MIGRATION_KEY = 'appvendas_pix_security_v9_instant_access';
       if (localStorage.getItem(MIGRATION_KEY) !== 'true') {
         const isPixPaidStored = localStorage.getItem('appvendas_pix_paid') === 'true';
         let isLegitPaid = isPixPaidStored;
@@ -154,26 +154,16 @@ try {
   console.warn('[Migration] Non-fatal storage check:', e);
 }
 
-// Register PWA service worker immediately for installability, offline support and instant updates
+// Register PWA service worker safely for installability and offline support (no reload flash)
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js', { scope: '/' })
     .then((reg) => {
-      console.log('[PWA] Service Worker registered with scope:', reg.scope);
-      // Force update check so all users receive updates immediately
+      // Force update check so all users receive updates seamlessly
       reg.update().catch(() => {});
     })
     .catch((err) => {
       console.warn('[PWA] Service Worker registration:', err);
     });
-
-  // Automatically reload when new service worker takes control
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) {
-      refreshing = true;
-      window.location.reload();
-    }
-  });
 }
 
 createRoot(document.getElementById('root')!).render(

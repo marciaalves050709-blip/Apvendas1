@@ -585,27 +585,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const saved = localStorage.getItem(STORAGE_KEYS.SUBSCRIPTION);
       const isPixPaid = localStorage.getItem('appvendas_pix_paid') === 'true';
+
+      // 1. Master admin is always permanently authorized
+      if (isAdmin) {
+        return MASTER_ADMIN_LIFETIME_SUBSCRIPTION;
+      }
+
       if (saved) {
-        const parsed = JSON.parse(saved);
-        // Master admin is always permanently authorized
-        if (isAdmin || parsed.lastPaymentRef?.includes('MASTER-ADMIN') || (parsed.subscriptionExpiresAt && new Date(parsed.subscriptionExpiresAt).getFullYear() > 2090)) {
-          return {
-            ...MASTER_ADMIN_LIFETIME_SUBSCRIPTION,
-            ...parsed,
-            isSubscribed: true
-          };
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.lastPaymentRef?.includes('MASTER-ADMIN') || (parsed.subscriptionExpiresAt && new Date(parsed.subscriptionExpiresAt).getFullYear() > 2090)) {
+            return {
+              ...MASTER_ADMIN_LIFETIME_SUBSCRIPTION,
+              ...parsed,
+              isSubscribed: true
+            };
+          }
+        } catch {}
+      }
+
+      // 2. Any user who has paid via Pix is confirmed with active subscription
+      if (isPixPaid) {
+        let expiry = calculateNextDay5Expiry(new Date(), true).toISOString();
+        let paymentRef = 'PIX-CONFIRMED';
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.subscriptionExpiresAt) {
+              const parsedTime = new Date(parsed.subscriptionExpiresAt).getTime();
+              if (!isNaN(parsedTime) && parsedTime > Date.now()) {
+                expiry = parsed.subscriptionExpiresAt;
+              }
+            }
+            if (parsed.lastPaymentRef) {
+              paymentRef = parsed.lastPaymentRef;
+            }
+            return {
+              ...DEFAULT_SUBSCRIPTION,
+              ...parsed,
+              isSubscribed: true,
+              subscriptionExpiresAt: expiry,
+              trialDurationDays: 0,
+              planPrice: 94.98,
+              lastPaymentRef: paymentRef
+            };
+          } catch {}
         }
-        // If not authenticated as admin and not confirmed paid via Pix, client user MUST remain blocked!
-        if (!isPixPaid) {
-          return DEFAULT_SUBSCRIPTION;
-        }
-        return { 
-          ...DEFAULT_SUBSCRIPTION, 
-          ...parsed,
+        return {
+          ...DEFAULT_SUBSCRIPTION,
+          isSubscribed: true,
+          subscriptionExpiresAt: expiry,
           trialDurationDays: 0,
-          planPrice: 94.98
+          planPrice: 94.98,
+          lastPaymentRef: paymentRef
         };
       }
+
+      // 3. Unpaid user: strictly blocked
       return DEFAULT_SUBSCRIPTION;
     } catch {
       return DEFAULT_SUBSCRIPTION;
@@ -631,7 +667,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Save subscription changes
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(subscription));
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(subscription));
+    } catch {}
   }, [subscription]);
 
   // Derived Trial & Subscription status
@@ -650,9 +688,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Day 5 Recurring Billing Rule:
   // Subscription expires on Day 5 at 23:59:59. If not renewed, access is immediately blocked!
-  const subscriptionExpiresAtMs = subscription.subscriptionExpiresAt 
-    ? new Date(subscription.subscriptionExpiresAt).getTime() 
-    : (subscription.isSubscribed ? calculateNextDay5Expiry(new Date(), true).getTime() : 0);
+  const subscriptionExpiresAtMs = useMemo(() => {
+    if (!subscription.isSubscribed) return 0;
+    if (subscription.subscriptionExpiresAt) {
+      const parsedTime = new Date(subscription.subscriptionExpiresAt).getTime();
+      if (!isNaN(parsedTime) && parsedTime > 0) {
+        return parsedTime;
+      }
+    }
+    return calculateNextDay5Expiry(new Date(), true).getTime();
+  }, [subscription.isSubscribed, subscription.subscriptionExpiresAt]);
 
   // Check if Day 5 deadline has passed without payment/renewal
   const isBlockedDueToDay5 = Boolean(
@@ -685,13 +730,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Countdown to Day 5 renewal & warning indicator:
   const msUntilDue = Math.max(0, subscriptionExpiresAtMs - currentTimeMs);
-  const daysUntilDue = Math.ceil(msUntilDue / (24 * 60 * 60 * 1000));
+  const daysUntilDue = subscriptionExpiresAtMs > 0 ? Math.ceil(msUntilDue / (24 * 60 * 60 * 1000)) : 0;
 
   // Informative warning: Triggered when user is subscribed, not master admin, not blocked, and <= 5 days to Day 5
   const isDueWarningActive = Boolean(
     !isMasterAdmin && 
     subscription.isSubscribed && 
     !isBlockedDueToDay5 && 
+    subscriptionExpiresAtMs > 0 &&
     daysUntilDue <= 5
   );
 

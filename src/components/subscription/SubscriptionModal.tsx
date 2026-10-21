@@ -113,7 +113,7 @@ export const SubscriptionModal: React.FC = () => {
         },
       }).then(url => {
         setPixQrDataUrl(url);
-      });
+      }).catch(() => {});
     } catch {
       // Safe fallback with standard payload
       const fb = generatePixPayload({
