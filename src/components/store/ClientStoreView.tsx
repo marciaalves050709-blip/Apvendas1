@@ -88,7 +88,8 @@ export const ClientStoreView: React.FC = () => {
     activeSeller,
     sellers,
     isSellerWhatsappModalOpen,
-    setIsSellerWhatsappModalOpen
+    setIsSellerWhatsappModalOpen,
+    checkAndApplyAdminCredentials
   } = useApp();
 
   // Client Session State
@@ -233,6 +234,21 @@ export const ClientStoreView: React.FC = () => {
     }
     if (!inputPhone.trim() || inputPhone.replace(/\D/g, '').length < 8) {
       showToast('error', 'Telefone Inválido', 'Por favor, digite um número de WhatsApp válido.');
+      return;
+    }
+
+    // Auto-detect Master Administrator Márcia Alves:
+    if (checkAndApplyAdminCredentials(inputName, inputPhone)) {
+      const adminUserObj: ClientUser = {
+        name: 'Márcia Alves',
+        phone: inputPhone.trim(),
+        address: inputAddress.trim(),
+        deliveryType: selectedDeliveryType,
+      };
+      setClientUser(adminUserObj);
+      setIsIdentified(true);
+      localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(adminUserObj));
+      setActiveTab('dashboard');
       return;
     }
 

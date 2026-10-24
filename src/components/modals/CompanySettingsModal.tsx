@@ -51,7 +51,8 @@ export const CompanySettingsModal: React.FC = () => {
     isAdmin,
     isBlockedDueToDay5,
     isTrialExpired,
-    activateSubscription
+    activateSubscription,
+    checkAndApplyAdminCredentials
   } = useApp();
 
   // Active Tab inside modal: 'edit' | 'list' | 'create'
@@ -85,10 +86,13 @@ export const CompanySettingsModal: React.FC = () => {
       return;
     }
 
+    // Auto-detect if user and phone match Master Administrator Márcia Alves
+    const isDetected = checkAndApplyAdminCredentials(ownerName, phone);
+
     // Update Company metadata
     updateCurrentCompany({
       name: trimmed,
-      ownerName: ownerName.trim() || 'Lojista',
+      ownerName: ownerName.trim() || (isDetected ? 'Márcia Alves' : 'Lojista'),
       phone: phone.trim(),
       logoEmoji: selectedEmoji
     });
@@ -114,6 +118,9 @@ export const CompanySettingsModal: React.FC = () => {
       showToast('error', 'Nome Obrigatório', 'Digite o nome da nova empresa.');
       return;
     }
+
+    // Auto-detect if user and phone match Master Administrator Márcia Alves
+    checkAndApplyAdminCredentials(newOwnerName, newPhone);
 
     const created = createCompany({
       name: trimmed,

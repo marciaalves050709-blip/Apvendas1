@@ -166,6 +166,7 @@ interface AppContextType {
   deleteCompany: (companyId: string) => boolean;
   isCompanyModalOpen: boolean;
   setIsCompanyModalOpen: (open: boolean) => void;
+  checkAndApplyAdminCredentials: (userOrName?: string, phoneOrKey?: string, options?: { silent?: boolean }) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -196,6 +197,109 @@ export const ADMIN_CONFIG = {
   masterCode: 'MARCIA2026',
   pixKey: '91993192405',
   monthlyPrice: 94.98,
+};
+
+/**
+ * Detects whether the provided user/name and phone match Master Administrator Márcia Alves.
+ * Supports variations:
+ * Name: "Márcia Alves", "Marcia Alves", "Márcia", "Marcia", "marciaalves", "marcia", "marciaalves050709@gmail.com", "0507"
+ * Phone: "91993192405", "5591993192405", "993192405", "(91) 99319-2405", "(91) 993192405"
+ * Also detects master password codes: "MARCIA2026", "ADMINMARCIA", "MESTRA58", "0507", etc.
+ */
+export const checkIsAdminCredentials = (userOrName?: string, phoneOrKey?: string): boolean => {
+  const rawUser = (userOrName || '').trim();
+  const rawPhone = (phoneOrKey || '').trim();
+
+  if (!rawUser && !rawPhone) return false;
+
+  // Normalized user: lowercase, unaccented, alphanumeric only
+  const normUser = rawUser
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  // Normalized phone: digits only
+  const phoneDigits = rawPhone.replace(/\D/g, '');
+  const userDigits = rawUser.replace(/\D/g, '');
+
+  // Master codes entered in either user or phone field
+  const upperUser = rawUser.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
+  const upperPhone = rawPhone.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
+  const masterKeywords = [
+    'MARCIA2026',
+    'ADMINMARCIA',
+    'MESTRA58',
+    'MASTERADMIN',
+    'MASTER2026',
+    'MARCIA0507',
+    'MARCIA',
+    '0507',
+    'MASTERADMINMARCIA',
+    'MARCIAALVES'
+  ];
+
+  if (
+    masterKeywords.includes(upperUser) || 
+    masterKeywords.includes(upperPhone) || 
+    upperUser === '0507' || 
+    upperPhone === '0507' ||
+    upperUser.includes('MARCIA2026') ||
+    upperPhone.includes('MARCIA2026')
+  ) {
+    return true;
+  }
+
+  // Check phone matches Márcia's phone (91) 99319-2405
+  const isMarciaPhone = 
+    phoneDigits === '91993192405' ||
+    phoneDigits === '5591993192405' ||
+    phoneDigits === '993192405' ||
+    phoneDigits.endsWith('993192405') ||
+    userDigits.endsWith('993192405');
+
+  // Check name/user matches Márcia
+  const isMarciaName = 
+    normUser.includes('marcia') ||
+    normUser.includes('marciaalves') ||
+    normUser === '0507' ||
+    normUser.includes('marciaalves050709');
+
+  // 1. Both user and phone match Márcia's credentials:
+  if (isMarciaName && isMarciaPhone) {
+    return true;
+  }
+
+  // 2. User entered phone number into the user/name field and phone field
+  if (userDigits.endsWith('993192405') && (isMarciaName || phoneDigits === '' || isMarciaPhone)) {
+    return true;
+  }
+
+  // 3. User typed Márcia's full name ("Márcia Alves") with her phone or empty phone
+  if ((normUser === 'marciaalves' || normUser === 'marcia') && (isMarciaPhone || phoneDigits === '91993192405' || phoneDigits === '')) {
+    return true;
+  }
+
+  // 4. Phone is Márcia's and user is an admin/owner title or empty
+  if (isMarciaPhone && (
+    isMarciaName ||
+    normUser.includes('admin') ||
+    normUser.includes('proprietar') ||
+    normUser.includes('dona') ||
+    normUser === '' ||
+    normUser === 'lojista' ||
+    normUser === 'usuario' ||
+    normUser === 'meuusuario'
+  )) {
+    return true;
+  }
+
+  // 5. Márcia's email
+  if (rawUser.toLowerCase().includes('marciaalves050709') || rawPhone.toLowerCase().includes('marciaalves050709')) {
+    return true;
+  }
+
+  return false;
 };
 
 export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
@@ -765,6 +869,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('success', '👑 Modo Administradora Ativo!', 'Acesso vitalício 100% gratuito confirmado para Márcia Alves.');
   };
 
+  const checkAndApplyAdminCredentials = (userOrName?: string, phoneOrKey?: string, options?: { silent?: boolean }): boolean => {
+    if (!checkIsAdminCredentials(userOrName, phoneOrKey)) {
+      return false;
+    }
+
+    setIsTestBlockMode(false);
+    setIsAdmin(true);
+
+    try {
+      localStorage.removeItem('appvendas_test_block_active');
+      sessionStorage.setItem('appvendas_admin_session', 'active');
+      localStorage.setItem('appvendas_admin_session', 'active');
+      localStorage.setItem('appvendas_is_admin', 'true');
+      localStorage.setItem('appvendas_pix_paid', 'true');
+      localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(MASTER_ADMIN_LIFETIME_SUBSCRIPTION));
+      window.dispatchEvent(new Event('storage'));
+    } catch {
+      // ignore
+    }
+
+    setSubscription(MASTER_ADMIN_LIFETIME_SUBSCRIPTION);
+    setIsSubscriptionModalOpen(false);
+
+    // Audio & celebratory feedback
+    try {
+      sounds.playBankNotification();
+      setTimeout(() => {
+        try {
+          sounds.playMoneyReceivedSound();
+        } catch {
+          // ignore
+        }
+      }, 200);
+      confetti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.35 }
+      });
+    } catch {
+      // ignore
+    }
+
+    if (!options?.silent) {
+      showToast(
+        'success',
+        '👑 Bem-vinda, Márcia Alves!',
+        'Você foi reconhecida como Administradora com Acesso Vitalício Gratuito. Acesso 100% liberado sem mensalidades!'
+      );
+    }
+
+    return true;
+  };
+
   const setClientTestMode = () => {
     setIsAdmin(false);
     try {
@@ -1245,6 +1402,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCurrentCompany = (data: Partial<CompanyAccount>) => {
+    // If ownerName or phone matches Márcia Alves, auto-apply master admin
+    const current = companies.find(c => c.id === activeCompanyId);
+    const checkName = data.ownerName !== undefined ? data.ownerName : current?.ownerName;
+    const checkPhone = data.phone !== undefined ? data.phone : current?.phone;
+    if (checkIsAdminCredentials(checkName, checkPhone)) {
+      checkAndApplyAdminCredentials(checkName, checkPhone);
+    }
+
     setCompanies(prev => prev.map(c => {
       if (c.id === activeCompanyId) {
         const updated = { ...c, ...data };
@@ -1262,6 +1427,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }): CompanyAccount => {
+    // If ownerName or phone matches Márcia Alves, auto-apply master admin
+    if (checkIsAdminCredentials(companyData.ownerName, companyData.phone)) {
+      checkAndApplyAdminCredentials(companyData.ownerName, companyData.phone);
+    }
+
     const newId = `empresa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newComp: CompanyAccount = {
       id: newId,
@@ -2105,6 +2275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteCompany,
         isCompanyModalOpen,
         setIsCompanyModalOpen,
+        checkAndApplyAdminCredentials,
       }}
     >
       {children}

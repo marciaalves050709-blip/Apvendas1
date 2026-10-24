@@ -46,7 +46,8 @@ export const SubscriptionModal: React.FC = () => {
     daysUntilDue,
     isBlockedDueToDay5,
     activateSubscription,
-    paymentSettings
+    paymentSettings,
+    checkAndApplyAdminCredentials
   } = useApp();
 
   const [copiedPix, setCopiedPix] = useState(false);
@@ -228,7 +229,7 @@ export const SubscriptionModal: React.FC = () => {
     const isE2E = /^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean);
     const isBankAuth = clean.length >= 8 && /^[A-Z0-9\-\.\_]+$/i.test(clean) && !['TESTE', 'SENHA', 'PAGO', 'GRATIS', 'LIVRE'].includes(clean);
 
-    if (isMaster) {
+    if (isMaster || checkAndApplyAdminCredentials(raw, raw)) {
       activateSubscription('MARCIA2026', 'MASTER-ADMIN-MARCIA');
       setActivationCode('');
     } else if (validCodes.includes(clean) || isE2E || isBankAuth) {

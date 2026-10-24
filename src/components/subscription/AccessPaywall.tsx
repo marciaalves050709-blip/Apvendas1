@@ -22,7 +22,10 @@ import {
   AlertCircle,
   Calendar,
   Eye,
-  EyeOff
+  EyeOff,
+  User,
+  Phone,
+  Crown
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -46,7 +49,8 @@ export const AccessPaywall: React.FC = () => {
     paymentSettings,
     isAccessAllowed,
     isTestBlockMode,
-    exitTestBlockMode
+    exitTestBlockMode,
+    checkAndApplyAdminCredentials
   } = useApp();
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
@@ -78,46 +82,32 @@ export const AccessPaywall: React.FC = () => {
   }
 
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminUser, setAdminUser] = useState('');
+  const [adminPhone, setAdminPhone] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [adminError, setAdminError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'CREDENTIALS' | 'PASSWORD'>('CREDENTIALS');
 
   const handleAdminBypass = (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
-    const raw = adminPass.trim();
-    // Normalize string: remove spaces, hyphens, dots, parentheses
-    const pass = raw.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
 
-    const masterCodes = [
-      'MARCIA2026',
-      'MARCIA',
-      '0507',
-      'MARCIA0507',
-      'ADMINMARCIA',
-      'MESTRA58',
-      'MASTER2026',
-      'MASTERADMIN',
-      'MASTERADMINMARCIA',
-      'MARCIAALVES',
-      '91993192405',
-      '993192405'
-    ];
+    const targetUser = (adminUser || adminPass).trim();
+    const targetPhone = (adminPhone || adminPass).trim();
 
-    const isMaster = masterCodes.includes(pass) || 
-      pass.includes('MASTERADMIN') || 
-      pass.includes('MARCIA') || 
-      pass === '0507' || 
-      raw.toLowerCase().includes('marciaalves');
-
-    if (isMaster) {
+    // Verify using central admin credentials logic
+    const success = checkAndApplyAdminCredentials(targetUser, targetPhone);
+    if (success) {
       exitTestBlockMode();
-      activateSubscription('MARCIA2026', 'MASTER-ADMIN-MARCIA');
       setShowAdminLogin(false);
+      setAdminUser('');
+      setAdminPhone('');
       setAdminPass('');
-    } else {
-      setAdminError('Chave incorreta. Digite sua Chave de Administradora para liberar o acesso.');
+      return;
     }
+
+    setAdminError('Usuário ou telefone não reconhecido como administradora. Digite seu usuário e telefone cadastrados para liberar o acesso vitalício.');
   };
 
   const handleSendWhatsAppProof = () => {
@@ -289,6 +279,21 @@ export const AccessPaywall: React.FC = () => {
             planPrice={planPrice}
           />
 
+          {/* Direct Administrator Identification Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAdminLogin(true);
+                setAdminError('');
+              }}
+              className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 border border-amber-300 text-amber-950 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+            >
+              <Crown className="w-4 h-4 text-amber-600" />
+              <span>👑 Sou Administradora: Entrar com Usuário e Telefone</span>
+            </button>
+          </div>
+
         </div>
 
         {/* Paywall Footer */}
@@ -298,7 +303,10 @@ export const AccessPaywall: React.FC = () => {
           {/* Discrete Administrator Access Link */}
           <button
             type="button"
-            onClick={() => setShowAdminLogin(true)}
+            onClick={() => {
+              setShowAdminLogin(true);
+              setAdminError('');
+            }}
             className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer transition-colors"
             title="Acesso da Administradora"
           >
@@ -307,63 +315,153 @@ export const AccessPaywall: React.FC = () => {
           </button>
         </div>
 
-        {/* Master Owner PIN Login Modal */}
+        {/* Master Owner Identification Modal (User + Phone or Password) */}
         {showAdminLogin && (
           <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border-2 border-indigo-500 animate-scale-up space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
+            <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border-2 border-indigo-500 animate-scale-up space-y-3.5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center text-lg shadow-sm">
                     👑
                   </div>
                   <div>
-                    <h4 className="font-black text-sm text-slate-900">Acesso Restrito</h4>
-                    <p className="text-[10px] text-slate-500">Administração</p>
+                    <h4 className="font-black text-sm text-slate-900 leading-tight">Identificação de Administradora</h4>
+                    <p className="text-[10px] text-slate-500">Reconhecimento automático de Acesso Vitalício</p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowAdminLogin(false)}
+                  onClick={() => {
+                    setShowAdminLogin(false);
+                    setAdminError('');
+                  }}
                   className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              <p className="text-xs text-slate-600">
-                Digite sua senha de acesso para liberar o sistema.
-              </p>
+              {/* Login Method Tabs */}
+              <div className="flex bg-slate-100 p-0.5 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMethod('CREDENTIALS');
+                    setAdminError('');
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    loginMethod === 'CREDENTIALS' 
+                      ? 'bg-white text-indigo-700 shadow-xs' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <User className="w-3 h-3" />
+                  <span>Usuário & Telefone</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginMethod('PASSWORD');
+                    setAdminError('');
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    loginMethod === 'PASSWORD' 
+                      ? 'bg-white text-indigo-700 shadow-xs' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <KeyRound className="w-3 h-3" />
+                  <span>Senha / Chave</span>
+                </button>
+              </div>
 
               <form onSubmit={handleAdminBypass} className="space-y-3">
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={adminPass}
-                    onChange={e => {
-                      setAdminPass(e.target.value);
-                      setAdminError('');
-                    }}
-                    placeholder="Senha de acesso"
-                    className="w-full pl-3 pr-10 py-2.5 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono uppercase font-bold text-slate-900 bg-slate-50 focus:bg-white"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                    title={showPassword ? 'Ocultar' : 'Visualizar'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+                {loginMethod === 'CREDENTIALS' ? (
+                  <>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Digite seu <strong>nome de usuário</strong> e <strong>número de telefone</strong> cadastrados para liberar o acesso vitalício gratuito imediatamente.
+                    </p>
 
-                {adminError && <p className="text-[11px] text-rose-600 font-bold">{adminError}</p>}
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <User className="w-3 h-3 text-indigo-600" />
+                          <span>Seu Usuário / Nome</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={adminUser}
+                          onChange={e => {
+                            setAdminUser(e.target.value);
+                            setAdminError('');
+                          }}
+                          placeholder="Ex: Márcia Alves"
+                          className="w-full px-3 py-2 text-xs border border-indigo-200 rounded-xl focus:border-indigo-600 focus:outline-hidden font-medium text-slate-900 bg-slate-50 focus:bg-white"
+                          autoFocus
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-emerald-600" />
+                          <span>Seu Telefone / WhatsApp</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={adminPhone}
+                          onChange={e => {
+                            setAdminPhone(e.target.value);
+                            setAdminError('');
+                          }}
+                          placeholder="Ex: (91) 99319-2405"
+                          className="w-full px-3 py-2 text-xs border border-indigo-200 rounded-xl focus:border-indigo-600 focus:outline-hidden font-medium text-slate-900 bg-slate-50 focus:bg-white"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-slate-600">
+                      Digite sua chave ou senha de administradora para liberar o sistema.
+                    </p>
+
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={adminPass}
+                        onChange={e => {
+                          setAdminPass(e.target.value);
+                          setAdminError('');
+                        }}
+                        placeholder="Ex: MARCIA2026"
+                        className="w-full pl-3 pr-10 py-2.5 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono uppercase font-bold text-slate-900 bg-slate-50 focus:bg-white"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                        title={showPassword ? 'Ocultar' : 'Visualizar'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {adminError && (
+                  <p className="text-[11px] text-rose-600 font-bold bg-rose-50 p-2 rounded-xl border border-rose-200">
+                    {adminError}
+                  </p>
+                )}
                 
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => {
                       setShowAdminLogin(false);
+                      setAdminUser('');
+                      setAdminPhone('');
                       setAdminPass('');
                       setAdminError('');
                     }}
@@ -373,9 +471,10 @@ export const AccessPaywall: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <span>Entrar</span>
+                    <Crown className="w-3.5 h-3.5" />
+                    <span>Liberar Vitalício</span>
                   </button>
                 </div>
               </form>
