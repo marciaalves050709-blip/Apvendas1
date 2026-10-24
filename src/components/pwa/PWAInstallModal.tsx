@@ -122,7 +122,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
+    <div className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
       <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-auto animate-scale-up">
         
         {/* Header */}
@@ -138,18 +138,18 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
 
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-2xl bg-white p-1.5 shadow-lg border border-emerald-400/40 shrink-0">
-              <img src="/pwa-192x192.png" alt="appvendas" className="w-full h-full object-cover rounded-xl" />
+              <img src="/apple-touch-icon.png" alt="appvendas" className="w-full h-full object-cover rounded-xl" />
             </div>
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-bold text-[10px] uppercase rounded tracking-wider mb-1">
                 <Sparkles className="w-3 h-3 text-emerald-400" />
-                <span>Aplicativo Oficial</span>
+                <span>{isIOS ? 'iPhone / iOS' : 'Aplicativo Oficial'}</span>
               </div>
               <h2 className="text-lg font-black tracking-tight text-white leading-tight">
-                Instalar no Celular
+                {isIOS ? 'Instalar no iPhone' : isAndroid ? 'Instalar no Android' : 'Instalar no Celular'}
               </h2>
               <p className="text-xs text-indigo-200">
-                Acesse o appvendas direto da sua tela inicial
+                {isIOS ? 'Adicione à sua Tela de Início em 3 passos' : 'Acesse o appvendas direto da sua tela inicial'}
               </p>
             </div>
           </div>
@@ -217,9 +217,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                         No iPhone, a Apple só permite instalar aplicativos diretamente pelo <strong>Safari</strong>:
                       </p>
                       <div className="space-y-1.5 text-[11px] text-amber-900 font-semibold bg-white/80 p-2.5 rounded-xl border border-amber-200">
-                        <p>1. Toque nos <strong>3 pontinhos •••</strong> ou no ícone da bússola 🧭 no canto do WhatsApp.</p>
+                        <p>1. Toque nos <strong>3 pontinhos •••</strong> ou na bússola 🧭 no canto do WhatsApp.</p>
                         <p>2. Selecione <strong>"Abrir no Safari"</strong>.</p>
-                        <p>3. No Safari, você poderá adicionar à Tela de Início em 1 toque!</p>
+                        <p>3. No Safari, toque em Compartilhar e "Adicionar à Tela de Início".</p>
                       </div>
                       <button
                         type="button"
@@ -232,37 +232,41 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={handleIosShare}
-                    className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 hover:from-blue-700 hover:to-indigo-700 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all border-2 border-blue-400"
-                  >
-                    <Share className="w-5 h-5 text-blue-200" />
-                    <span>Abrir Menu Compartilhar do iPhone</span>
-                  </button>
+                  {/* Safari Visual Guide Card */}
+                  <div className="p-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 text-white rounded-2xl shadow-md text-center space-y-2 border-2 border-blue-400">
+                    <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto text-white shadow-inner">
+                      <Share className="w-6 h-6 text-white stroke-[2.5]" />
+                    </div>
+                    <h4 className="font-black text-sm text-white">
+                      Instalar no iPhone pelo Safari
+                    </h4>
+                    <p className="text-[11px] text-blue-100 max-w-xs mx-auto leading-relaxed">
+                      Siga os 3 passos abaixo usando a barra de ferramentas do próprio Safari:
+                    </p>
+                  </div>
 
                   <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2.5 text-left">
                     <span className="font-black text-slate-900 block text-xs">
-                      Instalação no iPhone em 3 passos simples:
+                      Passo a passo no iPhone:
                     </span>
                     <div className="space-y-2.5 text-slate-700 text-[11px]">
-                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-xl border border-slate-200">
-                        <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">1</span>
-                        <span>Toque no botão <strong>Compartilhar [↑]</strong> na barra inferior do Safari.</span>
+                      <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="w-7 h-7 rounded-lg bg-blue-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">1</span>
+                        <span>Toque no botão <strong>Compartilhar [↑]</strong> (o quadrado com seta para cima na barra inferior do Safari).</span>
                       </div>
-                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-xl border border-slate-200">
-                        <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">2</span>
-                        <span>Role a lista e toque em <strong>"Adicionar à Tela de Início" ➕</strong>.</span>
+                      <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">2</span>
+                        <span>Role as opções para baixo e toque em <strong>"Adicionar à Tela de Início" ➕</strong>.</span>
                       </div>
-                      <div className="flex items-center gap-2.5 bg-white p-2 rounded-xl border border-slate-200">
-                        <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">3</span>
-                        <span>Toque em <strong>"Adicionar"</strong> no topo direito da tela.</span>
+                      <div className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                        <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">3</span>
+                        <span>Toque em <strong>"Adicionar"</strong> no canto superior direito da tela.</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 font-bold flex items-center justify-center gap-1.5 text-center">
-                    <span>👇 O botão de Compartilhar [↑] fica bem aqui embaixo na barra do Safari</span>
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 font-bold flex items-center justify-center gap-1.5 text-center animate-pulse">
+                    <span>👇 Olhe aqui embaixo: o botão Compartilhar [↑] fica na barra do Safari!</span>
                   </div>
 
                   <button
@@ -274,10 +278,10 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                       } catch {}
                       onClose();
                     }}
-                    className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    className="w-full py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md active:scale-95"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Já Adicionei à Tela de Início!</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                    <span>✅ Pronto, Já Adicionei à Tela de Início!</span>
                   </button>
                 </div>
               ) : (

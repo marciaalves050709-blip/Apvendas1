@@ -143,21 +143,9 @@ export function usePWAInstall() {
       return { success: true, action: 'already_installed' };
     }
 
-    // 1. If on iOS (iPhone/iPad): Trigger native Share Sheet if available
+    // 1. If on iOS (iPhone/iPad): Open the guided iOS installation modal directly
     if (isIOS) {
-      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && !isInAppBrowser) {
-        try {
-          await navigator.share({
-            title: 'appvendas - PDV e Estoque',
-            text: 'Toque em "Adicionar à Tela de Início" para instalar o appvendas no seu iPhone!',
-            url: window.location.href,
-          });
-          return { success: true, action: 'ios_share' };
-        } catch {
-          return { success: false, action: 'modal' };
-        }
-      }
-      return { success: false, action: 'modal' };
+      return { success: true, action: 'modal' };
     }
 
     // Try to get available prompt
