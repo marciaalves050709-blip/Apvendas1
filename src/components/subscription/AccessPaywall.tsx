@@ -195,8 +195,111 @@ export const AccessPaywall: React.FC = () => {
         </div>
 
         {/* Paywall Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
           
+          {/* DIRECT INLINE ADMIN AUTHENTICATION CARD - HIGHEST PRIORITY */}
+          <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-100 border-2 border-amber-400 rounded-2xl p-4 shadow-md">
+            <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-200/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-base shadow-xs shrink-0">
+                  👑
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-black text-amber-950 leading-tight">
+                    Identificação da Administradora (Acesso Vitalício)
+                  </h3>
+                  <p className="text-[11px] text-amber-800">
+                    Coloque seu usuário e telefone para liberar o aplicativo imediatamente com acesso vitalício gratuito:
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Fill Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminUser('Márcia Alves');
+                  setAdminPhone('(91) 99319-2405');
+                  setAdminError('');
+                }}
+                className="hidden sm:flex px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-lg text-[10px] font-black cursor-pointer items-center gap-1 shrink-0 transition-colors"
+                title="Preencher dados da Márcia Alves com 1 toque"
+              >
+                <span>⚡ Preencher Márcia</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminBypass} className="space-y-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-amber-950 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3 text-amber-800" />
+                      <span>Seu Usuário / Nome</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAdminUser('Márcia Alves')}
+                      className="sm:hidden text-[9px] text-amber-900 underline font-black cursor-pointer"
+                    >
+                      Preencher
+                    </button>
+                  </label>
+                  <input
+                    type="text"
+                    value={adminUser}
+                    onChange={e => {
+                      setAdminUser(e.target.value);
+                      setAdminError('');
+                    }}
+                    placeholder="Ex: Márcia Alves"
+                    className="w-full px-3 py-2 text-xs border-2 border-amber-300 rounded-xl focus:border-amber-600 focus:outline-hidden font-bold text-slate-900 bg-white shadow-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-amber-950 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-amber-800" />
+                      <span>Seu Telefone / WhatsApp</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPhone('(91) 99319-2405')}
+                      className="sm:hidden text-[9px] text-amber-900 underline font-black cursor-pointer"
+                    >
+                      Preencher
+                    </button>
+                  </label>
+                  <input
+                    type="tel"
+                    value={adminPhone}
+                    onChange={e => {
+                      setAdminPhone(e.target.value);
+                      setAdminError('');
+                    }}
+                    placeholder="Ex: (91) 99319-2405"
+                    className="w-full px-3 py-2 text-xs border-2 border-amber-300 rounded-xl focus:border-amber-600 focus:outline-hidden font-bold text-slate-900 bg-white shadow-xs"
+                  />
+                </div>
+              </div>
+
+              {adminError && (
+                <p className="text-[11px] text-rose-700 font-bold bg-rose-50 p-2 rounded-xl border border-rose-300">
+                  {adminError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-400"
+              >
+                <Crown className="w-4 h-4 text-slate-950" />
+                <span>👑 Confirmar Meu Usuário e Telefone (Liberar Vitalício)</span>
+              </button>
+            </form>
+          </div>
+
           {/* Price Offer Card */}
           <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
             <div>

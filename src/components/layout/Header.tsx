@@ -152,6 +152,42 @@ export const Header: React.FC = () => {
           )}
         </button>
 
+        {/* Quick App Refresh & Cache Clear */}
+        <button
+          onClick={() => {
+            try {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                  regs.forEach(r => r.update());
+                });
+              }
+              if ('caches' in window) {
+                caches.keys().then(keys => {
+                  keys.forEach(k => caches.delete(k));
+                });
+              }
+            } catch {}
+            window.location.reload();
+          }}
+          className="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+          title="Recarregar versão mais recente do aplicativo"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Quick Admin Access Button if not currently identified */}
+        {!isMasterAdmin && !isAdmin && (
+          <button
+            onClick={() => setIsCompanyModalOpen(true)}
+            className="flex px-2 sm:px-2.5 py-1.5 sm:py-2 bg-gradient-to-r from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-950 border border-amber-300 rounded-xl font-bold text-xs items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+            title="Entrar com Usuário e Telefone da Administradora"
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden sm:inline">Sou Administradora</span>
+            <span className="sm:hidden font-black">Admin 👑</span>
+          </button>
+        )}
+
         {/* PWA Install Button for Mobile & Desktop */}
         <PWAInstallButton />
 

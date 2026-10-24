@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA)
-const CACHE_NAME = 'appvendas-pwa-v10';
+// appvendas Service Worker (PWA) - Version 15 (Fresh Network-First Cache)
+const CACHE_NAME = 'appvendas-pwa-v15';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -29,7 +29,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: clean up older caches and claim clients immediately
+// Activate: delete ALL old caches immediately and claim clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -42,42 +42,40 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Network-first for navigation, stale-while-revalidate for assets
+// Listen for skip waiting message from app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Fetch: Network-first for ALL requests to ensure live updates on iPhone and web
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Ignore cross-origin non-http protocols or analytics
+  // Ignore cross-origin non-http protocols
   if (!url.protocol.startsWith('http')) return;
 
-  // HTML Navigation requests
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(event.request).then((res) => res || caches.match('/index.html') || caches.match('/')))
-    );
-    return;
-  }
-
-  // Static assets: cache-first with network fallback
+  // Network-First for HTML navigation and JS/CSS code
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
           const clone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return networkResponse;
-      }).catch(() => cached);
-    })
+      })
+      .catch(async () => {
+        // Fallback to cache if offline
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html') || caches.match('/');
+        }
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      })
   );
 });

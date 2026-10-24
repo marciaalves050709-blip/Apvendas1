@@ -154,12 +154,24 @@ try {
   console.warn('[Migration] Non-fatal storage check:', e);
 }
 
-// Register PWA service worker safely for installability and offline support (no reload flash)
+// Register PWA service worker safely for installability and offline support
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js', { scope: '/' })
     .then((reg) => {
-      // Force update check so all users receive updates seamlessly
       reg.update().catch(() => {});
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        }
+      });
     })
     .catch((err) => {
       console.warn('[PWA] Service Worker registration:', err);
