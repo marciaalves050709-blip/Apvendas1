@@ -114,9 +114,9 @@ try {
         }
       }
 
-      // 4. Sanitize subscription: ensure unpaid users are blocked, but ANY user who paid via Pix is recognized and granted access!
-      const MIGRATION_KEY = 'appvendas_pix_security_v9_instant_access';
-      if (localStorage.getItem(MIGRATION_KEY) !== 'true') {
+      // 4. Sanitize subscription: Ensure new users receive a 2-day free trial!
+      const TRIAL_2DAYS_KEY = 'appvendas_trial_2days_v18';
+      if (localStorage.getItem(TRIAL_2DAYS_KEY) !== 'true') {
         const isPixPaidStored = localStorage.getItem('appvendas_pix_paid') === 'true';
         let isLegitPaid = isPixPaidStored;
         if (subRaw) {
@@ -128,25 +128,31 @@ try {
           } catch {}
         }
 
-        if (!isLegitPaid) {
-          // Unpaid users must be strictly blocked until real payment confirmation!
-          localStorage.removeItem('appvendas_pix_paid');
-          localStorage.removeItem('appvendas_pix_paid_timestamp');
-          const blockedSub = {
-            isSubscribed: false,
-            trialStartDate: new Date().toISOString(),
-            trialDurationDays: 0,
-            planPrice: 94.98,
-            planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
-            subscriptionExpiresAt: '',
-            lastPaymentRef: ''
-          };
-          localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(blockedSub));
-        } else {
-          // Ensure paid flag is preserved
-          localStorage.setItem('appvendas_pix_paid', 'true');
+        const isAdminStored = localStorage.getItem('appvendas_is_admin') === 'true' || localStorage.getItem('appvendas_admin_session') === 'active';
+        if (!isLegitPaid && !isAdminStored) {
+          // If the user already had a custom subscription, check if they were zeroed out by legacy migration
+          let existingSub: any = null;
+          if (subRaw) {
+            try {
+              existingSub = JSON.parse(subRaw);
+            } catch {}
+          }
+
+          // Grant fresh 2-day free trial for new users and unblock users whose trial duration was forced to 0
+          if (!existingSub || existingSub.trialDurationDays === 0 || !existingSub.trialDurationDays) {
+            const trialSub = {
+              isSubscribed: false,
+              trialStartDate: new Date().toISOString(),
+              trialDurationDays: 2,
+              planPrice: 94.98,
+              planName: 'Plano Pro (2 Dias Grátis de Teste)',
+              subscriptionExpiresAt: '',
+              lastPaymentRef: ''
+            };
+            localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(trialSub));
+          }
         }
-        localStorage.setItem(MIGRATION_KEY, 'true');
+        localStorage.setItem(TRIAL_2DAYS_KEY, 'true');
       }
     }
   }
@@ -156,7 +162,7 @@ try {
 
 // Register PWA service worker safely for installability and offline support
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=17', { scope: '/' })
+  navigator.serviceWorker.register('/sw.js?v=18', { scope: '/' })
     .then((reg) => {
       reg.update().catch(() => {});
       if (reg.waiting) {

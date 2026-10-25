@@ -111,8 +111,8 @@ export const TrialBanner: React.FC = () => {
     );
   }
 
-  if (!isSubscribed && !isAdmin && !isMasterAdmin) {
-    // AccessPaywall covers the entire screen for unpaid users
+  if (!isSubscribed && !isAdmin && !isMasterAdmin && !isTrialActive) {
+    // AccessPaywall covers the entire screen for unpaid users whose trial has expired
     return null;
   }
 

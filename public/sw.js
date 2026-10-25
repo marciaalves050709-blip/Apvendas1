@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 17 (Fresh Network-First Cache)
-const CACHE_NAME = 'appvendas-pwa-v17';
+// appvendas Service Worker (PWA) - Version 18 (Fresh Network-First Cache)
+const CACHE_NAME = 'appvendas-pwa-v18';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',

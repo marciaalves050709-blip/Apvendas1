@@ -276,9 +276,9 @@ export const MASTER_ADMIN_LIFETIME_SUBSCRIPTION: SubscriptionState = {
 export const DEFAULT_SUBSCRIPTION: SubscriptionState = {
   isSubscribed: false,
   trialStartDate: new Date().toISOString(),
-  trialDurationDays: 0,
+  trialDurationDays: 2,
   planPrice: 94.98,
-  planName: 'Plano Pro (Estoque + PDV + Loja WhatsApp)',
+  planName: 'Plano Pro (2 Dias Grátis de Teste)',
 };
 
 export const DEFAULT_SELLERS: SellerProfile[] = [
@@ -639,15 +639,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isAdmin, isTestBlockMode]);
 
-  // Subscription state (Unpaid users are strictly blocked until Pix payment)
+  // Subscription state:
+  // New users automatically get 2 days of free trial (48 hours).
+  // Master admin has permanent lifetime access with master password.
+  // After 2 days expire, payment of R$ 94,98 is required.
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
       // If in test block mode, initialize directly as blocked
       if (localStorage.getItem('appvendas_test_block_active') === 'true') {
+        const expiredPast = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
         return {
           ...DEFAULT_SUBSCRIPTION,
           isSubscribed: false,
-          trialDurationDays: 0,
+          trialDurationDays: 2,
+          trialStartDate: expiredPast,
         };
       }
 
@@ -669,6 +674,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               isSubscribed: true
             };
           }
+          // If the user already has a saved trial, maintain their start date and duration
+          const duration = (parsed.trialDurationDays !== undefined && parsed.trialDurationDays > 0) ? parsed.trialDurationDays : 2;
+          return {
+            ...DEFAULT_SUBSCRIPTION,
+            ...parsed,
+            trialDurationDays: duration,
+          };
         } catch {}
       }
 
@@ -676,29 +688,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (isPixPaid) {
         let expiry = calculateNextDay5Expiry(new Date(), true).toISOString();
         let paymentRef = 'PIX-CONFIRMED';
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (parsed.subscriptionExpiresAt) {
-              const parsedTime = new Date(parsed.subscriptionExpiresAt).getTime();
-              if (!isNaN(parsedTime) && parsedTime > Date.now()) {
-                expiry = parsed.subscriptionExpiresAt;
-              }
-            }
-            if (parsed.lastPaymentRef) {
-              paymentRef = parsed.lastPaymentRef;
-            }
-            return {
-              ...DEFAULT_SUBSCRIPTION,
-              ...parsed,
-              isSubscribed: true,
-              subscriptionExpiresAt: expiry,
-              trialDurationDays: 0,
-              planPrice: 94.98,
-              lastPaymentRef: paymentRef
-            };
-          } catch {}
-        }
         return {
           ...DEFAULT_SUBSCRIPTION,
           isSubscribed: true,
@@ -709,8 +698,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
 
-      // 3. Unpaid user: strictly blocked
-      return DEFAULT_SUBSCRIPTION;
+      // 3. Brand new user opening the link for the first time:
+      // Receives 2 full days (48 hours) of free trial!
+      const initialTrial: SubscriptionState = {
+        isSubscribed: false,
+        trialStartDate: new Date().toISOString(),
+        trialDurationDays: 2,
+        planPrice: 94.98,
+        planName: 'Plano Pro (2 Dias Grátis de Teste)',
+      };
+      try {
+        localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(initialTrial));
+      } catch {}
+      return initialTrial;
     } catch {
       return DEFAULT_SUBSCRIPTION;
     }
@@ -741,8 +741,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [subscription]);
 
   // Derived Trial & Subscription status
+  // For new users or users with trialDurationDays, trial duration defaults to 2 days
+  const trialDurationDays = (subscription.trialDurationDays !== undefined && subscription.trialDurationDays > 0)
+    ? subscription.trialDurationDays
+    : (subscription.trialDurationDays === 0 ? 0 : 2);
   const trialStartMs = new Date(subscription.trialStartDate || Date.now()).getTime();
-  const trialDurationMs = (subscription.trialDurationDays || 0) * 24 * 60 * 60 * 1000;
+  const trialDurationMs = trialDurationDays * 24 * 60 * 60 * 1000;
   const trialEndMs = trialStartMs + trialDurationMs;
   const msRemaining = Math.max(0, trialEndMs - currentTimeMs);
 
@@ -784,12 +788,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Administrator is ALWAYS subscribed and NEVER expired (100% exempt from charges)
   const isSubscribed = Boolean(isAdmin || isSubscribedValid);
-  const isTrialActive = false; // No free unauthenticated trial: payment required for access
-  const isTrialExpired = !isAdmin && !isMasterAdmin && !subscription.isSubscribed;
+  // Active trial: not admin, not paid subscribed, has trial days and remaining time > 0
+  const isTrialActive = Boolean(!isAdmin && !isMasterAdmin && !subscription.isSubscribed && trialDurationDays > 0 && msRemaining > 0);
+  const isTrialExpired = Boolean(!isAdmin && !isMasterAdmin && !subscription.isSubscribed && !isTrialActive);
   
-  // Total access allowed: Admin OR Valid Subscribed (NOT blocked due to Day 5)
-  // When in test block mode or user has not paid (isSubscribed is false), access is strictly blocked!
-  const isAccessAllowed = Boolean(!isTestBlockMode && (isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5)));
+  // Total access allowed: Admin OR Valid Subscribed (NOT blocked due to Day 5) OR Active 2-Day Trial!
+  // When in test block mode or trial is expired or Day 5 unpaid, access is strictly blocked by AccessPaywall.
+  const isAccessAllowed = Boolean(!isTestBlockMode && (isAdmin || isMasterAdmin || (isSubscribedValid && !isBlockedDueToDay5) || isTrialActive));
 
   // Days remaining calculation:
   const trialDaysRemaining = isAdmin ? 999 : Math.floor(msRemaining / (24 * 60 * 60 * 1000));

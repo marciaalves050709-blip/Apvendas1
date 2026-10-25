@@ -19,7 +19,8 @@ import {
   Edit3,
   Building2,
   Users,
-  QrCode
+  QrCode,
+  Share2
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -53,6 +54,32 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
+
+  const handleShareApp = async () => {
+    const shareUrl = window.location.origin;
+    const shareData = {
+      title: 'appvendas - Teste Grátis de 2 Dias',
+      text: 'Acesse o aplicativo appvendas com 2 dias de teste grátis (Estoque, PDV, Comprovante e Loja WhatsApp)!',
+      url: shareUrl
+    };
+
+    try {
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        showToast('success', 'Compartilhado com Sucesso!', 'Link do aplicativo compartilhado.');
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('success', '🔗 Link Copiado!', 'Envie este link para novos usuários. Ao abrir, eles terão 2 dias de teste grátis!');
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('success', '🔗 Link Copiado!', 'Envie este link para novos usuários. Ao abrir, eles terão 2 dias de teste grátis!');
+      } catch {
+        showToast('info', 'Link do App:', shareUrl);
+      }
+    }
+  };
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
 
@@ -188,6 +215,18 @@ export const Header: React.FC = () => {
           title="Recarregar versão mais recente do aplicativo"
         >
           <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Share App Link with 2 Days Free Trial */}
+        <button
+          type="button"
+          onClick={handleShareApp}
+          className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 hover:border-indigo-300 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+          title="Compartilhar link do aplicativo para novos clientes (com 2 dias de teste grátis!)"
+        >
+          <Share2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+          <span className="hidden sm:inline">Enviar Link (2 Dias Grátis)</span>
+          <span className="sm:hidden font-bold">Enviar Link</span>
         </button>
 
         {/* PWA Install Button for Mobile & Desktop */}
