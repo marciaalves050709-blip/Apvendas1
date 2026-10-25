@@ -115,8 +115,10 @@ try {
       }
 
       // 4. Sanitize subscription: Ensure new users receive a 2-day free trial!
-      const TRIAL_2DAYS_KEY = 'appvendas_trial_2days_v18';
-      if (localStorage.getItem(TRIAL_2DAYS_KEY) !== 'true') {
+      const TRIAL_2DAYS_KEY = 'appvendas_trial_2days_v19';
+      const isUrlTrial = urlParams.has('teste') || urlParams.has('trial') || urlParams.has('novo') || urlParams.has('degustacao');
+
+      if (localStorage.getItem(TRIAL_2DAYS_KEY) !== 'true' || isUrlTrial) {
         const isPixPaidStored = localStorage.getItem('appvendas_pix_paid') === 'true';
         let isLegitPaid = isPixPaidStored;
         if (subRaw) {
@@ -130,7 +132,6 @@ try {
 
         const isAdminStored = localStorage.getItem('appvendas_is_admin') === 'true' || localStorage.getItem('appvendas_admin_session') === 'active';
         if (!isLegitPaid && !isAdminStored) {
-          // If the user already had a custom subscription, check if they were zeroed out by legacy migration
           let existingSub: any = null;
           if (subRaw) {
             try {
@@ -138,8 +139,10 @@ try {
             } catch {}
           }
 
-          // Grant fresh 2-day free trial for new users and unblock users whose trial duration was forced to 0
-          if (!existingSub || existingSub.trialDurationDays === 0 || !existingSub.trialDurationDays) {
+          const isTrialExpiredAlready = existingSub?.trialStartDate && (Date.now() - new Date(existingSub.trialStartDate).getTime() > 2 * 24 * 60 * 60 * 1000);
+
+          // Grant fresh 2-day free trial for new users, trial link visitors, or devices zeroed out by old legacy migrations
+          if (!existingSub || existingSub.trialDurationDays === 0 || !existingSub.trialDurationDays || isUrlTrial || isTrialExpiredAlready) {
             const trialSub = {
               isSubscribed: false,
               trialStartDate: new Date().toISOString(),
@@ -150,6 +153,7 @@ try {
               lastPaymentRef: ''
             };
             localStorage.setItem('descart_clean_subscription_v1', JSON.stringify(trialSub));
+            localStorage.removeItem('appvendas_test_block_active');
           }
         }
         localStorage.setItem(TRIAL_2DAYS_KEY, 'true');
@@ -162,7 +166,7 @@ try {
 
 // Register PWA service worker safely for installability and offline support
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=18', { scope: '/' })
+  navigator.serviceWorker.register('/sw.js?v=19', { scope: '/' })
     .then((reg) => {
       reg.update().catch(() => {});
       if (reg.waiting) {

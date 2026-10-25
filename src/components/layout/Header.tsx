@@ -56,7 +56,7 @@ export const Header: React.FC = () => {
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
 
   const handleShareApp = async () => {
-    const shareUrl = window.location.origin;
+    const shareUrl = `${window.location.origin}/?teste=2dias`;
     const shareData = {
       title: 'appvendas - Teste Grátis de 2 Dias',
       text: 'Acesse o aplicativo appvendas com 2 dias de teste grátis (Estoque, PDV, Comprovante e Loja WhatsApp)!',

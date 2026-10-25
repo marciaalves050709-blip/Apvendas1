@@ -167,6 +167,37 @@ export const AccessPaywall: React.FC = () => {
         {/* Paywall Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
           
+          {/* BOTÃO PARA LIBERAR 2 DIAS GRÁTIS PARA NOVO USUÁRIO */}
+          <div className="bg-gradient-to-r from-emerald-500/15 via-teal-500/20 to-emerald-500/15 border-2 border-emerald-400 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black text-2xl shadow-sm shrink-0">
+                🎁
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md">
+                    Novo Usuário
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-slate-900">
+                    Teste Grátis de 2 Dias (48 Horas)
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-950 mt-0.5">
+                  É novo por aqui? Clique no botão ao lado para liberar seus 2 dias de teste gratuito com acesso completo a todas as funções!
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => resetTrial()}
+              className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-200" />
+              <span>Liberar Teste de 2 Dias Grátis</span>
+            </button>
+          </div>
+
           {/* BOTÃO ADMINISTRADOR DE ACESSO VITALÍCIO */}
           <div className="bg-gradient-to-r from-amber-500/15 via-amber-400/25 to-yellow-500/15 border-2 border-amber-400 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">

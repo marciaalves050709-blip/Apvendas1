@@ -645,6 +645,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // After 2 days expire, payment of R$ 94,98 is required.
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     try {
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const isUrlTrial = Boolean(urlParams?.has('teste') || urlParams?.has('trial') || urlParams?.has('novo') || urlParams?.has('degustacao'));
+
+      // If opening via a trial invite link (?teste=2dias), always cancel any test block and grant fresh 2-day trial
+      if (isUrlTrial && !isAdmin) {
+        localStorage.removeItem('appvendas_test_block_active');
+        const freshTrial: SubscriptionState = {
+          ...DEFAULT_SUBSCRIPTION,
+          isSubscribed: false,
+          trialDurationDays: 2,
+          trialStartDate: new Date().toISOString(),
+        };
+        try {
+          localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(freshTrial));
+        } catch {}
+        return freshTrial;
+      }
+
       // If in test block mode, initialize directly as blocked
       if (localStorage.getItem('appvendas_test_block_active') === 'true') {
         const expiredPast = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
@@ -675,10 +693,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
           }
           // If the user already has a saved trial, maintain their start date and duration
-          const duration = (parsed.trialDurationDays !== undefined && parsed.trialDurationDays > 0) ? parsed.trialDurationDays : 2;
+          const duration = (parsed.trialDurationDays && parsed.trialDurationDays > 0) ? parsed.trialDurationDays : 2;
+          let startDate = parsed.trialStartDate;
+          // If legacy data had trialDurationDays 0, renew start date
+          if (parsed.trialDurationDays === 0 || !startDate) {
+            startDate = new Date().toISOString();
+          }
           return {
             ...DEFAULT_SUBSCRIPTION,
             ...parsed,
+            trialStartDate: startDate,
             trialDurationDays: duration,
           };
         } catch {}
@@ -742,9 +766,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Derived Trial & Subscription status
   // For new users or users with trialDurationDays, trial duration defaults to 2 days
-  const trialDurationDays = (subscription.trialDurationDays !== undefined && subscription.trialDurationDays > 0)
+  const trialDurationDays = (subscription.trialDurationDays && subscription.trialDurationDays > 0)
     ? subscription.trialDurationDays
-    : (subscription.trialDurationDays === 0 ? 0 : 2);
+    : 2;
   const trialStartMs = new Date(subscription.trialStartDate || Date.now()).getTime();
   const trialDurationMs = trialDurationDays * 24 * 60 * 60 * 1000;
   const trialEndMs = trialStartMs + trialDurationMs;
@@ -1092,14 +1116,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetTrial = () => {
+    setIsTestBlockMode(false);
+    try {
+      localStorage.removeItem('appvendas_test_block_active');
+    } catch {}
     const updated: SubscriptionState = {
       ...DEFAULT_SUBSCRIPTION,
       trialStartDate: new Date().toISOString(),
+      trialDurationDays: 2,
       isSubscribed: false,
     };
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(updated));
+    } catch {}
     setSubscription(updated);
     setCurrentTimeMs(Date.now());
-    showToast('info', 'Período de Teste Reiniciado', 'Você tem 2 dias grátis de acesso completo a partir de agora.');
+    showToast('success', '🎁 Teste Grátis de 2 Dias Liberado!', 'Você tem 48 horas de acesso completo com todas as ferramentas.');
   };
 
   const simulateTrialExpired = () => {
