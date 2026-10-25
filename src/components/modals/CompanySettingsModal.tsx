@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   Building2, 
@@ -22,7 +22,8 @@ import {
   Share2,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Crown
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { formatPhoneDisplay } from '../../utils/whatsappHelper';
@@ -52,7 +53,9 @@ export const CompanySettingsModal: React.FC = () => {
     isBlockedDueToDay5,
     isTrialExpired,
     activateSubscription,
-    checkAndApplyAdminCredentials
+    checkAndApplyAdminCredentials,
+    openAdminPasswordModal,
+    setClientTestMode
   } = useApp();
 
   // Active Tab inside modal: 'edit' | 'list' | 'create'
@@ -75,6 +78,17 @@ export const CompanySettingsModal: React.FC = () => {
   const [newCategory, setNewCategory] = useState('Comércio & Varejo');
   const [newEmoji, setNewEmoji] = useState('🏪');
 
+  const isMarciaCredentials = useMemo(() => {
+    const cleanName = (ownerName || '').toLowerCase().replace(/[\s\.]+/g, '');
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    return (
+      cleanName.includes('marcia') || 
+      cleanName.includes('marciaalves') || 
+      cleanPhone.includes('993192405') ||
+      cleanPhone === '91993192405'
+    );
+  }, [ownerName, phone]);
+
   if (!isCompanyModalOpen) return null;
 
   // Handle Save Current Company
@@ -86,13 +100,10 @@ export const CompanySettingsModal: React.FC = () => {
       return;
     }
 
-    // Auto-detect if user and phone match Master Administrator Márcia Alves
-    const isDetected = checkAndApplyAdminCredentials(ownerName, phone);
-
     // Update Company metadata
     updateCurrentCompany({
       name: trimmed,
-      ownerName: ownerName.trim() || (isDetected ? 'Márcia Alves' : 'Lojista'),
+      ownerName: ownerName.trim() || 'Lojista',
       phone: phone.trim(),
       logoEmoji: selectedEmoji
     });
@@ -108,6 +119,13 @@ export const CompanySettingsModal: React.FC = () => {
 
     showToast('success', 'Empresa Atualizada!', `O nome "${trimmed}" agora aparece em todo o aplicativo.`);
     setIsCompanyModalOpen(false);
+
+    // If Márcia's credentials entered without master password, trigger prompt
+    if (isMarciaCredentials && !isAdmin && !isMasterAdmin) {
+      setTimeout(() => {
+        openAdminPasswordModal();
+      }, 350);
+    }
   };
 
   // Handle Create New Company
@@ -118,9 +136,6 @@ export const CompanySettingsModal: React.FC = () => {
       showToast('error', 'Nome Obrigatório', 'Digite o nome da nova empresa.');
       return;
     }
-
-    // Auto-detect if user and phone match Master Administrator Márcia Alves
-    checkAndApplyAdminCredentials(newOwnerName, newPhone);
 
     const created = createCompany({
       name: trimmed,
@@ -309,6 +324,54 @@ export const CompanySettingsModal: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {/* Administradora Detection & Master Password Trigger */}
+              {isMarciaCredentials && (
+                <div className="p-3.5 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-400 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs animate-scale-up">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shadow-xs shrink-0">
+                      👑
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-slate-900">
+                        Dados de Administradora Detectados!
+                      </p>
+                      <p className="text-[11px] text-amber-900 leading-tight">
+                        {isAdmin || isMasterAdmin
+                          ? 'Sua conta de administradora está ativa com Acesso Vitalício gratuito.'
+                          : 'Para liberar o Acesso Vitalício de administradora, confirme a sua Senha Mestra.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isAdmin && !isMasterAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => openAdminPasswordModal()}
+                      className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Digitar Senha Mestra</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-black bg-emerald-600 text-white px-2.5 py-1 rounded-lg">
+                        Vitalício Ativo
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClientTestMode();
+                          showToast('info', 'Modo Cliente Ativado', 'Você saiu do modo administradora para testar.');
+                        }}
+                        className="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer font-bold"
+                      >
+                        Sair / Testar Bloqueio
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Pix Key & Cidade */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

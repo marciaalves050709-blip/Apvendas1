@@ -21,6 +21,7 @@ import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
 import { SubscriptionModal } from './components/subscription/SubscriptionModal';
 import { AccessPaywall } from './components/subscription/AccessPaywall';
+import { AdminPasswordModal } from './components/subscription/AdminPasswordModal';
 import { MobileInstallBanner } from './components/pwa/MobileInstallBanner';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 
@@ -83,6 +84,7 @@ const MainLayout: React.FC = () => {
 
       {/* Global Modals, Paywall, PWA & Notifications */}
       <AccessPaywall />
+      <AdminPasswordModal />
       <SubscriptionModal />
       <ReceiptModal />
       <StockMovementModal />

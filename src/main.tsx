@@ -9,7 +9,7 @@ try {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
     const adminParam = urlParams.get('admin')?.toLowerCase() || urlParams.get('chave')?.toLowerCase() || urlParams.get('key')?.toLowerCase();
-    const isAdminExplicit = adminParam === 'marcia2026' || adminParam === 'marcia' || adminParam === '0507';
+    const isAdminExplicit = adminParam === 'marcia2026' || adminParam === '0507';
     const isTestBlockActive = localStorage.getItem('appvendas_test_block_active') === 'true';
 
     // If explicit admin URL is provided, always cancel test block and activate admin
@@ -156,7 +156,7 @@ try {
 
 // Register PWA service worker safely for installability and offline support
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { scope: '/' })
+  navigator.serviceWorker.register('/sw.js?v=17', { scope: '/' })
     .then((reg) => {
       reg.update().catch(() => {});
       if (reg.waiting) {

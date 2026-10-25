@@ -152,7 +152,7 @@ interface AppContextType {
   simulateDay5Blocked: () => void;
   blockUnpaidUser: () => void;
   isTestBlockMode: boolean;
-  exitTestBlockMode: () => void;
+  exitTestBlockMode: (masterPassword?: string) => boolean;
   renewSubscription: () => void;
 
   // Multi-Company & Infinite Users Workspaces
@@ -166,7 +166,10 @@ interface AppContextType {
   deleteCompany: (companyId: string) => boolean;
   isCompanyModalOpen: boolean;
   setIsCompanyModalOpen: (open: boolean) => void;
-  checkAndApplyAdminCredentials: (userOrName?: string, phoneOrKey?: string, options?: { silent?: boolean }) => boolean;
+  checkAndApplyAdminCredentials: (userOrName?: string, phoneOrKey?: string, masterPassword?: string, options?: { silent?: boolean }) => boolean;
+  isAdminPasswordModalOpen: boolean;
+  setIsAdminPasswordModalOpen: (open: boolean) => void;
+  openAdminPasswordModal: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -199,106 +202,63 @@ export const ADMIN_CONFIG = {
   monthlyPrice: 94.98,
 };
 
+export const MASTER_CODES = [
+  'MARCIA2026',
+  'ADMINMARCIA',
+  'MESTRA58',
+  'MASTER2026',
+  'MARCIA0507',
+  '0507',
+  '050709',
+  'MARCIA050709',
+  'MARCIAALVES050709',
+  'MARCIA58',
+  'MARCIAALVES2026',
+  'MASTERADMIN',
+  'MASTERADMINMARCIA'
+];
+
 /**
- * Detects whether the provided user/name and phone match Master Administrator Márcia Alves.
- * Supports variations:
- * Name: "Márcia Alves", "Marcia Alves", "Márcia", "Marcia", "marciaalves", "marcia", "marciaalves050709@gmail.com", "0507"
- * Phone: "91993192405", "5591993192405", "993192405", "(91) 99319-2405", "(91) 993192405"
- * Also detects master password codes: "MARCIA2026", "ADMINMARCIA", "MESTRA58", "0507", etc.
+ * Checks if the provided Master Password (senha mestra) is valid.
  */
-export const checkIsAdminCredentials = (userOrName?: string, phoneOrKey?: string): boolean => {
-  const rawUser = (userOrName || '').trim();
-  const rawPhone = (phoneOrKey || '').trim();
+export const checkIsMasterPassword = (password?: string): boolean => {
+  if (!password) return false;
+  const clean = password.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
+  return (
+    MASTER_CODES.includes(clean) || 
+    clean === '0507' || 
+    clean === '050709' || 
+    clean.includes('MARCIA2026') ||
+    clean.includes('050709') ||
+    clean.includes('MARCIA0507')
+  );
+};
 
-  if (!rawUser && !rawPhone) return false;
+/**
+ * Validates Administrator access.
+ * CRITICAL SECURITY REQUIREMENT:
+ * The Master Password (senha mestra) is STRICTLY MANDATORY!
+ * Access to the administrator panel is NEVER granted without the secret master password.
+ */
+export const checkIsAdminCredentials = (
+  userOrName?: string, 
+  phoneOrKey?: string, 
+  masterPassword?: string
+): boolean => {
+  // If masterPassword is explicitly provided, it MUST be valid
+  if (masterPassword !== undefined) {
+    return checkIsMasterPassword(masterPassword);
+  }
 
-  // Normalized user: lowercase, unaccented, alphanumeric only
-  const normUser = rawUser
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-
-  // Normalized phone: digits only
-  const phoneDigits = rawPhone.replace(/\D/g, '');
-  const userDigits = rawUser.replace(/\D/g, '');
-
-  // Master codes entered in either user or phone field
-  const upperUser = rawUser.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
-  const upperPhone = rawPhone.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
-  const masterKeywords = [
-    'MARCIA2026',
-    'ADMINMARCIA',
-    'MESTRA58',
-    'MASTERADMIN',
-    'MASTER2026',
-    'MARCIA0507',
-    'MARCIA',
-    '0507',
-    'MASTERADMINMARCIA',
-    'MARCIAALVES'
-  ];
-
-  if (
-    masterKeywords.includes(upperUser) || 
-    masterKeywords.includes(upperPhone) || 
-    upperUser === '0507' || 
-    upperPhone === '0507' ||
-    upperUser.includes('MARCIA2026') ||
-    upperPhone.includes('MARCIA2026')
-  ) {
+  // If only 1 or 2 arguments are provided, one of them MUST be the master password
+  if (checkIsMasterPassword(phoneOrKey)) {
+    return true;
+  }
+  if (checkIsMasterPassword(userOrName)) {
     return true;
   }
 
-  // Check phone matches Márcia's phone (91) 99319-2405
-  const isMarciaPhone = 
-    phoneDigits === '91993192405' ||
-    phoneDigits === '5591993192405' ||
-    phoneDigits === '993192405' ||
-    phoneDigits.endsWith('993192405') ||
-    userDigits.endsWith('993192405');
-
-  // Check name/user matches Márcia
-  const isMarciaName = 
-    normUser.includes('marcia') ||
-    normUser.includes('marciaalves') ||
-    normUser === '0507' ||
-    normUser.includes('marciaalves050709');
-
-  // 1. Both user and phone match Márcia's credentials:
-  if (isMarciaName && isMarciaPhone) {
-    return true;
-  }
-
-  // 2. User entered phone number into the user/name field and phone field
-  if (userDigits.endsWith('993192405') && (isMarciaName || phoneDigits === '' || isMarciaPhone)) {
-    return true;
-  }
-
-  // 3. User typed Márcia's full name ("Márcia Alves") with her phone or empty phone
-  if ((normUser === 'marciaalves' || normUser === 'marcia') && (isMarciaPhone || phoneDigits === '91993192405' || phoneDigits === '')) {
-    return true;
-  }
-
-  // 4. Phone is Márcia's and user is an admin/owner title or empty
-  if (isMarciaPhone && (
-    isMarciaName ||
-    normUser.includes('admin') ||
-    normUser.includes('proprietar') ||
-    normUser.includes('dona') ||
-    normUser === '' ||
-    normUser === 'lojista' ||
-    normUser === 'usuario' ||
-    normUser === 'meuusuario'
-  )) {
-    return true;
-  }
-
-  // 5. Márcia's email
-  if (rawUser.toLowerCase().includes('marciaalves050709') || rawPhone.toLowerCase().includes('marciaalves050709')) {
-    return true;
-  }
-
+  // Without the secret master password, administrator access is NEVER granted!
   return false;
 };
 
@@ -616,15 +576,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  const [isAdminPasswordModalOpen, setIsAdminPasswordModalOpen] = useState<boolean>(false);
+  const openAdminPasswordModal = () => {
+    setIsAdminPasswordModalOpen(true);
+  };
+
   // Administrator identification:
   // Strictly defaults to FALSE so client users ALWAYS enter DIRECTLY into their own user account.
-  // Márcia Alves can explicitly activate admin mode via URL parameter (?admin=marcia or ?admin=marcia2026)
-  // or by typing the master key MARCIA2026 in the activation dialog.
+  // Márcia Alves can explicitly activate admin mode by typing the master key MARCIA2026.
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
       const adminParam = urlParams?.get('admin')?.toLowerCase() || urlParams?.get('chave')?.toLowerCase() || urlParams?.get('key')?.toLowerCase();
-      if (adminParam === 'marcia2026' || adminParam === 'marcia' || adminParam === '0507') {
+      if (adminParam === 'marcia2026' || adminParam === '0507') {
         localStorage.removeItem('appvendas_test_block_active');
         sessionStorage.setItem('appvendas_admin_session', 'active');
         localStorage.setItem('appvendas_admin_session', 'active');
@@ -869,8 +833,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('success', '👑 Modo Administradora Ativo!', 'Acesso vitalício 100% gratuito confirmado para Márcia Alves.');
   };
 
-  const checkAndApplyAdminCredentials = (userOrName?: string, phoneOrKey?: string, options?: { silent?: boolean }): boolean => {
-    if (!checkIsAdminCredentials(userOrName, phoneOrKey)) {
+  const checkAndApplyAdminCredentials = (
+    userOrName?: string, 
+    phoneOrKey?: string, 
+    masterPassword?: string, 
+    options?: { silent?: boolean }
+  ): boolean => {
+    // Senha Mestra is strictly mandatory!
+    if (!checkIsAdminCredentials(userOrName, phoneOrKey, masterPassword)) {
       return false;
     }
 
@@ -914,8 +884,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!options?.silent) {
       showToast(
         'success',
-        '👑 Bem-vinda, Márcia Alves!',
-        'Você foi reconhecida como Administradora com Acesso Vitalício Gratuito. Acesso 100% liberado sem mensalidades!'
+        '👑 Senha Mestra Confirmada!',
+        'Bem-vinda, Márcia Alves! Acesso vitalício liberado com sucesso.'
       );
     }
 
@@ -945,27 +915,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Normalize string: remove spaces, hyphens, dots, parentheses
     const cleanCode = rawInput.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
     
-    // Márcia's private secret passwords give administrator status
-    const masterKeys = [
-      'MARCIA2026',
-      'ADMINMARCIA',
-      'MARCIA0507',
-      'MARCIA',
-      '0507',
-      'MESTRA58',
-      'MASTER2026',
-      'MASTERADMIN',
-      'MASTERADMINMARCIA',
-      'MARCIAALVES',
-      '91993192405',
-      '993192405'
-    ];
-
-    const isMasterKey = masterKeys.includes(cleanCode) || 
-      cleanCode.includes('MASTERADMIN') || 
-      cleanCode.includes('MARCIA') || 
-      cleanCode === '0507' ||
-      rawInput.toLowerCase().includes('marciaalves');
+    // Márcia's private secret master password gives administrator status
+    const isMasterKey = checkIsMasterPassword(cleanCode);
 
     if (isMasterKey) {
       setIsTestBlockMode(false);
@@ -1118,8 +1069,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('error', '⛔ Modo Teste de Bloqueio Ativado', 'O sistema foi bloqueado imediatamente! Este é o bloqueio total que o usuário não pago vê.');
   };
 
-  // Exit testing block mode and return to admin
-  const exitTestBlockMode = () => {
+  // Exit testing block mode and return to admin - strictly requires master password
+  const exitTestBlockMode = (masterPassword?: string): boolean => {
+    if (!checkIsMasterPassword(masterPassword)) {
+      showToast('error', 'Senha Mestra Obrigatória', 'Digite a senha mestra confidencial para retornar ao modo administradora.');
+      return false;
+    }
     setIsTestBlockMode(false);
     try {
       localStorage.removeItem('appvendas_test_block_active');
@@ -1128,6 +1083,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setAdminMode();
     showToast('success', '👑 Teste Encerrado', 'Você retornou ao seu painel de administradora com acesso vitalício!');
+    return true;
   };
 
   const resetTrial = () => {
@@ -2276,6 +2232,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isCompanyModalOpen,
         setIsCompanyModalOpen,
         checkAndApplyAdminCredentials,
+        isAdminPasswordModalOpen,
+        setIsAdminPasswordModalOpen,
+        openAdminPasswordModal,
       }}
     >
       {children}

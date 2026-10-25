@@ -237,21 +237,6 @@ export const ClientStoreView: React.FC = () => {
       return;
     }
 
-    // Auto-detect Master Administrator Márcia Alves:
-    if (checkAndApplyAdminCredentials(inputName, inputPhone)) {
-      const adminUserObj: ClientUser = {
-        name: 'Márcia Alves',
-        phone: inputPhone.trim(),
-        address: inputAddress.trim(),
-        deliveryType: selectedDeliveryType,
-      };
-      setClientUser(adminUserObj);
-      setIsIdentified(true);
-      localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(adminUserObj));
-      setActiveTab('dashboard');
-      return;
-    }
-
     const newUser: ClientUser = {
       name: inputName.trim(),
       phone: inputPhone.trim(),

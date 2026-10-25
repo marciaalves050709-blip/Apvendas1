@@ -48,7 +48,8 @@ export const Header: React.FC = () => {
     companies,
     setIsCompanyModalOpen,
     setIsSellerWhatsappModalOpen,
-    activeSeller
+    activeSeller,
+    openAdminPasswordModal
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
@@ -104,6 +105,20 @@ export const Header: React.FC = () => {
           <span className="truncate">{currentCompany?.name || 'appvendas'}</span>
           <Edit3 className="w-3 h-3 text-slate-400 shrink-0" />
         </button>
+
+        {/* Botão de Autenticação da Administradora (Quando não autenticada) */}
+        {!isMasterAdmin && !isAdmin && (
+          <button
+            type="button"
+            onClick={() => openAdminPasswordModal()}
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-amber-500/15 via-amber-400/25 to-yellow-500/20 hover:from-amber-500/25 hover:to-amber-500/35 text-amber-950 border border-amber-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+            title="Acesso da Administradora: Clique para validar sua Senha Mestra"
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden sm:inline">Sou Administradora</span>
+            <span className="sm:hidden font-black">Admin</span>
+          </button>
+        )}
 
         {/* Subscription Plan / Admin Status Quick Button */}
         <button
@@ -174,19 +189,6 @@ export const Header: React.FC = () => {
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
-
-        {/* Quick Admin Access Button if not currently identified */}
-        {!isMasterAdmin && !isAdmin && (
-          <button
-            onClick={() => setIsCompanyModalOpen(true)}
-            className="flex px-2 sm:px-2.5 py-1.5 sm:py-2 bg-gradient-to-r from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-950 border border-amber-300 rounded-xl font-bold text-xs items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
-            title="Entrar com Usuário e Telefone da Administradora"
-          >
-            <Crown className="w-3.5 h-3.5 text-amber-600" />
-            <span className="hidden sm:inline">Sou Administradora</span>
-            <span className="sm:hidden font-black">Admin 👑</span>
-          </button>
-        )}
 
         {/* PWA Install Button for Mobile & Desktop */}
         <PWAInstallButton />

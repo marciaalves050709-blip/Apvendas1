@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, checkIsMasterPassword } from '../../context/AppContext';
 import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
 import { PixRadarScanner } from './PixRadarScanner';
 import { 
@@ -47,7 +47,8 @@ export const SubscriptionModal: React.FC = () => {
     isBlockedDueToDay5,
     activateSubscription,
     paymentSettings,
-    checkAndApplyAdminCredentials
+    checkAndApplyAdminCredentials,
+    openAdminPasswordModal
   } = useApp();
 
   const [copiedPix, setCopiedPix] = useState(false);
@@ -191,27 +192,8 @@ export const SubscriptionModal: React.FC = () => {
     const raw = activationCode.trim();
     const clean = raw.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
 
-    // Accepted valid codes
-    const masterCodes = [
-      'MARCIA2026',
-      'ADMINMARCIA',
-      'MARCIA0507',
-      'MARCIA',
-      '0507',
-      'MESTRA58',
-      'MASTER2026',
-      'MASTERADMIN',
-      'MASTERADMINMARCIA',
-      'MARCIAALVES',
-      '91993192405',
-      '993192405'
-    ];
-
-    const isMaster = masterCodes.includes(clean) || 
-      clean.includes('MASTERADMIN') || 
-      clean.includes('MARCIA') || 
-      clean === '0507' || 
-      raw.toLowerCase().includes('marciaalves');
+    // Check if the user entered the confidential master password
+    const isMaster = checkIsMasterPassword(clean);
 
     const validCodes = [
       'PAGO9498',
@@ -229,7 +211,7 @@ export const SubscriptionModal: React.FC = () => {
     const isE2E = /^E[0-9]{8}[A-Z0-9]{10,}$/i.test(clean);
     const isBankAuth = clean.length >= 8 && /^[A-Z0-9\-\.\_]+$/i.test(clean) && !['TESTE', 'SENHA', 'PAGO', 'GRATIS', 'LIVRE'].includes(clean);
 
-    if (isMaster || checkAndApplyAdminCredentials(raw, raw)) {
+    if (isMaster) {
       activateSubscription('MARCIA2026', 'MASTER-ADMIN-MARCIA');
       setActivationCode('');
     } else if (validCodes.includes(clean) || isE2E || isBankAuth) {
@@ -409,8 +391,20 @@ export const SubscriptionModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Botão de teste de visualização do cliente */}
-              <div className="pt-1 flex items-center justify-end">
+              {/* Botões de Ação da Administradora */}
+              <div className="pt-2 flex items-center justify-between border-t border-amber-200/80 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClientTestMode();
+                    setIsSubscriptionModalOpen(false);
+                  }}
+                  className="text-xs text-rose-700 hover:text-rose-900 font-bold flex items-center gap-1.5 cursor-pointer bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-200 transition-colors"
+                >
+                  <Lock className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Sair do Modo Admin (Exigir Senha Mestra)</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -633,6 +627,21 @@ export const SubscriptionModal: React.FC = () => {
                   </div>
                 </form>
               )}
+
+              {/* Botão de Autenticação da Administradora com Senha Mestra */}
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSubscriptionModalOpen(false);
+                    openAdminPasswordModal();
+                  }}
+                  className="text-xs text-amber-800 hover:text-amber-950 font-black inline-flex items-center gap-1.5 cursor-pointer underline bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-300 transition-colors"
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-600" />
+                  <span>👑 Sou a Administradora (Digitar Senha Mestra)</span>
+                </button>
+              </div>
 
             </div>
           )}

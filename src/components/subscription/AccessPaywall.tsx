@@ -41,7 +41,6 @@ export const AccessPaywall: React.FC = () => {
     isSubscribed,
     isMasterAdmin,
     isAdmin,
-    setAdminMode,
     adminConfig,
     activateSubscription,
     resetTrial,
@@ -49,8 +48,7 @@ export const AccessPaywall: React.FC = () => {
     paymentSettings,
     isAccessAllowed,
     isTestBlockMode,
-    exitTestBlockMode,
-    checkAndApplyAdminCredentials
+    openAdminPasswordModal
   } = useApp();
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
@@ -81,35 +79,6 @@ export const AccessPaywall: React.FC = () => {
     return null;
   }
 
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminUser, setAdminUser] = useState('');
-  const [adminPhone, setAdminPhone] = useState('');
-  const [adminPass, setAdminPass] = useState('');
-  const [adminError, setAdminError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<'CREDENTIALS' | 'PASSWORD'>('CREDENTIALS');
-
-  const handleAdminBypass = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
-
-    const targetUser = (adminUser || adminPass).trim();
-    const targetPhone = (adminPhone || adminPass).trim();
-
-    // Verify using central admin credentials logic
-    const success = checkAndApplyAdminCredentials(targetUser, targetPhone);
-    if (success) {
-      exitTestBlockMode();
-      setShowAdminLogin(false);
-      setAdminUser('');
-      setAdminPhone('');
-      setAdminPass('');
-      return;
-    }
-
-    setAdminError('Usuário ou telefone não reconhecido como administradora. Digite seu usuário e telefone cadastrados para liberar o acesso vitalício.');
-  };
-
   const handleSendWhatsAppProof = () => {
     const cleanPhone = '5591993192405';
     const message = encodeURIComponent(
@@ -131,10 +100,11 @@ export const AccessPaywall: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={exitTestBlockMode}
-            className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-amber-300 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-md shrink-0"
+            onClick={() => openAdminPasswordModal()}
+            className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 active:scale-95 text-amber-300 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-md shrink-0 border border-amber-400/40"
           >
-            <span>← Sair do Teste e Voltar ao Administrador</span>
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span>← Desbloquear Administrador com Senha Mestra</span>
           </button>
         </div>
       )}
@@ -197,107 +167,30 @@ export const AccessPaywall: React.FC = () => {
         {/* Paywall Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
           
-          {/* DIRECT INLINE ADMIN AUTHENTICATION CARD - HIGHEST PRIORITY */}
-          <div className="bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-100 border-2 border-amber-400 rounded-2xl p-4 shadow-md">
-            <div className="flex items-center justify-between mb-2 pb-2 border-b border-amber-200/80">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-base shadow-xs shrink-0">
-                  👑
-                </div>
-                <div>
-                  <h3 className="text-xs sm:text-sm font-black text-amber-950 leading-tight">
-                    Identificação da Administradora (Acesso Vitalício)
-                  </h3>
-                  <p className="text-[11px] text-amber-800">
-                    Coloque seu usuário e telefone para liberar o aplicativo imediatamente com acesso vitalício gratuito:
-                  </p>
-                </div>
+          {/* BOTÃO ADMINISTRADOR DE ACESSO VITALÍCIO */}
+          <div className="bg-gradient-to-r from-amber-500/15 via-amber-400/25 to-yellow-500/15 border-2 border-amber-400 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-2xl shadow-sm shrink-0">
+                👑
               </div>
-
-              {/* Quick Fill Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setAdminUser('Márcia Alves');
-                  setAdminPhone('(91) 99319-2405');
-                  setAdminError('');
-                }}
-                className="hidden sm:flex px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-lg text-[10px] font-black cursor-pointer items-center gap-1 shrink-0 transition-colors"
-                title="Preencher dados da Márcia Alves com 1 toque"
-              >
-                <span>⚡ Preencher Márcia</span>
-              </button>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-tight">
+                  Botão Administradora (Acesso Vitalício)
+                </h3>
+                <p className="text-[11px] text-amber-950 mt-0.5">
+                  Conta de Márcia Alves isenta de cobrança. O aplicativo solicita a Senha Mestra antes de liberar o acesso.
+                </p>
+              </div>
             </div>
 
-            <form onSubmit={handleAdminBypass} className="space-y-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-amber-950 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3 text-amber-800" />
-                      <span>Seu Usuário / Nome</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAdminUser('Márcia Alves')}
-                      className="sm:hidden text-[9px] text-amber-900 underline font-black cursor-pointer"
-                    >
-                      Preencher
-                    </button>
-                  </label>
-                  <input
-                    type="text"
-                    value={adminUser}
-                    onChange={e => {
-                      setAdminUser(e.target.value);
-                      setAdminError('');
-                    }}
-                    placeholder="Ex: Márcia Alves"
-                    className="w-full px-3 py-2 text-xs border-2 border-amber-300 rounded-xl focus:border-amber-600 focus:outline-hidden font-bold text-slate-900 bg-white shadow-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-amber-950 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-amber-800" />
-                      <span>Seu Telefone / WhatsApp</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAdminPhone('(91) 99319-2405')}
-                      className="sm:hidden text-[9px] text-amber-900 underline font-black cursor-pointer"
-                    >
-                      Preencher
-                    </button>
-                  </label>
-                  <input
-                    type="tel"
-                    value={adminPhone}
-                    onChange={e => {
-                      setAdminPhone(e.target.value);
-                      setAdminError('');
-                    }}
-                    placeholder="Ex: (91) 99319-2405"
-                    className="w-full px-3 py-2 text-xs border-2 border-amber-300 rounded-xl focus:border-amber-600 focus:outline-hidden font-bold text-slate-900 bg-white shadow-xs"
-                  />
-                </div>
-              </div>
-
-              {adminError && (
-                <p className="text-[11px] text-rose-700 font-bold bg-rose-50 p-2 rounded-xl border border-rose-300">
-                  {adminError}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-600 hover:to-amber-800 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-400"
-              >
-                <Crown className="w-4 h-4 text-slate-950" />
-                <span>👑 Confirmar Meu Usuário e Telefone (Liberar Vitalício)</span>
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={() => openAdminPasswordModal()}
+              className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+            >
+              <KeyRound className="w-4 h-4 text-amber-200" />
+              <span>Digitar Senha Mestra & Entrar</span>
+            </button>
           </div>
 
           {/* Price Offer Card */}
@@ -382,21 +275,6 @@ export const AccessPaywall: React.FC = () => {
             planPrice={planPrice}
           />
 
-          {/* Direct Administrator Identification Button */}
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowAdminLogin(true);
-                setAdminError('');
-              }}
-              className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 border border-amber-300 text-amber-950 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
-            >
-              <Crown className="w-4 h-4 text-amber-600" />
-              <span>👑 Sou Administradora: Entrar com Usuário e Telefone</span>
-            </button>
-          </div>
-
         </div>
 
         {/* Paywall Footer */}
@@ -406,184 +284,14 @@ export const AccessPaywall: React.FC = () => {
           {/* Discrete Administrator Access Link */}
           <button
             type="button"
-            onClick={() => {
-              setShowAdminLogin(true);
-              setAdminError('');
-            }}
-            className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer transition-colors"
+            onClick={() => openAdminPasswordModal()}
+            className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer transition-colors"
             title="Acesso da Administradora"
           >
             <Lock className="w-3 h-3 text-slate-400" />
             <span>Acesso da Administradora</span>
           </button>
         </div>
-
-        {/* Master Owner Identification Modal (User + Phone or Password) */}
-        {showAdminLogin && (
-          <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border-2 border-indigo-500 animate-scale-up space-y-3.5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center text-lg shadow-sm">
-                    👑
-                  </div>
-                  <div>
-                    <h4 className="font-black text-sm text-slate-900 leading-tight">Identificação de Administradora</h4>
-                    <p className="text-[10px] text-slate-500">Reconhecimento automático de Acesso Vitalício</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAdminLogin(false);
-                    setAdminError('');
-                  }}
-                  className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Login Method Tabs */}
-              <div className="flex bg-slate-100 p-0.5 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginMethod('CREDENTIALS');
-                    setAdminError('');
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                    loginMethod === 'CREDENTIALS' 
-                      ? 'bg-white text-indigo-700 shadow-xs' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <User className="w-3 h-3" />
-                  <span>Usuário & Telefone</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginMethod('PASSWORD');
-                    setAdminError('');
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                    loginMethod === 'PASSWORD' 
-                      ? 'bg-white text-indigo-700 shadow-xs' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <KeyRound className="w-3 h-3" />
-                  <span>Senha / Chave</span>
-                </button>
-              </div>
-
-              <form onSubmit={handleAdminBypass} className="space-y-3">
-                {loginMethod === 'CREDENTIALS' ? (
-                  <>
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Digite seu <strong>nome de usuário</strong> e <strong>número de telefone</strong> cadastrados para liberar o acesso vitalício gratuito imediatamente.
-                    </p>
-
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <User className="w-3 h-3 text-indigo-600" />
-                          <span>Seu Usuário / Nome</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={adminUser}
-                          onChange={e => {
-                            setAdminUser(e.target.value);
-                            setAdminError('');
-                          }}
-                          placeholder="Ex: Márcia Alves"
-                          className="w-full px-3 py-2 text-xs border border-indigo-200 rounded-xl focus:border-indigo-600 focus:outline-hidden font-medium text-slate-900 bg-slate-50 focus:bg-white"
-                          autoFocus
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-emerald-600" />
-                          <span>Seu Telefone / WhatsApp</span>
-                        </label>
-                        <input
-                          type="tel"
-                          value={adminPhone}
-                          onChange={e => {
-                            setAdminPhone(e.target.value);
-                            setAdminError('');
-                          }}
-                          placeholder="Ex: (91) 99319-2405"
-                          className="w-full px-3 py-2 text-xs border border-indigo-200 rounded-xl focus:border-indigo-600 focus:outline-hidden font-medium text-slate-900 bg-slate-50 focus:bg-white"
-                        />
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[11px] text-slate-600">
-                      Digite sua chave ou senha de administradora para liberar o sistema.
-                    </p>
-
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={adminPass}
-                        onChange={e => {
-                          setAdminPass(e.target.value);
-                          setAdminError('');
-                        }}
-                        placeholder="Ex: MARCIA2026"
-                        className="w-full pl-3 pr-10 py-2.5 text-xs border border-indigo-300 rounded-xl focus:border-indigo-600 focus:outline-hidden font-mono uppercase font-bold text-slate-900 bg-slate-50 focus:bg-white"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                        title={showPassword ? 'Ocultar' : 'Visualizar'}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {adminError && (
-                  <p className="text-[11px] text-rose-600 font-bold bg-rose-50 p-2 rounded-xl border border-rose-200">
-                    {adminError}
-                  </p>
-                )}
-                
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAdminLogin(false);
-                      setAdminUser('');
-                      setAdminPhone('');
-                      setAdminPass('');
-                      setAdminError('');
-                    }}
-                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Crown className="w-3.5 h-3.5" />
-                    <span>Liberar Vitalício</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
       </div>
 

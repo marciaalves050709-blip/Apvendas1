@@ -165,10 +165,6 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
     const formattedCity = merchantCity.trim() || 'Barcarena PA';
     const finalMerchantName = merchantName.trim() || cleanName;
 
-    // Auto-detect Master Administrator credentials
-    checkAndApplyAdminCredentials(cleanName, cleanWhatsapp);
-    checkAndApplyAdminCredentials(cleanName, cleanPixKey);
-
     if (isCreatingNew) {
       const created = addSeller({
         name: cleanName,
