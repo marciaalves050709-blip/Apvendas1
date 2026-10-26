@@ -22,7 +22,8 @@ import {
   CheckCheck,
   Crown,
   Settings2,
-  UserCheck
+  UserCheck,
+  Edit3
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -48,7 +49,8 @@ export const SubscriptionModal: React.FC = () => {
     activateSubscription,
     paymentSettings,
     checkAndApplyAdminCredentials,
-    openAdminPasswordModal
+    openAdminPasswordModal,
+    showToast
   } = useApp();
 
   const [copiedPix, setCopiedPix] = useState(false);
@@ -64,6 +66,8 @@ export const SubscriptionModal: React.FC = () => {
   const [copiedAdminKey, setCopiedAdminKey] = useState(false);
   const [copiedMasterKey, setCopiedMasterKey] = useState(false);
   const [forceShowRenewalPayment, setForceShowRenewalPayment] = useState(false);
+  const [isEditingAdminPix, setIsEditingAdminPix] = useState(false);
+  const [adminPixInput, setAdminPixInput] = useState(() => localStorage.getItem('appvendas_custom_admin_pix') || '91993192405');
 
   // Real-time Bank Alert state
   const [bankAlert, setBankAlert] = useState<{
@@ -363,8 +367,8 @@ export const SubscriptionModal: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
                   <div>
                     <span className="text-[10px] text-slate-400 block">Chave Pix:</span>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-slate-300 font-mono text-xs tracking-wider select-none">•••••••••</span>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="text-slate-300 font-mono text-xs tracking-widest select-none">****************</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -378,6 +382,15 @@ export const SubscriptionModal: React.FC = () => {
                         {copiedAdminKey ? <Check className="w-3 h-3 text-emerald-300" /> : <Copy className="w-3 h-3" />}
                         <span>{copiedAdminKey ? 'Copiada!' : 'Copiar'}</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingAdminPix(!isEditingAdminPix)}
+                        className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 border border-amber-400/30 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-all"
+                        title="Trocar Chave Pix"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Trocar</span>
+                      </button>
                     </div>
                   </div>
                   <div>
@@ -389,6 +402,43 @@ export const SubscriptionModal: React.FC = () => {
                     <strong className="text-emerald-400 font-bold">R$ 94,98/mês</strong>
                   </div>
                 </div>
+
+                {/* Campo Expansível para Trocar a Chave Pix da Administradora (Invisível só com asterisco) */}
+                {isEditingAdminPix && (
+                  <div className="pt-2 border-t border-slate-800 space-y-1.5 animate-scale-up">
+                    <label className="text-[10px] font-bold text-amber-300 block">
+                      Editar / Trocar Chave Pix da Administradora (Invisível):
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <input
+                          type="password"
+                          value={adminPixInput}
+                          onChange={e => setAdminPixInput(e.target.value)}
+                          placeholder="****************"
+                          className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-white outline-none focus:border-amber-400 tracking-widest"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = adminPixInput.trim();
+                          if (val) {
+                            localStorage.setItem('appvendas_custom_admin_pix', val);
+                            setIsEditingAdminPix(false);
+                            showToast('success', 'Chave Atualizada!', 'A nova chave Pix de recebimento foi gravada.');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer transition-all shrink-0"
+                      >
+                        Salvar Chave
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      🔒 A chave é invisível com asteriscos para ninguém ver. Você pode trocá-la a qualquer momento.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Botões de Ação da Administradora */}

@@ -494,10 +494,22 @@ class SoundPlayer {
 
 export const sounds = new SoundPlayer();
 
-// Master Subscription Pix Configuration (Fixed as requested: R$ 94,98, Key: 91993192405, Beneficiary: Marcia Alves)
+export const getAdminPixKey = (): string => {
+  if (typeof window !== 'undefined') {
+    try {
+      const custom = localStorage.getItem('appvendas_custom_admin_pix');
+      if (custom && custom.trim()) return custom.trim();
+    } catch {}
+  }
+  return '91993192405';
+};
+
+// Master Subscription Pix Configuration
 export const SUBSCRIPTION_CONFIG = {
   monthlyPrice: 94.98,
-  pixKey: '91993192405',
+  get pixKey() {
+    return getAdminPixKey();
+  },
   merchantName: 'MARCIA ALVES',
   merchantCity: 'BARCARENA',
   adminEmail: 'marciaalves050709@gmail.com',

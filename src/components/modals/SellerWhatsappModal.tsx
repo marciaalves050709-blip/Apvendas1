@@ -27,9 +27,7 @@ import {
   MapPin,
   ExternalLink,
   ShieldCheck,
-  Send,
-  Eye,
-  EyeOff
+  Send
 } from 'lucide-react';
 
 interface SellerWhatsappModalProps {
@@ -66,7 +64,6 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
   const [merchantName, setMerchantName] = useState('');
   const [merchantCity, setMerchantCity] = useState('Barcarena PA');
   const [receivingBank, setReceivingBank] = useState<BankProvider>('NUBANK');
-  const [showPixKeyInput, setShowPixKeyInput] = useState(false);
 
   // Preview QR code state
   const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
@@ -102,7 +99,13 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
 
   // Generate Live QR Code Preview
   useEffect(() => {
-    const keyToUse = pixKey.trim() || '91993192405';
+    const keyToUse = pixKey.trim();
+    if (!keyToUse) {
+      setPreviewPixPayload('');
+      setPreviewQrUrl('');
+      return;
+    }
+
     const nameToUse = (merchantName.trim() || name.trim() || 'VENDEDOR').toUpperCase();
     const cityToUse = (merchantCity.trim() || 'Barcarena PA');
 
@@ -333,7 +336,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                           <span>{formatPhoneDisplay(s.whatsapp)}</span>
                         </p>
                         <p className="text-[10px] text-slate-600 font-mono mt-1 truncate bg-slate-100 px-1.5 py-0.5 rounded-md flex items-center justify-between">
-                          <span>Pix: •••••••••</span>
+                          <span>Pix: ****************</span>
                           <span className="text-[9px] text-emerald-700 font-bold">Chave Protegida</span>
                         </p>
                         <div className="mt-1 flex items-center gap-1.5">
@@ -482,30 +485,17 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                   })}
                 </div>
 
-                {/* Input Chave Pix Protegida */}
+                {/* Input Chave Pix Totalmente Oculta com Asterisco (Sem botão de olho) */}
                 <div className="relative">
                   <CreditCard className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type={showPixKeyInput ? 'text' : 'password'}
+                    type="password"
                     required
-                    placeholder={
-                      pixKeyType === 'PHONE' ? 'Ex: (11) 99999-8888' :
-                      pixKeyType === 'CPF' ? 'Ex: 123.456.789-00' :
-                      pixKeyType === 'EMAIL' ? 'Ex: seuemail@gmail.com' :
-                      pixKeyType === 'CNPJ' ? 'Ex: 12.345.678/0001-90' : 'Chave aleatória EVP'
-                    }
+                    placeholder="****************"
                     value={pixKey}
                     onChange={e => setPixKey(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 focus:border-emerald-600 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none transition-all tracking-widest"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPixKeyInput(!showPixKeyInput)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
-                    title={showPixKeyInput ? 'Ocultar Chave' : 'Mostrar Chave'}
-                  >
-                    {showPixKeyInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
 
                 {/* Titular / Favorecido na Conta */}
@@ -601,7 +591,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                   </div>
                 )}
                 <div className="mt-2 text-[10px] font-mono text-slate-500 font-bold tracking-widest select-none">
-                  Chave: •••••••••
+                  Chave: ****************
                 </div>
               </div>
 

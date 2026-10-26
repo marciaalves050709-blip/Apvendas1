@@ -166,7 +166,7 @@ try {
 
 // Register PWA service worker safely for installability and offline support
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=19', { scope: '/' })
+  navigator.serviceWorker.register('/sw.js?v=20', { scope: '/' })
     .then((reg) => {
       reg.update().catch(() => {});
       if (reg.waiting) {

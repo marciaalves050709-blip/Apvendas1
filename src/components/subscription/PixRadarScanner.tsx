@@ -269,14 +269,14 @@ export const PixRadarScanner: React.FC<PixRadarScannerProps> = ({
           <span className="text-[10px] uppercase font-bold text-slate-400 block">Chave Pix da Assinatura:</span>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="font-mono text-base font-black text-slate-400 tracking-widest select-none">
-              •••••••••••••
+              ****************
             </span>
             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
               Márcia Alves
             </span>
           </div>
           <span className="text-[10px] text-slate-500 block mt-0.5">
-            Chave oculta por segurança • Clique ao lado para copiar
+            Chave invisível por segurança • Clique ao lado para copiar
           </span>
         </div>
         <button

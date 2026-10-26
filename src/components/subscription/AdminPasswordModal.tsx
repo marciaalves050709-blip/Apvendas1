@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp, checkIsMasterPassword } from '../../context/AppContext';
-import { Lock, Eye, EyeOff, AlertCircle, Crown, ShieldAlert } from 'lucide-react';
+import { Lock, AlertCircle, Crown, ShieldAlert } from 'lucide-react';
 
 export const AdminPasswordModal: React.FC = () => {
   const {
@@ -11,7 +11,6 @@ export const AdminPasswordModal: React.FC = () => {
   } = useApp();
 
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   if (!isAdminPasswordModalOpen) return null;
@@ -94,9 +93,8 @@ export const AdminPasswordModal: React.FC = () => {
                 Obrigatória
               </span>
             </label>
-            <div className="relative">
               <input
-                type={showPassword ? 'text' : 'password'}
+                type="password"
                 required
                 autoFocus
                 value={password}
@@ -104,18 +102,9 @@ export const AdminPasswordModal: React.FC = () => {
                   setPassword(e.target.value);
                   setError('');
                 }}
-                placeholder="Digite sua Senha Mestra"
-                className="w-full pl-3.5 pr-10 py-3 text-sm border-2 border-amber-400 focus:border-amber-600 rounded-xl focus:outline-hidden font-mono font-black text-slate-900 bg-amber-50/20 focus:bg-white shadow-inner"
+                placeholder="****************"
+                className="w-full px-3.5 py-3 text-sm border-2 border-amber-400 focus:border-amber-600 rounded-xl focus:outline-hidden font-mono font-black text-slate-900 bg-amber-50/20 focus:bg-white shadow-inner tracking-widest"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 cursor-pointer"
-                title={showPassword ? 'Ocultar' : 'Visualizar'}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 pt-1">

@@ -20,7 +20,8 @@ import {
   Clock,
   Edit3,
   Building2,
-  QrCode
+  QrCode,
+  Phone
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -178,17 +179,17 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={() => setIsSellerWhatsappModalOpen(true)}
           className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-950 border border-emerald-200 hover:bg-emerald-100 transition-all cursor-pointer group shadow-2xs"
-          title="Configurar WhatsApp e Chaves Pix de cada vendedor"
+          title="Configurar WhatsApp e Vendedor"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <QrCode className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
+            <Phone className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform shrink-0" />
             <div className="text-left min-w-0">
-              <span className="block text-xs font-bold leading-tight truncate">Pix & WhatsApp Vendedor</span>
+              <span className="block text-xs font-bold leading-tight truncate">Vendedor & WhatsApp</span>
               <span className="text-[10px] text-emerald-700 block truncate">{activeSeller?.name || 'Vendedor'}</span>
             </div>
           </div>
           <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-md font-black shrink-0">
-            PIX
+            ZAP
           </span>
         </button>
 

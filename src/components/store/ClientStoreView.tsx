@@ -409,10 +409,11 @@ export const ClientStoreView: React.FC = () => {
 
   // Generate QR Code for Pix when completed or viewing
   useEffect(() => {
-    if (paymentMethod === 'PIX' && cartTotal > 0) {
+    const rawKey = (activeSeller?.pixKey || paymentSettings.pixKey || '').trim();
+    if (paymentMethod === 'PIX' && cartTotal > 0 && rawKey) {
       const pixObj = generatePixPayload({
-        pixKey: activeSeller?.pixKey || paymentSettings.pixKey || '91993192405',
-        merchantName: (activeSeller?.merchantName || activeSeller?.name || paymentSettings.merchantName || 'MARCIA ALVES').toUpperCase(),
+        pixKey: rawKey,
+        merchantName: (activeSeller?.merchantName || activeSeller?.name || paymentSettings.merchantName || currentCompany.name || 'LOJA').toUpperCase(),
         merchantCity: activeSeller?.merchantCity || paymentSettings.merchantCity || 'BARCARENA',
         amount: cartTotal,
         txId: '***',
@@ -423,8 +424,11 @@ export const ClientStoreView: React.FC = () => {
       QRCode.toDataURL(pixObj.payload, { width: 220, margin: 1 })
         .then(url => setPixQrDataUrl(url))
         .catch(() => setPixQrDataUrl(''));
+    } else {
+      setPixPayloadCode('');
+      setPixQrDataUrl('');
     }
-  }, [paymentMethod, cartTotal, activeSeller, paymentSettings]);
+  }, [paymentMethod, cartTotal, activeSeller, paymentSettings, currentCompany.name]);
 
   // Finalize Order and Send to WhatsApp with strict stock safety
   const handleSendOrderToWhatsApp = () => {
@@ -1350,7 +1354,7 @@ export const ClientStoreView: React.FC = () => {
                       <span className="font-bold flex items-center gap-1.5">
                         <QrCode className="w-3.5 h-3.5 text-emerald-700" />
                         <span>Chave Pix:</span>
-                        <span className="font-mono text-emerald-800 tracking-widest select-none font-bold">•••••••••</span>
+                        <span className="font-mono text-emerald-800 tracking-widest select-none font-bold">****************</span>
                       </span>
                       <button
                         type="button"

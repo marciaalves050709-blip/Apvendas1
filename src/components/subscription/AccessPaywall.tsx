@@ -21,8 +21,6 @@ import {
   CheckCheck,
   AlertCircle,
   Calendar,
-  Eye,
-  EyeOff,
   User,
   Phone,
   Crown
@@ -310,7 +308,7 @@ export const AccessPaywall: React.FC = () => {
 
         {/* Paywall Footer */}
         <div className="p-3.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <span>{paymentSettings.merchantName || 'Sistema'} • Liberação Imediata via Pix</span>
+          <span>appvendas • Licença Oficial</span>
           
           {/* Discrete Administrator Access Link */}
           <button
