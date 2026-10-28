@@ -1,4 +1,13 @@
 export type Category = 
+  | 'Salão de Beleza'
+  | 'Padaria'
+  | 'Pizzaria'
+  | 'Restaurante'
+  | 'Hambúrguer'
+  | 'Mercadinho'
+  | 'Maquiagem'
+  | 'Descartáveis'
+  | 'Distribuidora'
   | 'Copos & Taças'
   | 'Pratos & Potes'
   | 'Marmitex & Alumínio'
@@ -6,7 +15,9 @@ export type Category =
   | 'Guardanapos & Papéis'
   | 'Sacolas & Bobinas'
   | 'Filmes & Embalagens'
-  | 'Higiene & Proteção';
+  | 'Higiene & Proteção'
+  | 'Outros'
+  | (string & {});
 
 export type UnitType = 'UN' | 'PCT' | 'CX' | 'FARDO' | 'ROLO' | 'KIT';
 
@@ -213,7 +224,8 @@ export type ActiveTab =
   | 'sales' 
   | 'cashier' 
   | 'customers' 
-  | 'reports';
+  | 'reports'
+  | 'company-costs';
 
 export interface SubscriptionState {
   isSubscribed: boolean;

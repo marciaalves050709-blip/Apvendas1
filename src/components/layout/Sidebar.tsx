@@ -21,7 +21,12 @@ import {
   Edit3,
   Building2,
   QrCode,
-  Phone
+  Phone,
+  Lock,
+  Unlock,
+  DollarSign,
+  Truck,
+  KeyRound
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -46,7 +51,10 @@ export const Sidebar: React.FC = () => {
     companies,
     setIsCompanyModalOpen,
     setIsSellerWhatsappModalOpen,
-    activeSeller
+    activeSeller,
+    isCompanyAreaUnlocked,
+    lockCompanyArea,
+    openCompanyAreaUnlock
   } = useApp();
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
@@ -65,22 +73,37 @@ export const Sidebar: React.FC = () => {
     },
   ];
 
-  const navItems: { id: ActiveTab; label: string; icon: React.ReactNode; badge?: number; alert?: boolean }[] = [
+  const navItems: { id: ActiveTab; label: string; icon: React.ReactNode; badge?: number; alert?: boolean; locked?: boolean; highlight?: boolean }[] = [
     { 
-      id: 'dashboard', 
-      label: 'Dashboard', 
-      icon: <LayoutDashboard className="w-4 h-4" /> 
+      id: 'company-costs', 
+      label: 'Área Empresa: Custos & Fornecedor', 
+      icon: isCompanyAreaUnlocked ? <Unlock className="w-4 h-4 text-amber-500" /> : <Lock className="w-4 h-4 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked,
+      highlight: true
     },
     { 
       id: 'inventory', 
       label: 'Controle de Estoque', 
       icon: <Package className="w-4 h-4" />,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
-      alert: lowStockCount > 0
+      alert: lowStockCount > 0,
+      locked: !isCompanyAreaUnlocked
+    },
+    { 
+      id: 'reports', 
+      label: 'Relatórios & Lucro Real', 
+      icon: <BarChart3 className="w-4 h-4" />,
+      locked: !isCompanyAreaUnlocked
+    },
+    { 
+      id: 'dashboard', 
+      label: 'Dashboard Geral', 
+      icon: <LayoutDashboard className="w-4 h-4" />,
+      locked: !isCompanyAreaUnlocked
     },
     { 
       id: 'pos', 
-      label: 'Vendas & PDV', 
+      label: 'Frente de Caixa (PDV)', 
       icon: <ShoppingCart className="w-4 h-4" /> 
     },
     { 
@@ -90,19 +113,14 @@ export const Sidebar: React.FC = () => {
     },
     { 
       id: 'cashier', 
-      label: 'Frente de Caixa', 
+      label: 'Movimento de Caixa', 
       icon: <WalletCards className="w-4 h-4" />,
       badge: currentShift.isOpen ? undefined : 1
     },
     { 
       id: 'customers', 
-      label: 'Clientes & Fornecedores', 
+      label: 'Cadastro de Clientes', 
       icon: <Users className="w-4 h-4" /> 
-    },
-    { 
-      id: 'reports', 
-      label: 'Relatórios & Lucro', 
-      icon: <BarChart3 className="w-4 h-4" /> 
     },
   ];
 
@@ -193,8 +211,36 @@ export const Sidebar: React.FC = () => {
           </span>
         </button>
 
-        <div className="px-3 pt-3 pb-1 border-t border-slate-100 mt-1">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Painel & Gestão</p>
+        <div className="px-3 pt-3 pb-1 border-t border-slate-100 mt-1 flex items-center justify-between">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Área da Empresa & Gestão</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (isCompanyAreaUnlocked) {
+                  setActiveTab('company-costs');
+                } else {
+                  openCompanyAreaUnlock('company-costs');
+                }
+              }}
+              className="text-[10px] text-amber-700 hover:text-amber-900 font-bold flex items-center gap-1 cursor-pointer"
+              title="Trocar Senha da Empresa"
+            >
+              <KeyRound className="w-2.5 h-2.5 text-amber-600" />
+              <span>Trocar Senha</span>
+            </button>
+            {isCompanyAreaUnlocked && (
+              <button
+                type="button"
+                onClick={lockCompanyArea}
+                className="text-[10px] text-rose-600 hover:text-rose-800 font-bold flex items-center gap-0.5 cursor-pointer"
+                title="Bloquear agora e voltar para venda direta ao cliente"
+              >
+                <Lock className="w-2.5 h-2.5" />
+                <span>Bloquear</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {navItems.map(item => {
@@ -202,35 +248,47 @@ export const Sidebar: React.FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              onClick={() => {
+                if (item.locked) {
+                  openCompanyAreaUnlock(item.id);
+                } else {
+                  setActiveTab(item.id);
+                }
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                  : item.highlight
+                  ? 'bg-amber-50/80 text-amber-950 border border-amber-200/80 hover:bg-amber-100'
+                  : 'text-slate-700 hover:bg-slate-100'
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-4 h-4 border-2 rounded-xs flex items-center justify-center transition-colors ${
-                    isActive ? 'border-indigo-700 bg-indigo-700' : 'border-slate-400'
-                  }`}
-                >
-                  {isActive && <div className="w-1.5 h-1.5 bg-white rounded-2xs" />}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={isActive ? 'text-white' : ''}>
+                  {item.icon}
                 </div>
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </div>
 
-              {item.badge !== undefined && (
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    item.alert
-                      ? 'bg-rose-100 text-rose-700 animate-pulse'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {item.badge}
-                </span>
-              )}
+              <div className="flex items-center gap-1 shrink-0">
+                {item.locked && (
+                  <span className="p-0.5 rounded text-slate-400" title="Protegido por senha">
+                    <Lock className="w-3 h-3 text-amber-600" />
+                  </span>
+                )}
+
+                {item.badge !== undefined && (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      item.alert
+                        ? 'bg-rose-100 text-rose-700 animate-pulse'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </div>
             </button>
           );
         })}

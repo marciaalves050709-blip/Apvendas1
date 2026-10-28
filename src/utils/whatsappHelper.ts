@@ -109,10 +109,14 @@ export function buildWhatsAppOrderMessage(
   
   msg += `👤 *DADOS DO CLIENTE*\n`;
   msg += `• *Nome:* ${order.customerName}\n`;
-  msg += `• *WhatsApp:* ${formatPhoneDisplay(order.customerPhone)}\n`;
-  msg += `• *Tipo:* ${order.deliveryType === 'ENTREGA' ? '🛵 Entrega em Domicílio' : '🏪 Retirar na Loja'}\n`;
-  if (order.deliveryType === 'ENTREGA' && order.deliveryAddress) {
-    msg += `• *Endereço:* ${order.deliveryAddress}\n`;
+  msg += `• *WhatsApp:* ${formatPhoneDisplay(order.customerPhone)}\n\n`;
+  
+  msg += `📍 *RECEBIMENTO / ENTREGA*\n`;
+  if (order.deliveryType === 'ENTREGA') {
+    msg += `• *Modalidade:* 🛵 ENTREGA LOCAL\n`;
+    msg += `• *Endereço Completo:* ${order.deliveryAddress || 'Endereço a combinar'}\n`;
+  } else {
+    msg += `• *Modalidade:* 🏪 RETIRAR NO LOCAL (Balcão da Loja)\n`;
   }
   if (order.notes) {
     msg += `• *Observação:* ${order.notes}\n`;
@@ -141,17 +145,25 @@ export function buildWhatsAppOrderMessage(
   msg += `• ${getPaymentMethodName(order.paymentMethod, order.cashChangeFor)}\n`;
   
   if (order.paymentMethod === 'PIX') {
-    const activePixKey = seller?.pixKey || order.sellerPixKey || settings.pixKey;
-    const activePixType = seller?.pixKeyType || settings.pixKeyType;
     const activeFavorecido = seller?.merchantName || seller?.name || settings.merchantName;
     const activeBank = seller?.receivingBank || settings.receivingBank;
     const activeCity = seller?.merchantCity || settings.merchantCity || 'Barcarena PA';
 
-    msg += `• *Pagamento Pix:* Chave Pix copiada pelo cliente no catálogo\n`;
-    msg += `• *Favorecido / Vendedor:* ${activeFavorecido}\n`;
+    msg += `• *Pagamento Pix:* Chave Pix gerada/copiada pelo cliente\n`;
+    msg += `• *Favorecido / Loja:* ${activeFavorecido}\n`;
     msg += `• *Banco:* ${activeBank}\n`;
     msg += `• *Cidade:* ${activeCity}\n`;
-    msg += `_(Por favor, anexe o comprovante do Pix após a transferência)_\n`;
+    msg += `\n📎 *Envie o comprovante do Pix em anexo logo abaixo para confirmação imediata!*\n`;
+  } else if (order.paymentMethod === 'CARTAO_CREDITO' || order.paymentMethod === 'CARTAO_DEBITO') {
+    if (order.deliveryType === 'ENTREGA') {
+      msg += `• *Aviso Maquininha:* 💳 Favor levar a maquininha de cartão no endereço de entrega.\n`;
+    } else {
+      msg += `• *Aviso Retirada:* 💳 Pagamento no cartão na máquina disponível no balcão da loja.\n`;
+    }
+  } else if (order.paymentMethod === 'DINHEIRO') {
+    if (order.cashChangeFor && order.cashChangeFor > 0) {
+      msg += `• *Troco Solicitado:* Levar troco para ${formatCurrency(order.cashChangeFor)}.\n`;
+    }
   }
   
   msg += `\n✨ *Aguardando confirmação do vendedor!*`;
@@ -172,4 +184,34 @@ export function generateWhatsAppLink(
   const message = buildWhatsAppOrderMessage(order, settings, seller);
   const encoded = encodeURIComponent(message);
   return `https://wa.me/${rawPhone}?text=${encoded}`;
+}
+
+/**
+ * Creates WhatsApp click-to-chat specifically for sending payment proof / receipt
+ */
+export function generateWhatsAppPaymentProofLink(
+  order: CustomerOrderData,
+  settings: PaymentSettings,
+  seller?: SellerProfile
+): string {
+  const targetPhone = seller?.whatsapp || order.sellerWhatsapp || settings.merchantWhatsapp || '5511999998888';
+  const rawPhone = formatPhoneToWhatsApp(targetPhone);
+  let text = `💳 *PAGAMENTO REALIZADO - PEDIDO #${order.orderCode}*\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `Olá! Segue o pagamento do meu pedido *#${order.orderCode}* no valor de *${formatCurrency(order.cartTotal)}*.\n\n`;
+  text += `👤 *Cliente:* ${order.customerName}\n`;
+  text += `💳 *Forma de Pagamento:* ${getPaymentMethodName(order.paymentMethod, order.cashChangeFor)}\n`;
+  if (order.deliveryType === 'ENTREGA') {
+    text += `🛵 *Entrega Local:* ${order.deliveryAddress || 'Endereço informado'}\n`;
+  } else {
+    text += `🏪 *Retirar no Local*\n`;
+  }
+  if (order.paymentMethod === 'PIX') {
+    text += `\n📎 *(Segue comprovante do Pix em anexo nesta conversa)*\n`;
+  } else if (order.paymentMethod === 'CARTAO_CREDITO' || order.paymentMethod === 'CARTAO_DEBITO') {
+    text += `\n💳 *(Aguardando maquininha de cartão no local)*\n`;
+  }
+  text += `\nPor favor, confirmem o recebimento e o status do pedido!`;
+  
+  return `https://wa.me/${rawPhone}?text=${encodeURIComponent(text)}`;
 }

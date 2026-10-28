@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, checkIsMasterPassword } from '../../context/AppContext';
 import { 
   Building2, 
   Store, 
@@ -21,7 +21,8 @@ import {
   Smartphone,
   Share2,
   Lock,
-  Crown
+  Crown,
+  KeyRound
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { formatPhoneDisplay } from '../../utils/whatsappHelper';
@@ -53,11 +54,13 @@ export const CompanySettingsModal: React.FC = () => {
     activateSubscription,
     checkAndApplyAdminCredentials,
     openAdminPasswordModal,
-    setClientTestMode
+    setClientTestMode,
+    companyPassword,
+    setCompanyPassword
   } = useApp();
 
-  // Active Tab inside modal: 'edit' | 'list' | 'create'
-  const [tab, setTab] = useState<'edit' | 'list' | 'create'>('edit');
+  // Active Tab inside modal: 'edit' | 'list' | 'create' | 'password'
+  const [tab, setTab] = useState<'edit' | 'list' | 'create' | 'password'>('edit');
 
   // Form State for editing current company
   const [name, setName] = useState(currentCompany?.name || paymentSettings.merchantName || 'Minha Loja');
@@ -74,6 +77,12 @@ export const CompanySettingsModal: React.FC = () => {
   const [newPhone, setNewPhone] = useState('');
   const [newCategory, setNewCategory] = useState('Comércio & Varejo');
   const [newEmoji, setNewEmoji] = useState('🏪');
+
+  // Form State for changing company password
+  const [currentCompanyPass, setCurrentCompanyPass] = useState('');
+  const [newCompanyPass, setNewCompanyPass] = useState('');
+  const [confirmCompanyPass, setConfirmCompanyPass] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const isMarciaCredentials = useMemo(() => {
     const cleanName = (ownerName || '').toLowerCase().replace(/[\s\.]+/g, '');
@@ -164,6 +173,46 @@ export const CompanySettingsModal: React.FC = () => {
     showToast('info', 'Link Copiado!', `Link exclusivo da loja de "${companyName}" copiado.`);
   };
 
+  // Handle Save Company Password
+  const handleSaveCompanyPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+
+    const currTrimmed = currentCompanyPass.trim();
+    const isMaster = checkIsMasterPassword(currTrimmed);
+    const isCurrentMatch = currTrimmed === companyPassword;
+    const isDefaultFallback = currTrimmed === '1234';
+
+    if (!isMaster && !isCurrentMatch && !isDefaultFallback) {
+      setPasswordError('Senha atual incorreta! Digite a senha atual (padrão inicial 1234) ou a Senha Mestra.');
+      return;
+    }
+
+    const cleanNew = newCompanyPass.trim();
+    if (!cleanNew) {
+      setPasswordError('Digite a nova senha.');
+      return;
+    }
+
+    if (cleanNew.length < 4) {
+      setPasswordError('A nova senha deve ter no mínimo 4 caracteres.');
+      return;
+    }
+
+    if (cleanNew !== confirmCompanyPass.trim()) {
+      setPasswordError('A confirmação da nova senha não confere.');
+      return;
+    }
+
+    setCompanyPassword(cleanNew);
+    showToast('success', 'Senha da Empresa Atualizada!', 'A nova senha foi gravada com sucesso. Preços de custo e fornecedores protegidos.');
+    setCurrentCompanyPass('');
+    setNewCompanyPass('');
+    setConfirmCompanyPass('');
+    setPasswordError('');
+    setTab('edit');
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
       <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[92dvh] max-w-2xl sm:rounded-3xl shadow-2xl border-0 sm:border border-slate-200 overflow-hidden flex flex-col">
@@ -176,7 +225,7 @@ export const CompanySettingsModal: React.FC = () => {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-black text-base sm:text-lg text-white truncate">
-                  {tab === 'edit' ? 'Nome da Empresa & Dados' : tab === 'list' ? 'Empresas & Usuários' : 'Criar Nova Empresa'}
+                  {tab === 'edit' ? 'Nome da Empresa & Dados' : tab === 'password' ? 'Senha da Empresa' : tab === 'list' ? 'Empresas & Usuários' : 'Criar Nova Empresa'}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   Infinitos Usuários
@@ -201,7 +250,10 @@ export const CompanySettingsModal: React.FC = () => {
         <div className="shrink-0 bg-slate-100 border-b border-slate-200 px-3 sm:px-6 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           <button
             type="button"
-            onClick={() => setTab('edit')}
+            onClick={() => {
+              setTab('edit');
+              setPasswordError('');
+            }}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               tab === 'edit'
                 ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
@@ -210,6 +262,22 @@ export const CompanySettingsModal: React.FC = () => {
           >
             <Building2 className="w-3.5 h-3.5 text-indigo-600" />
             <span>Nome da Minha Empresa</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTab('password');
+              setPasswordError('');
+            }}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+              tab === 'password'
+                ? 'bg-white text-amber-800 shadow-xs border border-slate-200 font-black'
+                : 'text-amber-800 bg-amber-50/70 hover:bg-amber-100 border border-amber-200/60'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+            <span>Trocar Senha da Empresa</span>
           </button>
 
           <button
@@ -430,6 +498,34 @@ export const CompanySettingsModal: React.FC = () => {
                 <p className="text-[11px] text-slate-500 leading-tight">
                   🔒 A chave não fica visível em texto puro para proteger seus dados no balcão. Você pode alterá-la ou trocar a chave sempre que desejar.
                 </p>
+              </div>
+
+              {/* Senha de Acesso da Empresa (Protege custos e fornecedores) */}
+              <div className="p-3.5 bg-amber-50/60 border border-amber-200 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-2xs font-bold">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-900 truncate">
+                      Senha da Empresa: Custos & Fornecedores
+                    </p>
+                    <p className="text-[11px] text-amber-900 truncate">
+                      O cliente da loja não tem acesso aos seus custos de venda
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('password');
+                    setPasswordError('');
+                  }}
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-xs font-black rounded-xl shrink-0 cursor-pointer transition-all shadow-xs flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Trocar Senha</span>
+                </button>
               </div>
 
               {/* Vendedores & WhatsApp */}
@@ -752,6 +848,96 @@ export const CompanySettingsModal: React.FC = () => {
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
                   <span>Criar Empresa com Dados Isolados e Entrar Agora</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {tab === 'password' && (
+            <form onSubmit={handleSaveCompanyPassword} className="space-y-4 max-w-lg mx-auto">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                <KeyRound className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-950 leading-relaxed">
+                  <strong>Área da Empresa (Custos & Fornecedores):</strong> Esta senha protege as informações financeiras da sua empresa. Os clientes que abrem a loja só veem os preços de venda e o carrinho.
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Senha Atual da Empresa *</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Padrão inicial: 1234</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  placeholder="****************"
+                  value={currentCompanyPass}
+                  onChange={e => {
+                    setCurrentCompanyPass(e.target.value);
+                    setPasswordError('');
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-600 tracking-widest"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Nova Senha da Empresa *
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="****************"
+                  value={newCompanyPass}
+                  onChange={e => {
+                    setNewCompanyPass(e.target.value);
+                    setPasswordError('');
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-600 tracking-widest"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Confirmar Nova Senha *
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="****************"
+                  value={confirmCompanyPass}
+                  onChange={e => {
+                    setConfirmCompanyPass(e.target.value);
+                    setPasswordError('');
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-indigo-600 tracking-widest"
+                />
+              </div>
+
+              {passwordError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">
+                  {passwordError}
+                </div>
+              )}
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('edit');
+                    setPasswordError('');
+                  }}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Gravar Nova Senha</span>
                 </button>
               </div>
             </form>

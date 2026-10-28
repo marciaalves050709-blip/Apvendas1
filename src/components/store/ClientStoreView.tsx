@@ -7,6 +7,8 @@ import {
   formatPhoneDisplay, 
   buildWhatsAppOrderMessage, 
   generateWhatsAppLink,
+  generateWhatsAppPaymentProofLink,
+  getPaymentMethodName,
   CustomerOrderData 
 } from '../../utils/whatsappHelper';
 import { getProductImage, CATEGORY_EMOJIS } from '../../utils/productImages';
@@ -48,13 +50,24 @@ import {
   Bell,
   ShieldCheck,
   Zap,
-  Volume2
+  Volume2,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 const ALL_CATEGORIES: Category[] = [
+  'Salão de Beleza',
+  'Padaria',
+  'Pizzaria',
+  'Restaurante',
+  'Hambúrguer',
+  'Mercadinho',
+  'Maquiagem',
+  'Descartáveis',
+  'Distribuidora',
   'Copos & Taças',
   'Pratos & Potes',
   'Marmitex & Alumínio',
@@ -63,6 +76,7 @@ const ALL_CATEGORIES: Category[] = [
   'Sacolas & Bobinas',
   'Filmes & Embalagens',
   'Higiene & Proteção',
+  'Outros',
 ];
 
 interface ClientUser {
@@ -88,6 +102,9 @@ export const ClientStoreView: React.FC = () => {
     activeSeller,
     sellers,
     isSellerWhatsappModalOpen,
+    isCompanyAreaUnlocked,
+    openCompanyAreaUnlock,
+    lockCompanyArea,
     setIsSellerWhatsappModalOpen,
     checkAndApplyAdminCredentials
   } = useApp();
@@ -588,8 +605,8 @@ export const ClientStoreView: React.FC = () => {
           {/* Form Content */}
           <form onSubmit={handleIdentifyCustomer} className="p-4 sm:p-6 space-y-3 sm:space-y-4">
             <div className="text-center mb-0.5">
-              <h2 className="text-xs sm:text-sm font-bold text-slate-800">Ou personalize seus dados para pedidos</h2>
-              <p className="text-[10px] sm:text-xs text-slate-500">Para receber o pedido com seu nome e WhatsApp</p>
+              <h2 className="text-xs sm:text-sm font-bold text-slate-800">Personalize seus dados para o pedido</h2>
+              <p className="text-[10px] sm:text-xs text-slate-500">Escolha como deseja receber e sua forma de pagamento</p>
             </div>
 
             {/* Nome */}
@@ -600,7 +617,7 @@ export const ClientStoreView: React.FC = () => {
               </label>
               <input
                 type="text"
-                placeholder="Ex: Márcia Alves ou Seu Nome"
+                placeholder="Ex: Seu Nome ou Empresa"
                 value={inputName}
                 onChange={e => setInputName(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-medium text-slate-900 outline-none transition-all"
@@ -622,10 +639,109 @@ export const ClientStoreView: React.FC = () => {
               />
             </div>
 
+            {/* Como deseja receber? Retirar no Local vs Entrega Local */}
+            <div className="space-y-1.5 pt-1 border-t border-slate-100">
+              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                Como deseja receber?
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDeliveryType('RETIRADA')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    selectedDeliveryType === 'RETIRADA'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <Store className="w-4 h-4" />
+                  <span>🏪 Retirar no Local</span>
+                  <span className="text-[9px] font-normal opacity-85">Balcão da loja</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDeliveryType('ENTREGA')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    selectedDeliveryType === 'ENTREGA'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <Truck className="w-4 h-4" />
+                  <span>🛵 Entrega Local</span>
+                  <span className="text-[9px] font-normal opacity-85">No seu endereço</span>
+                </button>
+              </div>
+
+              {selectedDeliveryType === 'ENTREGA' && (
+                <div className="mt-2 p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1">
+                  <label className="block text-[10px] font-bold text-emerald-950 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-emerald-700" />
+                    <span>Adicionar Endereço de Entrega:</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Rua, Número, Bairro, Complemento/Referência"
+                    value={inputAddress}
+                    onChange={e => setInputAddress(e.target.value)}
+                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-xs font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Forma de Pagamento Preferida */}
+            <div className="space-y-1.5 pt-1 border-t border-slate-100">
+              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                Forma de Pagamento
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('PIX')}
+                  className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    paymentMethod === 'PIX'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>⚡ Pix</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('CARTAO_CREDITO')}
+                  className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>💳 Cartão</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('DINHEIRO')}
+                  className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    paymentMethod === 'DINHEIRO'
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Banknote className="w-3.5 h-3.5" />
+                  <span>💵 Dinheiro</span>
+                </button>
+              </div>
+            </div>
+
             {/* Main Submit Button: Entrar e Ver Produtos */}
             <button
               type="submit"
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-1"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               <span>Salvar Dados e Ver Produtos</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -646,10 +762,18 @@ export const ClientStoreView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setActiveTab('dashboard')}
-                className="hover:text-emerald-700 font-bold transition-colors text-[10px] flex items-center gap-1 cursor-pointer"
+                onClick={() => {
+                  if (isCompanyAreaUnlocked) {
+                    setActiveTab('company-costs');
+                  } else {
+                    openCompanyAreaUnlock('company-costs');
+                  }
+                }}
+                className="hover:text-amber-700 font-bold transition-colors text-[10px] flex items-center gap-1 cursor-pointer"
+                title="Acesso exclusivo da empresa com senha"
               >
-                <span>Painel Principal →</span>
+                <Lock className="w-3 h-3 text-amber-600" />
+                <span>Área da Empresa (Senha)</span>
               </button>
             </div>
 
@@ -699,14 +823,26 @@ export const ClientStoreView: React.FC = () => {
 
         {/* Action icons */}
         <div className="flex items-center gap-2">
-          {/* Back to management button */}
+          {/* Company Area Protected Button */}
           <button
-            onClick={() => setActiveTab('dashboard')}
-            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
-            title="Ir para o Painel de Gestão"
+            type="button"
+            onClick={() => {
+              if (isCompanyAreaUnlocked) {
+                setActiveTab('company-costs');
+              } else {
+                openCompanyAreaUnlock('company-costs');
+              }
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 ${
+              isCompanyAreaUnlocked
+                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black'
+                : 'bg-slate-900 hover:bg-slate-800 text-white'
+            }`}
+            title="Área da Empresa (Custos & Fornecedores protegidos com senha)"
           >
-            <span>Painel Gestão</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            {isCompanyAreaUnlocked ? <Unlock className="w-3.5 h-3.5 text-slate-950" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+            <span className="hidden sm:inline">Área da Empresa</span>
+            <span className="sm:hidden">Empresa</span>
           </button>
 
           {/* WhatsApp Destination Config */}
@@ -740,6 +876,42 @@ export const ClientStoreView: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Quick Delivery & Payment status strip */}
+      <div className="bg-emerald-50/90 border-b border-emerald-200/80 px-3 py-1.5 flex items-center justify-between text-[11px] shrink-0">
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="font-bold text-emerald-950 flex items-center gap-1 shrink-0">
+            {clientUser.deliveryType === 'ENTREGA' ? (
+              <>
+                <Truck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>🛵 Entrega:</span>
+              </>
+            ) : (
+              <>
+                <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>🏪 Retirada:</span>
+              </>
+            )}
+          </span>
+          <span className="text-emerald-800 truncate font-medium">
+            {clientUser.deliveryType === 'ENTREGA'
+              ? (clientUser.address ? clientUser.address : 'Clique em Alterar para adicionar endereço')
+              : 'Balcão da loja'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="font-bold text-slate-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
+            {paymentMethod === 'PIX' ? '⚡ Pix' : (paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO') ? '💳 Cartão' : '💵 Dinheiro'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsCartOpen(true)}
+            className="text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer text-[10px]"
+          >
+            Alterar
+          </button>
+        </div>
+      </div>
 
       {/* Search & Category Filter Section */}
       <div className="p-3 bg-white border-b border-slate-200 shrink-0 space-y-2.5">
@@ -1224,29 +1396,18 @@ export const ClientStoreView: React.FC = () => {
                 })}
               </div>
 
-              {/* Delivery vs Pickup */}
+              {/* 1. Como deseja receber seu pedido? Retirar no Local vs Entrega Local */}
               <div className="space-y-2 pt-2 border-t border-slate-200">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Como deseja receber?
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = { ...clientUser, deliveryType: 'ENTREGA' as const };
-                      setClientUser(updated);
-                      localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
-                    }}
-                    className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
-                      clientUser.deliveryType === 'ENTREGA'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <Truck className="w-4 h-4 text-emerald-600" />
-                    <span>Entrega no Local</span>
-                  </button>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Como deseja receber?
+                  </label>
+                  <span className="text-[10px] text-emerald-700 font-semibold">
+                    {clientUser.deliveryType === 'ENTREGA' ? '🛵 Entrega Local' : '🏪 Retirada no Local'}
+                  </span>
+                </div>
 
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1256,84 +1417,174 @@ export const ClientStoreView: React.FC = () => {
                     }}
                     className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                       clientUser.deliveryType === 'RETIRADA'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-500/20'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <Store className="w-4 h-4 text-emerald-600" />
-                    <span>Retirar no Balcão</span>
+                    <Store className="w-5 h-5" />
+                    <span>🏪 Retirar no Local</span>
+                    <span className="text-[10px] font-normal opacity-85">Retirada no balcão</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = { ...clientUser, deliveryType: 'ENTREGA' as const };
+                      setClientUser(updated);
+                      localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
+                    }}
+                    className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                      clientUser.deliveryType === 'ENTREGA'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-500/20'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Truck className="w-5 h-5" />
+                    <span>🛵 Entrega Local</span>
+                    <span className="text-[10px] font-normal opacity-85">Receber no endereço</span>
                   </button>
                 </div>
 
+                {/* Campo de Endereço quando Entrega Local estiver ativa */}
                 {clientUser.deliveryType === 'ENTREGA' && (
-                  <div className="mt-2">
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Endereço Completo para Entrega:
+                  <div className="mt-2.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-1.5">
+                    <label className="block text-[11px] font-black text-emerald-950 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Endereço Completo para Entrega Local:</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
+                        Obrigatório
+                      </span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Rua, Número, Bairro, Ponto de Referência"
+                      placeholder="Ex: Rua das Flores, nº 120, Bairro Centro, Apto 201 (Ref: Próximo à padaria)"
                       value={clientUser.address}
                       onChange={e => {
                         const updated = { ...clientUser, address: e.target.value };
                         setClientUser(updated);
                         localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
                       }}
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 bg-slate-50 focus:bg-white focus:border-emerald-600 outline-none"
+                      className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl text-xs font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-300 outline-none"
                     />
+                    <p className="text-[10px] text-emerald-800 leading-tight">
+                      📍 O entregador levará seus produtos diretamente neste endereço.
+                    </p>
                   </div>
                 )}
               </div>
 
-              {/* Payment Method Selection */}
+              {/* 2. Forma de Pagamento */}
               <div className="space-y-2 pt-2 border-t border-slate-200">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Forma de Pagamento
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Forma de Pagamento
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Escolha como prefere pagar
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-3 gap-2">
+                  {/* Botão Pix */}
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('PIX')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    className={`p-3 rounded-2xl border text-xs font-black flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                       paymentMethod === 'PIX'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-500/20'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <QrCode className="w-4 h-4" />
-                    <span>Pix</span>
+                    <QrCode className="w-5 h-5 text-emerald-500" />
+                    <span>⚡ Pix</span>
+                    <span className="text-[10px] font-normal opacity-85">Instantâneo</span>
                   </button>
 
+                  {/* Botão Cartão */}
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('CARTAO_CREDITO')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                      paymentMethod === 'CARTAO_CREDITO'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                    onClick={() => {
+                      if (paymentMethod !== 'CARTAO_CREDITO' && paymentMethod !== 'CARTAO_DEBITO') {
+                        setPaymentMethod('CARTAO_CREDITO');
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-xs font-black flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                      paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/20'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Cartão</span>
+                    <CreditCard className="w-5 h-5 text-blue-500" />
+                    <span>💳 Cartão</span>
+                    <span className="text-[10px] font-normal opacity-85">Maquininha</span>
                   </button>
 
+                  {/* Botão Dinheiro */}
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('DINHEIRO')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                    className={`p-3 rounded-2xl border text-xs font-black flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                       paymentMethod === 'DINHEIRO'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-500/20'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <Banknote className="w-4 h-4" />
-                    <span>Dinheiro</span>
+                    <Banknote className="w-5 h-5 text-amber-500" />
+                    <span>💵 Dinheiro</span>
+                    <span className="text-[10px] font-normal opacity-85">No local</span>
                   </button>
                 </div>
 
+                {/* Cartão de Crédito ou Débito Sub-opções */}
+                {(paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO') && (
+                  <div className="mt-2 p-3 bg-blue-50/90 border border-blue-200 rounded-2xl space-y-2">
+                    <p className="text-[11px] font-bold text-blue-950 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Modalidade do Cartão:</span>
+                      </span>
+                      <span className="text-[10px] text-blue-700 font-semibold">Levar Maquininha</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('CARTAO_CREDITO')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          paymentMethod === 'CARTAO_CREDITO'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white text-blue-900 border-blue-200 hover:bg-blue-100/50'
+                        }`}
+                      >
+                        💳 Cartão de Crédito
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('CARTAO_DEBITO')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          paymentMethod === 'CARTAO_DEBITO'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white text-blue-900 border-blue-200 hover:bg-blue-100/50'
+                        }`}
+                      >
+                        💳 Cartão de Débito
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-blue-800 bg-white/70 p-2 rounded-xl border border-blue-100 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>
+                        {clientUser.deliveryType === 'ENTREGA'
+                          ? '🛵 O entregador levará a maquininha até seu endereço de entrega.'
+                          : '🏪 A maquininha de cartão estará disponível no balcão da loja para pagamento.'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Dinheiro Troco Input */}
                 {paymentMethod === 'DINHEIRO' && (
-                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
                     <label className="block text-[11px] font-bold text-amber-900 mb-1">
                       Precisa de troco para quanto? (Opcional)
                     </label>
@@ -1344,6 +1595,9 @@ export const ClientStoreView: React.FC = () => {
                       onChange={e => setCashChangeFor(e.target.value)}
                       className="w-full px-3 py-2 border border-amber-300 rounded-lg text-xs font-medium bg-white outline-none"
                     />
+                    <p className="text-[10px] text-amber-800">
+                      Deixe em branco se for pagar com o valor exato.
+                    </p>
                   </div>
                 )}
 
@@ -1359,7 +1613,7 @@ export const ClientStoreView: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleCopyPix}
-                        className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
                       >
                         {copiedPixKey ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                         <span>{copiedPixKey ? 'Copiado!' : 'Copiar Chave'}</span>
@@ -1379,7 +1633,7 @@ export const ClientStoreView: React.FC = () => {
                 )}
               </div>
 
-              {/* Order Notes */}
+              {/* Observações do Pedido */}
               <div className="pt-2 border-t border-slate-200">
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
                   Observações do Pedido (Opcional)
@@ -1465,13 +1719,88 @@ export const ClientStoreView: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-                <p className="font-bold text-slate-800">Resumo da Compra:</p>
-                <p className="text-slate-600">👤 <strong>Cliente:</strong> {completedOrder.customerName}</p>
-                <p className="text-slate-600">📦 <strong>Itens:</strong> {completedOrder.cart.length} produtos ({cartTotalItems} un/pcts)</p>
-                <p className="text-slate-600">🛵 <strong>Recebimento:</strong> {completedOrder.deliveryType === 'ENTREGA' ? 'Entrega em Domicílio' : 'Retirada no Balcão'}</p>
-                <p className="text-slate-600">💳 <strong>Pagamento:</strong> {completedOrder.paymentMethod}</p>
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Resumo do Pedido & Entrega:</p>
+                <div className="space-y-1 text-slate-700">
+                  <p>👤 <strong>Cliente:</strong> {completedOrder.customerName}</p>
+                  <p>📦 <strong>Itens:</strong> {completedOrder.cart.length} produtos ({cartTotalItems} un/pcts)</p>
+                  
+                  {/* Entrega Local com Endereço ou Retirada */}
+                  <div className="pt-1 border-t border-slate-200/60">
+                    <p className="font-bold text-emerald-950 flex items-start gap-1">
+                      {completedOrder.deliveryType === 'ENTREGA' ? (
+                        <>
+                          <Truck className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Entrega Local:</strong> {completedOrder.deliveryAddress || 'Endereço informado'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <span><strong>Retirada no Local:</strong> Balcão da loja</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="pt-1 border-t border-slate-200/60">
+                    <p className="text-slate-900 font-bold flex items-center gap-1">
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Forma de Pagamento: {getPaymentMethodName(completedOrder.paymentMethod, completedOrder.cashChangeFor)}</span>
+                    </p>
+                  </div>
+                </div>
               </div>
+
+              {/* Botão de Destaque: Enviar Pagamento pro WhatsApp */}
+              <a
+                href={generateWhatsAppPaymentProofLink(completedOrder, paymentSettings, activeSeller)}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Send className="w-4 h-4 fill-white" />
+                <span>📲 Enviar Pagamento pro WhatsApp</span>
+              </a>
+
+              {/* Cartão de Crédito / Débito Box (Levar Maquininha) */}
+              {(completedOrder.paymentMethod === 'CARTAO_CREDITO' || completedOrder.paymentMethod === 'CARTAO_DEBITO') && (
+                <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-2xl space-y-3 text-blue-950 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
+                      💳
+                    </div>
+                    <div>
+                      <p className="font-black text-xs">
+                        Pagamento no Cartão ({completedOrder.paymentMethod === 'CARTAO_CREDITO' ? 'Crédito' : 'Débito'})
+                      </p>
+                      <p className="text-[10px] text-blue-700">Maquininha habilitada</p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-blue-200 text-[11px] space-y-1">
+                    <p className="font-semibold text-blue-900">
+                      {completedOrder.deliveryType === 'ENTREGA'
+                        ? '🛵 O entregador levará a maquininha de cartão até o seu endereço para você realizar o pagamento na entrega.'
+                        : '🏪 A maquininha de cartão estará no balcão da loja para você pagar ao retirar seus produtos.'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      Total a passar na maquininha: <strong className="text-blue-900 font-bold">{formatCurrency(completedOrder.cartTotal)}</strong>
+                    </p>
+                  </div>
+
+                  <a
+                    href={generateWhatsAppPaymentProofLink(completedOrder, paymentSettings, activeSeller)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Avisar Vendedor que vai pagar no Cartão</span>
+                  </a>
+                </div>
+              )}
 
               {/* Pix Info, QR Code & Instant Bank Payment Alert */}
               {completedOrder.paymentMethod === 'PIX' && (
@@ -1584,6 +1913,17 @@ export const ClientStoreView: React.FC = () => {
                       <span>{copiedPixKey ? 'Chave Pix Copiada com Sucesso!' : 'Copiar Chave Pix'}</span>
                     </button>
 
+                    {/* Botão de Enviar Comprovante do Pix no WhatsApp */}
+                    <a
+                      href={generateWhatsAppPaymentProofLink(completedOrder, paymentSettings, activeSeller)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="py-3 px-3 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition-all"
+                    >
+                      <Send className="w-4 h-4 fill-white" />
+                      <span>📲 Enviar Comprovante do Pix no WhatsApp</span>
+                    </a>
+
                     {/* Instant Simulation Action */}
                     {pixPaymentStatus === 'WAITING' && (
                       <button
@@ -1605,16 +1945,16 @@ export const ClientStoreView: React.FC = () => {
                   href={generateWhatsAppLink(completedOrder, paymentSettings, activeSeller)}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-300 transition-colors"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>Reabrir WhatsApp do Vendedor ({activeSeller?.name || 'Vendedor'})</span>
+                  <Send className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Reabrir Pedido Completo no WhatsApp ({activeSeller?.name || 'Vendedor'})</span>
                 </a>
 
                 <button
                   type="button"
                   onClick={handleCopyOrderText}
-                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-300 cursor-pointer"
+                  className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl font-semibold text-xs flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer"
                 >
                   {copiedOrderText ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
                   <span>{copiedOrderText ? 'Mensagem Copiada!' : 'Copiar Texto do Pedido'}</span>

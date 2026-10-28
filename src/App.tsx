@@ -12,10 +12,12 @@ import { SalesHistoryView } from './components/sales/SalesHistoryView';
 import { CashierView } from './components/cashier/CashierView';
 import { CustomersView } from './components/customers/CustomersView';
 import { ReportsView } from './components/reports/ReportsView';
+import { CompanyManagementView } from './components/company/CompanyManagementView';
 import { ReceiptModal } from './components/modals/ReceiptModal';
 import { StockMovementModal } from './components/modals/StockMovementModal';
 import { ProductFormModal } from './components/modals/ProductFormModal';
 import { CompanySettingsModal } from './components/modals/CompanySettingsModal';
+import { CompanyPasswordModal } from './components/modals/CompanyPasswordModal';
 import { SellerWhatsappModal } from './components/modals/SellerWhatsappModal';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
@@ -76,6 +78,7 @@ const MainLayout: React.FC = () => {
           {activeTab === 'cashier' && <CashierView />}
           {activeTab === 'customers' && <CustomersView />}
           {activeTab === 'reports' && <ReportsView />}
+          {activeTab === 'company-costs' && <CompanyManagementView />}
         </main>
       </div>
 
@@ -90,6 +93,7 @@ const MainLayout: React.FC = () => {
       <StockMovementModal />
       <ProductFormModal />
       <CompanySettingsModal />
+      <CompanyPasswordModal />
       <SellerWhatsappModal 
         isOpen={isSellerWhatsappModalOpen} 
         onClose={() => setIsSellerWhatsappModalOpen(false)} 

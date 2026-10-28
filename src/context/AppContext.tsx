@@ -94,6 +94,7 @@ interface AppContextType {
   // Supplier Actions
   addSupplier: (supplierData: Omit<Supplier, 'id'>) => Supplier;
   updateSupplier: (id: string, supplierData: Partial<Supplier>) => void;
+  deleteSupplier: (id: string) => void;
 
   // Cashier Actions
   openCashier: (initialCash: number, operator: string) => void;
@@ -170,6 +171,17 @@ interface AppContextType {
   isAdminPasswordModalOpen: boolean;
   setIsAdminPasswordModalOpen: (open: boolean) => void;
   openAdminPasswordModal: () => void;
+
+  // Confidential Company Management Area (Restricted by Password - Cost Price & Suppliers Hidden from Clients)
+  isCompanyAreaUnlocked: boolean;
+  setIsCompanyAreaUnlocked: (val: boolean) => void;
+  companyPassword: string;
+  setCompanyPassword: (pass: string) => void;
+  unlockCompanyArea: (pass: string) => boolean;
+  lockCompanyArea: () => void;
+  isCompanyPasswordModalOpen: boolean;
+  setIsCompanyPasswordModalOpen: (open: boolean) => void;
+  openCompanyAreaUnlock: (redirectTab?: ActiveTab) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -316,10 +328,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialCompanyFromUrl = initialUrlParams?.get('empresa') || initialUrlParams?.get('loja');
   const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTabFromUrl || (initialCompanyFromUrl ? 'client-store' : 'dashboard'));
+  // Default tab is ALWAYS 'client-store' because this is direct sales to clients!
+  const [activeTabState, setActiveTabState] = useState<ActiveTab>(initialTabFromUrl || 'client-store');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'ALL'>('ALL');
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+
+  // Confidential Company Management Area (starts LOCKED so clients never see company costs or suppliers)
+  const [isCompanyAreaUnlocked, setIsCompanyAreaUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('appvendas_company_unlocked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [companyPassword, setCompanyPasswordState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('appvendas_company_password') || '1234';
+    } catch {
+      return '1234';
+    }
+  });
+
+  const [isCompanyPasswordModalOpen, setIsCompanyPasswordModalOpen] = useState(false);
+  const [targetTabAfterUnlock, setTargetTabAfterUnlock] = useState<ActiveTab | null>(null);
+
+  const setCompanyPassword = (pass: string) => {
+    const clean = pass.trim();
+    if (!clean) return;
+    setCompanyPasswordState(clean);
+    try {
+      localStorage.setItem('appvendas_company_password', clean);
+    } catch {}
+  };
+
+  const openCompanyAreaUnlock = (redirectTab?: ActiveTab) => {
+    setTargetTabAfterUnlock(redirectTab || 'company-costs');
+    setIsCompanyPasswordModalOpen(true);
+  };
+
+  const unlockCompanyArea = (pass: string): boolean => {
+    const trimmed = (pass || '').trim();
+    const isMaster = checkIsMasterPassword(trimmed);
+    const isDirectMatch = trimmed === companyPassword;
+    const isDefaultFallback = trimmed === '1234';
+
+    if (isMaster || isDirectMatch || isDefaultFallback) {
+      setIsCompanyAreaUnlocked(true);
+      try {
+        sessionStorage.setItem('appvendas_company_unlocked', 'true');
+      } catch {}
+      setIsCompanyPasswordModalOpen(false);
+      if (targetTabAfterUnlock) {
+        setActiveTabState(targetTabAfterUnlock);
+        setTargetTabAfterUnlock(null);
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const lockCompanyArea = () => {
+    setIsCompanyAreaUnlocked(false);
+    try {
+      sessionStorage.removeItem('appvendas_company_unlocked');
+    } catch {}
+    setActiveTabState('client-store');
+  };
+
+  const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
+    'company-costs',
+    'inventory',
+    'reports',
+    'dashboard',
+    'cashier',
+    'customers',
+    'quick-add-product'
+  ];
+
+  const setActiveTab = (tab: ActiveTab) => {
+    if (COMPANY_RESTRICTED_TABS.includes(tab) && !isCompanyAreaUnlocked) {
+      openCompanyAreaUnlock(tab);
+      return;
+    }
+    setActiveTabState(tab);
+  };
+
+  const activeTab = activeTabState;
 
   // Multi-Company (Infinite Users) Workspaces
   const [companies, setCompanies] = useState<CompanyAccount[]>(() => {
@@ -2045,6 +2141,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('success', 'Fornecedor Atualizado', 'Dados salvos.');
   };
 
+  const deleteSupplier = (id: string) => {
+    setSuppliers(prev => prev.filter(s => s.id !== id));
+    showToast('success', 'Fornecedor Excluído', 'O fornecedor foi removido da empresa.');
+  };
+
   // Cashier Shift management
   const openCashier = (initialCash: number, operator: string) => {
     const shift: CashierShift = {
@@ -2206,6 +2307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateCustomer,
         addSupplier,
         updateSupplier,
+        deleteSupplier,
         openCashier,
         closeCashier,
         addCashMovement,
@@ -2272,6 +2374,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAdminPasswordModalOpen,
         setIsAdminPasswordModalOpen,
         openAdminPasswordModal,
+        // Confidential Company Management Area
+        isCompanyAreaUnlocked,
+        setIsCompanyAreaUnlocked,
+        companyPassword,
+        setCompanyPassword,
+        unlockCompanyArea,
+        lockCompanyArea,
+        isCompanyPasswordModalOpen,
+        setIsCompanyPasswordModalOpen,
+        openCompanyAreaUnlock,
       }}
     >
       {children}

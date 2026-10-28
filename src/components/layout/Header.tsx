@@ -21,7 +21,10 @@ import {
   Users,
   QrCode,
   Share2,
-  Phone
+  Phone,
+  Lock,
+  Unlock,
+  KeyRound
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
@@ -51,7 +54,10 @@ export const Header: React.FC = () => {
     setIsCompanyModalOpen,
     setIsSellerWhatsappModalOpen,
     activeSeller,
-    openAdminPasswordModal
+    openAdminPasswordModal,
+    isCompanyAreaUnlocked,
+    lockCompanyArea,
+    openCompanyAreaUnlock
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
@@ -88,6 +94,7 @@ export const Header: React.FC = () => {
     switch (activeTab) {
       case 'client-store': return '📱 Loja & Catálogo do Cliente';
       case 'quick-add-product': return '➕ Adicionar & Gerenciar Produtos';
+      case 'company-costs': return '🔒 Área Empresa: Custos & Fornecedores';
       case 'dashboard': return 'Visão Geral';
       case 'inventory': return 'Controle de Estoque';
       case 'pos': return 'Ponto de Venda & Frente de Caixa';
@@ -103,6 +110,7 @@ export const Header: React.FC = () => {
     switch (activeTab) {
       case 'client-store': return 'Área simplificada para o cliente digitar nome e WhatsApp, comprar e mandar o pedido no seu Zap';
       case 'quick-add-product': return 'Cadastre produtos rapidamente com preço de varejo, atacado, custo e foto';
+      case 'company-costs': return 'Área restrita por senha com custos de compra, margens de lucro reais e gestão de fornecedores';
       case 'dashboard': return 'Resumo operacional de vendas, estoque e movimentações em tempo real';
       case 'inventory': return 'Catálogo de produtos, controle de estoque e alertas de reposição';
       case 'pos': return 'Registre vendas ágeis com cálculo automático de atacado e cupom não fiscal';
@@ -245,6 +253,57 @@ export const Header: React.FC = () => {
             <span className="sm:hidden font-bold">Loja</span>
           </button>
         )}
+
+        {/* Company Area Protected Button (Costs & Suppliers) */}
+        {activeTab !== 'company-costs' ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (!isCompanyAreaUnlocked) {
+                openCompanyAreaUnlock('company-costs');
+              } else {
+                setActiveTab('company-costs');
+              }
+            }}
+            className={`flex px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95 ${
+              isCompanyAreaUnlocked
+                ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+            }`}
+            title="Acessar Área Restrita da Empresa (Custos de Compra e Fornecedores)"
+          >
+            {isCompanyAreaUnlocked ? (
+              <Unlock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            ) : (
+              <Lock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+            )}
+            <span className="hidden sm:inline">{isCompanyAreaUnlocked ? 'Área Empresa' : 'Área Empresa 🔒'}</span>
+            <span className="sm:hidden font-bold">Empresa</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={lockCompanyArea}
+            className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Bloquear agora e voltar para a visualização do cliente"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Bloquear p/ Cliente</span>
+            <span className="sm:hidden font-bold">Bloquear</span>
+          </button>
+        )}
+
+        {/* Trocar Senha da Empresa Quick Button */}
+        <button
+          type="button"
+          onClick={() => openCompanyAreaUnlock('company-costs')}
+          className="flex px-2 sm:px-2.5 py-1.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
+          title="Alterar a Senha da Empresa (Custos & Fornecedores)"
+        >
+          <KeyRound className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span className="hidden sm:inline">Trocar Senha</span>
+          <span className="sm:hidden font-bold">Senha</span>
+        </button>
 
         {/* WhatsApp do Vendedor Quick Button */}
         <button

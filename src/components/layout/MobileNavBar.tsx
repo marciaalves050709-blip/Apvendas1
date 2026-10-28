@@ -6,26 +6,35 @@ import {
   PlusCircle, 
   ShoppingCart, 
   Package, 
-  LayoutDashboard,
-  Receipt
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 export const MobileNavBar: React.FC = () => {
-  const { activeTab, setActiveTab, cartItemCount, products } = useApp();
+  const { 
+    activeTab, 
+    setActiveTab, 
+    cartItemCount, 
+    products,
+    isCompanyAreaUnlocked,
+    openCompanyAreaUnlock 
+  } = useApp();
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
 
-  const items: { id: ActiveTab; label: string; icon: React.ReactNode; badge?: number; highlight?: boolean }[] = [
+  const items: { 
+    id: ActiveTab; 
+    label: string; 
+    icon: React.ReactNode; 
+    badge?: number; 
+    highlight?: boolean;
+    locked?: boolean;
+  }[] = [
     {
       id: 'client-store',
-      label: 'Entrar / Loja',
+      label: 'Loja Cliente',
       icon: <ShoppingBag className="w-5 h-5" />,
       highlight: true,
-    },
-    {
-      id: 'quick-add-product',
-      label: 'Add / Atualizar',
-      icon: <PlusCircle className="w-5 h-5" />,
     },
     {
       id: 'pos',
@@ -34,15 +43,22 @@ export const MobileNavBar: React.FC = () => {
       badge: cartItemCount > 0 ? cartItemCount : undefined,
     },
     {
+      id: 'quick-add-product',
+      label: 'Add Produto',
+      icon: <PlusCircle className="w-5 h-5" />,
+    },
+    {
       id: 'inventory',
       label: 'Estoque',
       icon: <Package className="w-5 h-5" />,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
+      locked: !isCompanyAreaUnlocked,
     },
     {
-      id: 'dashboard',
-      label: 'Painel',
-      icon: <LayoutDashboard className="w-5 h-5" />,
+      id: 'company-costs',
+      label: isCompanyAreaUnlocked ? 'Empresa' : 'Empresa 🔒',
+      icon: isCompanyAreaUnlocked ? <Unlock className="w-5 h-5 text-amber-500" /> : <Lock className="w-5 h-5 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked,
     },
   ];
 
@@ -54,7 +70,13 @@ export const MobileNavBar: React.FC = () => {
           <button
             key={item.id}
             type="button"
-            onClick={() => setActiveTab(item.id)}
+            onClick={() => {
+              if (item.locked) {
+                openCompanyAreaUnlock(item.id);
+              } else {
+                setActiveTab(item.id);
+              }
+            }}
             className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer relative min-w-[58px] ${
               isActive
                 ? item.highlight
