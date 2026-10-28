@@ -115,7 +115,7 @@ export const CompanyPasswordModal: React.FC = () => {
                 {modalMode === 'unlock' ? 'Área Restrita da Empresa' : 'Trocar Senha da Empresa'}
               </h3>
               <p className="text-[11px] text-amber-300 font-bold">
-                {modalMode === 'unlock' ? 'Custos de Venda & Fornecedores' : 'Definir Nova Senha de Segurança'}
+                {modalMode === 'unlock' ? 'Frente de Caixa, Vendas, Custos & Empresa' : 'Definir Nova Senha de Segurança'}
               </p>
             </div>
           </div>
@@ -172,8 +172,8 @@ export const CompanyPasswordModal: React.FC = () => {
           <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
           <p className="text-[11px] leading-relaxed">
             {modalMode === 'unlock'
-              ? 'Área exclusiva da empresa. Preços de custo e fornecedores são protegidos contra visualização de clientes.'
-              : 'Altere a senha de acesso aos custos e fornecedores. Somente quem tiver a senha poderá entrar.'}
+              ? 'Área exclusiva da empresa. Frente de Caixa (PDV), Histórico de Vendas, Fechamento de Caixa, Custos e Fornecedores são protegidos contra visualização de clientes.'
+              : 'Altere a senha de acesso à gestão interna da empresa. Somente quem tiver a senha poderá acessar Frente de Caixa, Vendas e Custos.'}
           </p>
         </div>
 

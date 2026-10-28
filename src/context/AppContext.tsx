@@ -328,13 +328,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialCompanyFromUrl = initialUrlParams?.get('empresa') || initialUrlParams?.get('loja');
   const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
 
+  const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
+    'pos',
+    'sales',
+    'cashier',
+    'company-costs',
+    'inventory',
+    'reports',
+    'dashboard',
+    'customers',
+    'quick-add-product'
+  ];
+
   // Default tab is ALWAYS 'client-store' because this is direct sales to clients!
-  const [activeTabState, setActiveTabState] = useState<ActiveTab>(initialTabFromUrl || 'client-store');
+  // Any restricted tab (POS, sales history, reports, cashier, costs) requires company password
+  const [activeTabState, setActiveTabState] = useState<ActiveTab>(() => {
+    const isUnlockedInitial = typeof window !== 'undefined' && sessionStorage.getItem('appvendas_company_unlocked') === 'true';
+    if (initialTabFromUrl && (initialTabFromUrl === 'client-store' || isUnlockedInitial || !COMPANY_RESTRICTED_TABS.includes(initialTabFromUrl))) {
+      return initialTabFromUrl;
+    }
+    return 'client-store';
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'ALL'>('ALL');
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
 
-  // Confidential Company Management Area (starts LOCKED so clients never see company costs or suppliers)
+  // Confidential Company Management Area (starts LOCKED so clients never see company costs, POS, sales or suppliers)
   const [isCompanyAreaUnlocked, setIsCompanyAreaUnlocked] = useState<boolean>(() => {
     try {
       return sessionStorage.getItem('appvendas_company_unlocked') === 'true';
@@ -396,16 +415,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
     setActiveTabState('client-store');
   };
-
-  const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
-    'company-costs',
-    'inventory',
-    'reports',
-    'dashboard',
-    'cashier',
-    'customers',
-    'quick-add-product'
-  ];
 
   const setActiveTab = (tab: ActiveTab) => {
     if (COMPANY_RESTRICTED_TABS.includes(tab) && !isCompanyAreaUnlocked) {

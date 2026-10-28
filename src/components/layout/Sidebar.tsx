@@ -59,7 +59,7 @@ export const Sidebar: React.FC = () => {
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
 
-  const clientNavItems: { id: ActiveTab; label: string; icon: React.ReactNode; badge?: number; special?: boolean }[] = [
+  const clientNavItems: { id: ActiveTab; label: string; icon: React.ReactNode; badge?: number; special?: boolean; locked?: boolean }[] = [
     {
       id: 'client-store',
       label: 'Loja do Cliente (WhatsApp)',
@@ -69,7 +69,8 @@ export const Sidebar: React.FC = () => {
     {
       id: 'quick-add-product',
       label: 'Adicionar Produtos',
-      icon: <PlusCircle className="w-4 h-4 text-indigo-600" />,
+      icon: isCompanyAreaUnlocked ? <PlusCircle className="w-4 h-4 text-indigo-600" /> : <Lock className="w-4 h-4 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked,
     },
   ];
 
@@ -82,9 +83,28 @@ export const Sidebar: React.FC = () => {
       highlight: true
     },
     { 
+      id: 'pos', 
+      label: 'Frente de Caixa (PDV)', 
+      icon: isCompanyAreaUnlocked ? <ShoppingCart className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked 
+    },
+    { 
+      id: 'sales', 
+      label: 'Histórico de Vendas', 
+      icon: isCompanyAreaUnlocked ? <Receipt className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked 
+    },
+    { 
+      id: 'cashier', 
+      label: 'Movimento de Caixa', 
+      icon: isCompanyAreaUnlocked ? <WalletCards className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked,
+      badge: currentShift.isOpen ? undefined : 1
+    },
+    { 
       id: 'inventory', 
       label: 'Controle de Estoque', 
-      icon: <Package className="w-4 h-4" />,
+      icon: isCompanyAreaUnlocked ? <Package className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
       badge: lowStockCount > 0 ? lowStockCount : undefined,
       alert: lowStockCount > 0,
       locked: !isCompanyAreaUnlocked
@@ -92,35 +112,20 @@ export const Sidebar: React.FC = () => {
     { 
       id: 'reports', 
       label: 'Relatórios & Lucro Real', 
-      icon: <BarChart3 className="w-4 h-4" />,
+      icon: isCompanyAreaUnlocked ? <BarChart3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
       locked: !isCompanyAreaUnlocked
     },
     { 
       id: 'dashboard', 
       label: 'Dashboard Geral', 
-      icon: <LayoutDashboard className="w-4 h-4" />,
+      icon: isCompanyAreaUnlocked ? <LayoutDashboard className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
       locked: !isCompanyAreaUnlocked
-    },
-    { 
-      id: 'pos', 
-      label: 'Frente de Caixa (PDV)', 
-      icon: <ShoppingCart className="w-4 h-4" /> 
-    },
-    { 
-      id: 'sales', 
-      label: 'Histórico de Vendas', 
-      icon: <Receipt className="w-4 h-4" /> 
-    },
-    { 
-      id: 'cashier', 
-      label: 'Movimento de Caixa', 
-      icon: <WalletCards className="w-4 h-4" />,
-      badge: currentShift.isOpen ? undefined : 1
     },
     { 
       id: 'customers', 
       label: 'Cadastro de Clientes', 
-      icon: <Users className="w-4 h-4" /> 
+      icon: isCompanyAreaUnlocked ? <Users className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />,
+      locked: !isCompanyAreaUnlocked
     },
   ];
 
@@ -173,8 +178,14 @@ export const Sidebar: React.FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              onClick={() => {
+                if (item.locked) {
+                  openCompanyAreaUnlock(item.id);
+                } else {
+                  setActiveTab(item.id);
+                }
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 isActive
                   ? item.special 
                     ? 'bg-emerald-600 text-white shadow-sm'
@@ -190,6 +201,9 @@ export const Sidebar: React.FC = () => {
                 </div>
                 <span>{item.label}</span>
               </div>
+              {item.locked && (
+                <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+              )}
             </button>
           );
         })}

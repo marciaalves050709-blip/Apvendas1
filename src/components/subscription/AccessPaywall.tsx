@@ -33,6 +33,8 @@ import { PWAInstallModal } from '../pwa/PWAInstallModal';
 
 export const AccessPaywall: React.FC = () => {
   const {
+    activeTab,
+    setActiveTab,
     subscription,
     isTrialExpired,
     isBlockedDueToDay5,
@@ -48,6 +50,12 @@ export const AccessPaywall: React.FC = () => {
     isTestBlockMode,
     openAdminPasswordModal
   } = useApp();
+
+  // A área de vendas do cliente é SEMPRE liberada para compras!
+  // O cliente NUNCA deve ser bloqueado de visualizar os produtos e fazer pedidos.
+  if (activeTab === 'client-store') {
+    return null;
+  }
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
 

@@ -119,9 +119,7 @@ export const ClientStoreView: React.FC = () => {
     }
   });
 
-  const [isIdentified, setIsIdentified] = useState<boolean>(() => {
-    return Boolean(clientUser.name.trim() && clientUser.phone.trim());
-  });
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
 
   // Entry Form Inputs
   const [inputName, setInputName] = useState(clientUser.name);
@@ -242,40 +240,33 @@ export const ClientStoreView: React.FC = () => {
     setInputPhone(formatted);
   };
 
-  // Login / Identify Action
+  // Save / Update Client Info Action
   const handleIdentifyCustomer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputName.trim()) {
-      showToast('error', 'Nome Obrigatório', 'Por favor, digite seu nome.');
-      return;
-    }
-    if (!inputPhone.trim() || inputPhone.replace(/\D/g, '').length < 8) {
-      showToast('error', 'Telefone Inválido', 'Por favor, digite um número de WhatsApp válido.');
-      return;
-    }
-
     const newUser: ClientUser = {
-      name: inputName.trim(),
+      name: inputName.trim() || 'Cliente',
       phone: inputPhone.trim(),
       address: inputAddress.trim(),
       deliveryType: selectedDeliveryType,
     };
 
     setClientUser(newUser);
-    setIsIdentified(true);
+    setIsEditUserModalOpen(false);
     localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(newUser));
 
     // Register customer in central store context if not exists
-    addCustomer({
-      name: newUser.name,
-      document: '',
-      phone: newUser.phone,
-      address: newUser.address,
-      city: paymentSettings.merchantCity || 'Barcarena PA',
-      notes: 'Cliente cadastrado via Catálogo Mobile',
-    });
+    if (newUser.name && newUser.phone) {
+      addCustomer({
+        name: newUser.name,
+        document: '',
+        phone: newUser.phone,
+        address: newUser.address,
+        city: paymentSettings.merchantCity || 'Barcarena PA',
+        notes: 'Cliente cadastrado via Catálogo Mobile',
+      });
+    }
 
-    showToast('success', `Bem-vindo(a), ${newUser.name}!`, 'Selecione os produtos e faça seu pedido.');
+    showToast('success', 'Dados Salvos!', 'Suas preferências e informações foram salvas.');
   };
 
   // Handle click on out-of-stock product
@@ -467,16 +458,19 @@ export const ClientStoreView: React.FC = () => {
       }
     }
 
+    const finalCustomerName = clientUser.name.trim() || 'Cliente';
+    const finalCustomerPhone = clientUser.phone.trim();
+
     if (clientUser.deliveryType === 'ENTREGA' && !clientUser.address.trim()) {
-      showToast('error', 'Endereço Obrigatório', 'Por favor, informe o endereço para entrega.');
+      showToast('error', 'Endereço Obrigatório', 'Por favor, informe o endereço completo para entrega.');
       return;
     }
 
     const orderNumber = Math.floor(1000 + Math.random() * 9000).toString();
     const orderData: CustomerOrderData = {
       orderCode: orderNumber,
-      customerName: clientUser.name,
-      customerPhone: clientUser.phone,
+      customerName: finalCustomerName,
+      customerPhone: finalCustomerPhone,
       deliveryType: clientUser.deliveryType,
       deliveryAddress: clientUser.address,
       paymentMethod,
@@ -496,11 +490,22 @@ export const ClientStoreView: React.FC = () => {
     // Deduct inventory items so stock is accurately reserved/sold
     detailedCart.forEach(item => {
       addStockMovement(item.product.id, 'SAIDA_VENDA', item.quantity, {
-        reason: `Pedido WhatsApp #${orderNumber} (${clientUser.name} - Vendedor: ${activeSeller?.name || 'Geral'})`,
+        reason: `Pedido WhatsApp #${orderNumber} (${finalCustomerName} - Vendedor: ${activeSeller?.name || 'Geral'})`,
         documentRef: `WA-${orderNumber}`,
-        user: activeSeller?.name || clientUser.name,
+        user: activeSeller?.name || finalCustomerName,
       });
     });
+
+    if (finalCustomerName && finalCustomerPhone) {
+      addCustomer({
+        name: finalCustomerName,
+        document: '',
+        phone: finalCustomerPhone,
+        address: clientUser.address,
+        city: paymentSettings.merchantCity || 'Barcarena PA',
+        notes: 'Cliente que comprou via Catálogo Mobile',
+      });
+    }
 
     // Trigger celebratory confetti
     try {
@@ -554,243 +559,8 @@ export const ClientStoreView: React.FC = () => {
     setTimeout(() => setCopiedOrderText(false), 2500);
   };
 
-  // STEP 1: Identification Screen (Ultra Simple & 100% Mobile Accessible)
-  if (!isIdentified) {
-    return (
-      <div className="flex-1 w-full h-full bg-slate-100 overflow-y-auto overscroll-contain p-2 sm:p-6 pb-36 sm:pb-16 flex flex-col items-center justify-start min-h-0">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden shrink-0 my-1 sm:my-auto">
-          {/* Header Banner */}
-          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-4 sm:p-6 text-white text-center relative">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-3 text-2xl sm:text-3xl shadow-inner">
-              🛍️
-            </div>
-            <h1 className="text-lg sm:text-2xl font-black tracking-tight">
-              {paymentSettings.merchantName || currentCompany?.name || 'Minha Loja'}
-            </h1>
+  // A área de vendas e compras do cliente é 100% liberada e desbloqueada para catálogo e compras
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 bg-white/15 rounded-full text-[11px] font-semibold mt-1.5 text-emerald-50">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>{products.length} Produtos Cadastrados</span>
-            </div>
-          </div>
-
-          {/* Quick Action Buttons (Top of Mobile Screen - Always Visible) */}
-          <div className="p-3 sm:p-4 bg-emerald-50/80 border-b border-emerald-200 space-y-2">
-            <button
-              type="button"
-              onClick={() => {
-                setClientUser({ name: 'Visitante', phone: '(11) 99999-9999', address: '', deliveryType: 'RETIRADA' });
-                setIsIdentified(true);
-              }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider shadow-md shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>🚀 Entrar e Ver Produtos ({products.length})</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('inventory')}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>✏️ Ver Produtos pra Atualizar no Estoque</span>
-            </button>
-
-            <div className="pt-1 flex items-center justify-center">
-              <PWAInstallButton />
-            </div>
-          </div>
-
-          {/* Form Content */}
-          <form onSubmit={handleIdentifyCustomer} className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-            <div className="text-center mb-0.5">
-              <h2 className="text-xs sm:text-sm font-bold text-slate-800">Personalize seus dados para o pedido</h2>
-              <p className="text-[10px] sm:text-xs text-slate-500">Escolha como deseja receber e sua forma de pagamento</p>
-            </div>
-
-            {/* Nome */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Seu Nome / Razão Social</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ex: Seu Nome ou Empresa"
-                value={inputName}
-                onChange={e => setInputName(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-medium text-slate-900 outline-none transition-all"
-              />
-            </div>
-
-            {/* WhatsApp */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Seu WhatsApp</span>
-              </label>
-              <input
-                type="tel"
-                placeholder="(11) 99999-9999"
-                value={inputPhone}
-                onChange={e => handlePhoneChange(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 text-xs sm:text-sm font-medium text-slate-900 outline-none transition-all"
-              />
-            </div>
-
-            {/* Como deseja receber? Retirar no Local vs Entrega Local */}
-            <div className="space-y-1.5 pt-1 border-t border-slate-100">
-              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                Como deseja receber?
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedDeliveryType('RETIRADA')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                    selectedDeliveryType === 'RETIRADA'
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <Store className="w-4 h-4" />
-                  <span>🏪 Retirar no Local</span>
-                  <span className="text-[9px] font-normal opacity-85">Balcão da loja</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedDeliveryType('ENTREGA')}
-                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                    selectedDeliveryType === 'ENTREGA'
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <Truck className="w-4 h-4" />
-                  <span>🛵 Entrega Local</span>
-                  <span className="text-[9px] font-normal opacity-85">No seu endereço</span>
-                </button>
-              </div>
-
-              {selectedDeliveryType === 'ENTREGA' && (
-                <div className="mt-2 p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1">
-                  <label className="block text-[10px] font-bold text-emerald-950 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-emerald-700" />
-                    <span>Adicionar Endereço de Entrega:</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Rua, Número, Bairro, Complemento/Referência"
-                    value={inputAddress}
-                    onChange={e => setInputAddress(e.target.value)}
-                    className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-xs font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Forma de Pagamento Preferida */}
-            <div className="space-y-1.5 pt-1 border-t border-slate-100">
-              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                Forma de Pagamento
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('PIX')}
-                  className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                    paymentMethod === 'PIX'
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>⚡ Pix</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('CARTAO_CREDITO')}
-                  className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                    paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span>💳 Cartão</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('DINHEIRO')}
-                  className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                    paymentMethod === 'DINHEIRO'
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <Banknote className="w-3.5 h-3.5" />
-                  <span>💵 Dinheiro</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Main Submit Button: Entrar e Ver Produtos */}
-            <button
-              type="submit"
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
-            >
-              <span>Salvar Dados e Ver Produtos</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Demo Quick login & Back to dashboard */}
-            <div className="pt-1 flex items-center justify-between text-xs text-slate-400">
-              <button
-                type="button"
-                onClick={() => {
-                  setInputName('Cliente VIP');
-                  setInputPhone('(11) 98765-4321');
-                }}
-                className="hover:text-emerald-700 transition-colors underline cursor-pointer text-[10px]"
-              >
-                Preencher dados rápidos
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (isCompanyAreaUnlocked) {
-                    setActiveTab('company-costs');
-                  } else {
-                    openCompanyAreaUnlock('company-costs');
-                  }
-                }}
-                className="hover:text-amber-700 font-bold transition-colors text-[10px] flex items-center gap-1 cursor-pointer"
-                title="Acesso exclusivo da empresa com senha"
-              >
-                <Lock className="w-3 h-3 text-amber-600" />
-                <span>Área da Empresa (Senha)</span>
-              </button>
-            </div>
-
-            {/* Quick Install App on Phone button */}
-            <div className="pt-2 flex justify-center">
-              <PWAInstallButton />
-            </div>
-          </form>
-
-          {/* Footer signature */}
-          <div className="text-center py-2.5 sm:py-3 text-[11px] text-slate-400 font-medium border-t border-slate-100 bg-slate-50">
-            {currentCompany?.name || 'Loja Virtual'} • Atendimento Direto no WhatsApp
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // STEP 2: Main Customer Shopping View
   return (
@@ -804,19 +574,35 @@ export const ClientStoreView: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-sm text-slate-900 truncate">
-                Olá, {clientUser.name.split(' ')[0]}!
+                {clientUser.name.trim() ? `Olá, ${clientUser.name.split(' ')[0]}!` : (paymentSettings.merchantName || currentCompany?.name || 'Catálogo de Produtos')}
               </span>
               <button
-                onClick={() => setIsIdentified(false)}
+                type="button"
+                onClick={() => {
+                  setInputName(clientUser.name);
+                  setInputPhone(clientUser.phone);
+                  setInputAddress(clientUser.address);
+                  setSelectedDeliveryType(clientUser.deliveryType);
+                  setIsEditUserModalOpen(true);
+                }}
                 title="Editar dados"
                 className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold underline cursor-pointer"
               >
-                Trocar
+                {clientUser.name.trim() ? 'Editar' : 'Identificar-se'}
               </button>
             </div>
             <p className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-              <Smartphone className="w-3 h-3 text-slate-400" />
-              <span>{formatPhoneDisplay(clientUser.phone)}</span>
+              {clientUser.phone ? (
+                <>
+                  <Smartphone className="w-3 h-3 text-slate-400" />
+                  <span>{formatPhoneDisplay(clientUser.phone)}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3 h-3 text-emerald-600" />
+                  <span>Venda Direta ao Cliente</span>
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -1260,18 +1046,27 @@ export const ClientStoreView: React.FC = () => {
             {/* Drawer Content */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-28 sm:pb-8">
               {/* Customer Info Card */}
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 flex items-center justify-between">
-                <div>
-                  <p className="font-bold">{clientUser.name}</p>
-                  <p className="text-[11px] text-emerald-700">{formatPhoneDisplay(clientUser.phone)}</p>
+              {clientUser.name.trim() && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 flex items-center justify-between">
+                  <div>
+                    <p className="font-bold">{clientUser.name}</p>
+                    <p className="text-[11px] text-emerald-700">{formatPhoneDisplay(clientUser.phone)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { 
+                      setInputName(clientUser.name);
+                      setInputPhone(clientUser.phone);
+                      setInputAddress(clientUser.address);
+                      setSelectedDeliveryType(clientUser.deliveryType);
+                      setIsEditUserModalOpen(true); 
+                    }}
+                    className="text-[11px] font-bold text-emerald-800 underline cursor-pointer"
+                  >
+                    Alterar
+                  </button>
                 </div>
-                <button
-                  onClick={() => { setIsCartOpen(false); setIsIdentified(false); }}
-                  className="text-[11px] font-bold text-emerald-800 underline cursor-pointer"
-                >
-                  Alterar
-                </button>
-              </div>
+              )}
 
               {/* OUT OF STOCK ALERT BANNER IN CART */}
               {hasStockError && (
@@ -1394,6 +1189,56 @@ export const ClientStoreView: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Identificação do Cliente */}
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Seus Dados para o Pedido</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">Para identificar você no WhatsApp</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Seu Nome / Empresa</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Maria Silva"
+                      value={clientUser.name}
+                      onChange={e => {
+                        const updated = { ...clientUser, name: e.target.value };
+                        setClientUser(updated);
+                        localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Seu WhatsApp</label>
+                    <input
+                      type="tel"
+                      placeholder="(99) 99999-9999"
+                      value={clientUser.phone}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                        let formatted = digits;
+                        if (digits.length > 2) {
+                          formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+                        }
+                        if (digits.length > 7) {
+                          formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+                        }
+                        const updated = { ...clientUser, phone: formatted };
+                        setClientUser(updated);
+                        localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* 1. Como deseja receber seu pedido? Retirar no Local vs Entrega Local */}
@@ -2020,6 +1865,89 @@ export const ClientStoreView: React.FC = () => {
                 Entendi, ver outros produtos
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Opcional de Identificação e Preferências do Cliente */}
+      {isEditUserModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-scale-up">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-4 sm:p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center text-lg">
+                  👤
+                </div>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wide">Seus Dados de Cliente</h3>
+                  <p className="text-[11px] text-emerald-100">Personalize seu nome e preferências de compra</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditUserModalOpen(false)}
+                className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white text-xs cursor-pointer transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleIdentifyCustomer} className="p-4 sm:p-5 space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Seu Nome / Razão Social
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Seu Nome ou Empresa"
+                  value={inputName}
+                  onChange={e => setInputName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Seu WhatsApp
+                </label>
+                <input
+                  type="tel"
+                  placeholder="(99) 99999-9999"
+                  value={inputPhone}
+                  onChange={e => handlePhoneChange(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Endereço para Entrega Local (Opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Rua, número, bairro e referências..."
+                  value={inputAddress}
+                  onChange={e => setInputAddress(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditUserModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 cursor-pointer transition-all"
+                >
+                  Salvar Dados
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

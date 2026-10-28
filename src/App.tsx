@@ -19,6 +19,7 @@ import { ProductFormModal } from './components/modals/ProductFormModal';
 import { CompanySettingsModal } from './components/modals/CompanySettingsModal';
 import { CompanyPasswordModal } from './components/modals/CompanyPasswordModal';
 import { SellerWhatsappModal } from './components/modals/SellerWhatsappModal';
+import { CompanyProtectedView } from './components/common/CompanyProtectedView';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
 import { SubscriptionModal } from './components/subscription/SubscriptionModal';
@@ -36,23 +37,31 @@ const MainLayout: React.FC = () => {
     isAccessAllowed,
     isAdmin,
     isMasterAdmin,
-    isTestBlockMode
+    isTestBlockMode,
+    isCompanyAreaUnlocked,
+    openCompanyAreaUnlock
   } = useApp();
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
 
-  // Keyboard shortcut support (F2 for POS) - disabled when blocked
+  // Keyboard shortcut support (F2 for POS) - requires company password if locked
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isBlocked) return;
       if (e.key === 'F2') {
         e.preventDefault();
-        setActiveTab('pos');
+        if (!isCompanyAreaUnlocked) {
+          openCompanyAreaUnlock('pos');
+        } else {
+          setActiveTab('pos');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setActiveTab, isBlocked]);
+  }, [setActiveTab, isBlocked, isCompanyAreaUnlocked, openCompanyAreaUnlock]);
+
+  const isRestrictedTab = activeTab !== 'client-store';
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -67,18 +76,29 @@ const MainLayout: React.FC = () => {
         <TrialBanner />
         <Header />
 
-        {/* Dynamic Views */}
+        {/* Dynamic Views with Password Shield Protection */}
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
           {activeTab === 'client-store' && <ClientStoreView />}
-          {activeTab === 'quick-add-product' && <QuickAddProductView />}
-          {activeTab === 'dashboard' && <DashboardView />}
-          {activeTab === 'inventory' && <InventoryView />}
-          {activeTab === 'pos' && <PosView />}
-          {activeTab === 'sales' && <SalesHistoryView />}
-          {activeTab === 'cashier' && <CashierView />}
-          {activeTab === 'customers' && <CustomersView />}
-          {activeTab === 'reports' && <ReportsView />}
-          {activeTab === 'company-costs' && <CompanyManagementView />}
+
+          {/* If company area is locked, ANY internal view is blocked by CompanyProtectedView */}
+          {isRestrictedTab && !isCompanyAreaUnlocked && (
+            <CompanyProtectedView tab={activeTab} />
+          )}
+
+          {/* When company area is unlocked, render the requested management view */}
+          {isRestrictedTab && isCompanyAreaUnlocked && (
+            <>
+              {activeTab === 'quick-add-product' && <QuickAddProductView />}
+              {activeTab === 'dashboard' && <DashboardView />}
+              {activeTab === 'inventory' && <InventoryView />}
+              {activeTab === 'pos' && <PosView />}
+              {activeTab === 'sales' && <SalesHistoryView />}
+              {activeTab === 'cashier' && <CashierView />}
+              {activeTab === 'customers' && <CustomersView />}
+              {activeTab === 'reports' && <ReportsView />}
+              {activeTab === 'company-costs' && <CompanyManagementView />}
+            </>
+          )}
         </main>
       </div>
 

@@ -22,6 +22,7 @@ export const TrialBanner: React.FC = () => {
     isBlockedDueToDay5,
     isSubscribed,
     isMasterAdmin,
+    activeTab,
     isAdmin,
     setAdminMode,
     setClientTestMode,
@@ -43,6 +44,11 @@ export const TrialBanner: React.FC = () => {
   } = useApp();
 
   const [showSimMenu, setShowSimMenu] = useState(false);
+
+  // A loja do cliente é exclusiva para compras e não exibe avisos de assinatura do sistema
+  if (activeTab === 'client-store') {
+    return null;
+  }
 
   // If in test block mode, do not render banner - AccessPaywall handles test block
   if (isTestBlockMode) {

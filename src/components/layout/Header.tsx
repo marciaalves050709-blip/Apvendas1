@@ -254,42 +254,28 @@ export const Header: React.FC = () => {
           </button>
         )}
 
-        {/* Company Area Protected Button (Costs & Suppliers) */}
-        {activeTab !== 'company-costs' ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (!isCompanyAreaUnlocked) {
-                openCompanyAreaUnlock('company-costs');
-              } else {
-                setActiveTab('company-costs');
-              }
-            }}
-            className={`flex px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95 ${
-              isCompanyAreaUnlocked
-                ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-            }`}
-            title="Acessar Área Restrita da Empresa (Custos de Compra e Fornecedores)"
-          >
-            {isCompanyAreaUnlocked ? (
-              <Unlock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            ) : (
-              <Lock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-            )}
-            <span className="hidden sm:inline">{isCompanyAreaUnlocked ? 'Área Empresa' : 'Área Empresa 🔒'}</span>
-            <span className="sm:hidden font-bold">Empresa</span>
-          </button>
-        ) : (
+        {/* Company Area Lock/Unlock Button */}
+        {isCompanyAreaUnlocked ? (
           <button
             type="button"
             onClick={lockCompanyArea}
             className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
-            title="Bloquear agora e voltar para a visualização do cliente"
+            title="Bloquear agora e voltar para a visualização do cliente (ocultar Frente de Caixa, Vendas e Custos)"
           >
             <Lock className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Bloquear p/ Cliente</span>
+            <span className="hidden sm:inline">Bloquear Gestão</span>
             <span className="sm:hidden font-bold">Bloquear</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openCompanyAreaUnlock('company-costs')}
+            className="flex px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+            title="Acessar Área Restrita da Empresa (Frente de Caixa, Histórico de Vendas, Custos e Fornecedores)"
+          >
+            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="hidden sm:inline">Área Empresa 🔒</span>
+            <span className="sm:hidden font-bold">Empresa</span>
           </button>
         )}
 
