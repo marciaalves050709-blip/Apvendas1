@@ -205,23 +205,30 @@ export const Header: React.FC = () => {
 
         {/* Quick App Refresh & Cache Clear */}
         <button
-          onClick={() => {
+          onClick={async () => {
+            showToast('info', 'Atualizando Aplicativo...', 'Limpando cache e carregando a versão mais recente...');
             try {
               if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(regs => {
-                  regs.forEach(r => r.update());
-                });
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const r of regs) {
+                  await r.update();
+                }
               }
               if ('caches' in window) {
-                caches.keys().then(keys => {
-                  keys.forEach(k => caches.delete(k));
-                });
+                const keys = await caches.keys();
+                for (const k of keys) {
+                  if (k !== 'appvendas-pwa-v21') {
+                    await caches.delete(k);
+                  }
+                }
               }
             } catch {}
-            window.location.reload();
+            setTimeout(() => {
+              window.location.reload();
+            }, 300);
           }}
           className="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-          title="Recarregar versão mais recente do aplicativo"
+          title="Recarregar e atualizar aplicativo para a versão mais recente"
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>

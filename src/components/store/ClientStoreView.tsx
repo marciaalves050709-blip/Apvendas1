@@ -54,7 +54,8 @@ import {
   Lock,
   Unlock,
   Share2,
-  Link2
+  Link2,
+  RefreshCw
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -679,6 +680,37 @@ export const ClientStoreView: React.FC = () => {
             <Share2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <span className="hidden sm:inline">Compartilhar Link</span>
             <span className="sm:hidden font-bold">Link</span>
+          </button>
+
+          {/* Quick App Refresh & Update Button */}
+          <button
+            type="button"
+            onClick={async () => {
+              showToast('info', 'Atualizando Aplicativo...', 'Verificando a versão mais recente e limpando cache...');
+              try {
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  for (const reg of regs) {
+                    await reg.update();
+                  }
+                }
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  for (const key of keys) {
+                    if (key !== 'appvendas-pwa-v21') {
+                      await caches.delete(key);
+                    }
+                  }
+                }
+              } catch {}
+              setTimeout(() => {
+                window.location.reload();
+              }, 400);
+            }}
+            className="p-1.5 sm:p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all cursor-pointer border border-slate-200 bg-white shadow-2xs active:scale-95"
+            title="Atualizar aplicativo para a versão mais recente"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
 
           {/* PWA Install Button */}

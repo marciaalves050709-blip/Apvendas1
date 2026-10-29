@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 20 (Fresh Network-First Cache)
-const CACHE_NAME = 'appvendas-pwa-v20';
+// appvendas Service Worker (PWA) - Version 21 (Instant Auto-Update & Fresh Network-First Cache)
+const CACHE_NAME = 'appvendas-pwa-v21';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -29,27 +29,40 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: delete ALL old caches immediately and claim clients
+// Activate: delete ALL old caches immediately, claim clients, and broadcast update to all open windows/installed apps
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+          .map((name) => {
+            console.log('[SW] Deleting stale cache:', name);
+            return caches.delete(name);
+          })
       );
-    }).then(() => self.clients.claim())
+    })
+    .then(() => self.clients.claim())
+    .then(async () => {
+      const allClients = await self.clients.matchAll({ type: 'window' });
+      for (const client of allClients) {
+        client.postMessage({ type: 'SW_VERSION_UPDATED', version: 'v21' });
+      }
+    })
   );
 });
 
-// Listen for skip waiting message from app
+// Listen for messages from app
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  if (event.data && event.data.type === 'CHECK_FOR_UPDATES') {
+    self.skipWaiting();
+  }
 });
 
-// Fetch: Network-first for ALL requests to ensure live updates on iPhone and web
+// Fetch: Network-first for ALL requests to ensure live updates on iPhone, Android and web
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 

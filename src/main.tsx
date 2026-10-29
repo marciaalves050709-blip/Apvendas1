@@ -164,28 +164,79 @@ try {
   console.warn('[Migration] Non-fatal storage check:', e);
 }
 
-// Register PWA service worker safely for installability and offline support
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=20', { scope: '/' })
-    .then((reg) => {
-      reg.update().catch(() => {});
-      if (reg.waiting) {
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        }
+// Force-bust stale caches and register PWA service worker with auto-update
+const CURRENT_SW_VERSION = 'v21';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v21';
+
+if (typeof window !== 'undefined') {
+  // Purge any old cache versions directly on the client
+  if ('caches' in window) {
+    try {
+      caches.keys().then((keys) => {
+        keys.forEach((key) => {
+          if (key !== CURRENT_CACHE_NAME) {
+            caches.delete(key).catch(() => {});
+          }
+        });
       });
-    })
-    .catch((err) => {
-      console.warn('[PWA] Service Worker registration:', err);
+    } catch {}
+  }
+
+  if ('serviceWorker' in navigator) {
+    let refreshing = false;
+
+    // Reload immediately when a new service worker takes over (so installed app updates right away)
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
     });
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'SW_VERSION_UPDATED' && !refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+
+    navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/' })
+      .then((reg) => {
+        reg.update().catch(() => {});
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          }
+        });
+
+        // Whenever the user opens or switches back to the installed app on phone/desktop, check for updates
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update().catch(() => {});
+          }
+        });
+
+        window.addEventListener('focus', () => {
+          reg.update().catch(() => {});
+        });
+
+        // Periodic background update check every 5 minutes
+        setInterval(() => {
+          reg.update().catch(() => {});
+        }, 5 * 60 * 1000);
+      })
+      .catch((err) => {
+        console.warn('[PWA] Service Worker registration:', err);
+      });
+  }
 }
 
 createRoot(document.getElementById('root')!).render(
