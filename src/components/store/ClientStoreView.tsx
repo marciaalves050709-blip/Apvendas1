@@ -52,7 +52,9 @@ import {
   Zap,
   Volume2,
   Lock,
-  Unlock
+  Unlock,
+  Share2,
+  Link2
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -127,9 +129,8 @@ export const ClientStoreView: React.FC = () => {
   const [inputAddress, setInputAddress] = useState(clientUser.address || '');
   const [selectedDeliveryType, setSelectedDeliveryType] = useState<'ENTREGA' | 'RETIRADA'>(clientUser.deliveryType || 'ENTREGA');
 
-  // Search and Category Filters
+  // Search Filter
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<Category | 'TODOS'>('TODOS');
 
   // Local Client Cart
   const [cartItems, setCartItems] = useState<{ [productId: string]: number }>({});
@@ -401,19 +402,18 @@ export const ClientStoreView: React.FC = () => {
 
   const cartDiscount = Math.max(0, cartSubtotal - cartTotal);
 
-  // Filtered Products
+  // Filtered Products (Searches directly across name, description, sku)
   const filteredProducts = useMemo(() => {
+    const term = search.toLowerCase().trim();
+    if (!term) return products;
     return products.filter(product => {
-      const matchesCat = selectedCategory === 'TODOS' || product.category === selectedCategory;
-      const term = search.toLowerCase();
-      const matchesSearch = 
+      return (
         product.name.toLowerCase().includes(term) ||
-        product.category.toLowerCase().includes(term) ||
         product.sku.toLowerCase().includes(term) ||
-        (product.description && product.description.toLowerCase().includes(term));
-      return matchesCat && matchesSearch;
+        (product.description && product.description.toLowerCase().includes(term))
+      );
     });
-  }, [products, selectedCategory, search]);
+  }, [products, search]);
 
   // Generate QR Code for Pix when completed or viewing
   useEffect(() => {
@@ -559,7 +559,32 @@ export const ClientStoreView: React.FC = () => {
     setTimeout(() => setCopiedOrderText(false), 2500);
   };
 
-  // A área de vendas e compras do cliente é 100% liberada e desbloqueada para catálogo e compras
+  // Share or Copy Customer Store Link
+  const handleShareStoreLink = async () => {
+    const storeUrl = `${window.location.origin}/?tab=client-store`;
+    const shareData = {
+      title: `${paymentSettings.merchantName || currentCompany?.name || 'Catálogo de Produtos'}`,
+      text: `Acesse nosso catálogo e faça suas compras direto pelo WhatsApp!`,
+      url: storeUrl,
+    };
+
+    try {
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        showToast('success', 'Catálogo Compartilhado!', 'Link da loja enviado com sucesso.');
+      } else {
+        await navigator.clipboard.writeText(storeUrl);
+        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie no WhatsApp para seus clientes.');
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(storeUrl);
+        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie no WhatsApp para seus clientes.');
+      } catch {
+        showToast('info', 'Link do Catálogo:', storeUrl);
+      }
+    }
+  };
 
 
   // STEP 2: Main Customer Shopping View
@@ -644,6 +669,18 @@ export const ClientStoreView: React.FC = () => {
             </span>
           </button>
 
+          {/* Share / Copy Updated Catalog Link Button */}
+          <button
+            type="button"
+            onClick={handleShareStoreLink}
+            className="p-1.5 sm:px-2.5 sm:py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer shadow-2xs active:scale-95"
+            title="Copiar e compartilhar link atualizado do catálogo para clientes"
+          >
+            <Share2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span className="hidden sm:inline">Compartilhar Link</span>
+            <span className="sm:hidden font-bold">Link</span>
+          </button>
+
           {/* PWA Install Button */}
           <PWAInstallButton />
 
@@ -721,52 +758,20 @@ export const ClientStoreView: React.FC = () => {
           )}
         </div>
 
-        {/* Quick Product Manager Switcher */}
+        {/* Product Count & Clear Search */}
         <div className="flex items-center justify-between text-xs pt-0.5">
           <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-            {filteredProducts.length} de {products.length} produtos
+            {filteredProducts.length} {filteredProducts.length === 1 ? 'produto cadastrado' : 'produtos cadastrados'}
           </span>
-          <button
-            type="button"
-            onClick={() => setActiveTab('inventory')}
-            className="text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <Edit3 className="w-3 h-3 text-indigo-600" />
-            <span>Ver Produtos no Estoque pra Atualizar</span>
-          </button>
-        </div>
-
-        {/* Category Horizontal Scroll Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-          <button
-            onClick={() => setSelectedCategory('TODOS')}
-            className={`px-3 py-1.5 rounded-full font-bold whitespace-nowrap transition-all cursor-pointer ${
-              selectedCategory === 'TODOS'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            🔥 Todos ({products.length})
-          </button>
-          {ALL_CATEGORIES.map(cat => {
-            const count = products.filter(p => p.category === cat).length;
-            const isSelected = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-full font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                  isSelected
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <span>{CATEGORY_EMOJIS[cat] || '📦'}</span>
-                <span>{cat}</span>
-                <span className="text-[10px] opacity-70">({count})</span>
-              </button>
-            );
-          })}
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+            >
+              Limpar busca
+            </button>
+          )}
         </div>
       </div>
 
@@ -780,13 +785,14 @@ export const ClientStoreView: React.FC = () => {
               </div>
               <h3 className="font-bold text-slate-800 text-sm">Nenhum produto encontrado</h3>
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                Tente buscar por outro termo ou selecione a categoria "Todos".
+                Tente buscar por outro termo digitando no campo de pesquisa acima.
               </p>
               <button
-                onClick={() => { setSearch(''); setSelectedCategory('TODOS'); }}
-                className="mt-3 px-4 py-2 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-100"
+                type="button"
+                onClick={() => setSearch('')}
+                className="mt-3 px-4 py-2 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-100 cursor-pointer"
               >
-                Limpar Filtros
+                Limpar Busca
               </button>
             </div>
           ) : (
@@ -839,10 +845,6 @@ export const ClientStoreView: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Category Badge */}
-                      <span className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold rounded-md">
-                        {CATEGORY_EMOJIS[product.category]} {product.category}
-                      </span>
 
                       {/* Stock Badge */}
                       <span className={`absolute top-2.5 right-2.5 px-2 py-0.5 text-[10px] font-bold rounded-md backdrop-blur-md flex items-center gap-1 ${
@@ -913,19 +915,6 @@ export const ClientStoreView: React.FC = () => {
                               {formatCurrency(currentPrice)}
                             </p>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setProductModalProduct(product);
-                            }}
-                            className="px-2 py-1 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95 ml-1"
-                            title="Atualizar dados, preço e estoque deste produto"
-                          >
-                            <Edit3 className="w-3 h-3 text-indigo-600" />
-                            <span>Atualizar</span>
-                          </button>
                         </div>
 
                         {/* Quantity Controls with Out of Stock Protection */}

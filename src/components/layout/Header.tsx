@@ -63,27 +63,27 @@ export const Header: React.FC = () => {
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
 
   const handleShareApp = async () => {
-    const shareUrl = `${window.location.origin}/?teste=2dias`;
+    const shareUrl = `${window.location.origin}/?tab=client-store`;
     const shareData = {
-      title: 'appvendas - Teste Grátis de 2 Dias',
-      text: 'Acesse o aplicativo appvendas com 2 dias de teste grátis (Estoque, PDV, Comprovante e Loja WhatsApp)!',
+      title: `${currentCompany?.name || 'appvendas'} - Catálogo & Loja Virtual`,
+      text: `Acesse o catálogo da ${currentCompany?.name || 'nossa loja'} e faça seus pedidos diretamente pelo WhatsApp!`,
       url: shareUrl
     };
 
     try {
       if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
         await navigator.share(shareData);
-        showToast('success', 'Compartilhado com Sucesso!', 'Link do aplicativo compartilhado.');
+        showToast('success', 'Compartilhado com Sucesso!', 'Link do catálogo compartilhado.');
       } else {
         await navigator.clipboard.writeText(shareUrl);
-        showToast('success', '🔗 Link Copiado!', 'Envie este link para novos usuários. Ao abrir, eles terão 2 dias de teste grátis!');
+        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie para seus clientes no WhatsApp.');
       }
     } catch {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        showToast('success', '🔗 Link Copiado!', 'Envie este link para novos usuários. Ao abrir, eles terão 2 dias de teste grátis!');
+        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie para seus clientes no WhatsApp.');
       } catch {
-        showToast('info', 'Link do App:', shareUrl);
+        showToast('info', 'Link do Catálogo:', shareUrl);
       }
     }
   };
@@ -226,15 +226,15 @@ export const Header: React.FC = () => {
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
 
-        {/* Share App Link with 2 Days Free Trial */}
+        {/* Share App / Catalog Link */}
         <button
           type="button"
           onClick={handleShareApp}
           className="flex px-2 sm:px-3 py-1.5 sm:py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 hover:border-indigo-300 rounded-xl font-bold text-xs items-center gap-1 sm:gap-1.5 transition-all shadow-2xs cursor-pointer active:scale-95"
-          title="Compartilhar link do aplicativo para novos clientes (com 2 dias de teste grátis!)"
+          title="Compartilhar link atualizado do catálogo para clientes"
         >
           <Share2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-          <span className="hidden sm:inline">Enviar Link (2 Dias Grátis)</span>
+          <span className="hidden sm:inline">Enviar Link do Catálogo</span>
           <span className="sm:hidden font-bold">Enviar Link</span>
         </button>
 
