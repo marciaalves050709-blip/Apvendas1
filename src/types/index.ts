@@ -251,3 +251,14 @@ export interface CompanyAccount {
   createdAt: string;
 }
 
+export interface ExtendedTrialClient {
+  id: string;
+  clientName: string;
+  clientPhone: string;
+  extendedAt: string;
+  expiresAt: string;
+  daysAdded: number;
+  status: 'ACTIVE' | 'EXPIRED';
+  notes?: string;
+}
+

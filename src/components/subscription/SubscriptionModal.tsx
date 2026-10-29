@@ -23,10 +23,17 @@ import {
   Crown,
   Settings2,
   UserCheck,
-  Edit3
+  Edit3,
+  UserPlus,
+  Phone,
+  Trash2,
+  ExternalLink,
+  Share2,
+  User
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
+import { ExtendedTrialClient } from '../../types';
 
 export const SubscriptionModal: React.FC = () => {
   const {
@@ -50,6 +57,10 @@ export const SubscriptionModal: React.FC = () => {
     paymentSettings,
     checkAndApplyAdminCredentials,
     openAdminPasswordModal,
+    extendedTrialClients,
+    addExtendedTrialClient,
+    removeExtendedTrialClient,
+    extendTrialForCurrentDevice,
     showToast
   } = useApp();
 
@@ -68,6 +79,57 @@ export const SubscriptionModal: React.FC = () => {
   const [forceShowRenewalPayment, setForceShowRenewalPayment] = useState(false);
   const [isEditingAdminPix, setIsEditingAdminPix] = useState(false);
   const [adminPixInput, setAdminPixInput] = useState(() => localStorage.getItem('appvendas_custom_admin_pix') || '91993192405');
+
+  // Extended Trial Client Liberation state (Área da Administradora)
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [lastLiberatedClient, setLastLiberatedClient] = useState<ExtendedTrialClient | null>(null);
+  const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
+  const [showClientsList, setShowClientsList] = useState(true);
+
+  const handleLiberateClient = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const name = newClientName.trim();
+    const phone = newClientPhone.trim();
+
+    if (!name) {
+      showToast('error', 'Nome Obrigatório', 'Informe o nome do cliente ou da empresa para liberar.');
+      return;
+    }
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (cleanDigits.length < 8) {
+      showToast('error', 'Celular Inválido', 'Informe o número do celular ou WhatsApp com DDD para liberar.');
+      return;
+    }
+
+    const created = addExtendedTrialClient(name, phone, 2);
+    setLastLiberatedClient(created);
+    setNewClientName('');
+    setNewClientPhone('');
+  };
+
+  const getClientDirectUrl = (client: ExtendedTrialClient) => {
+    const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+    const cleanDigits = client.clientPhone.replace(/\D/g, '');
+    return `${origin}?liberar=teste2dias&cliente=${encodeURIComponent(client.clientName)}&celular=${encodeURIComponent(cleanDigits)}`;
+  };
+
+  const handleSendClientWhatsApp = (client: ExtendedTrialClient) => {
+    const cleanDigits = client.clientPhone.replace(/\D/g, '');
+    const clientUrl = getClientDirectUrl(client);
+    const message = encodeURIComponent(
+      `Olá ${client.clientName}! 🎁\n\nSeu acesso de teste ao App de Vendas foi LIBERADO com sucesso por mais 2 dias grátis (+48 horas) pela Administradora Márcia Alves!\n\nClique no link abaixo para abrir seu sistema liberado agora mesmo:\n${clientUrl}\n\nAproveite para testar todas as funcionalidades!`
+    );
+    window.open(`https://wa.me/55${cleanDigits}?text=${message}`, '_blank');
+  };
+
+  const handleCopyClientLink = (client: ExtendedTrialClient) => {
+    const clientUrl = getClientDirectUrl(client);
+    navigator.clipboard.writeText(clientUrl);
+    setCopiedClientId(client.id);
+    setTimeout(() => setCopiedClientId(null), 2500);
+    showToast('success', 'Link Copiado!', `Link exclusivo para ${client.clientName} copiado para a área de transferência.`);
+  };
 
   // Real-time Bank Alert state
   const [bankAlert, setBankAlert] = useState<{
@@ -437,6 +499,210 @@ export const SubscriptionModal: React.FC = () => {
                     <p className="text-[10px] text-slate-400">
                       🔒 A chave é invisível com asteriscos para ninguém ver. Você pode trocá-la a qualquer momento.
                     </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Área da Administradora: Liberar Cliente para Estender Teste por +2 Dias */}
+              <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 border-2 border-indigo-400 shadow-md space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2 border-b border-indigo-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shadow-sm">
+                      🎁
+                    </div>
+                    <div>
+                      <h4 className="font-black text-sm text-white flex items-center gap-1.5 flex-wrap">
+                        <span>Liberar Cliente: Estender Teste por +2 Dias</span>
+                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] rounded-full font-bold">
+                          +48 Horas Grátis
+                        </span>
+                      </h4>
+                      <p className="text-xs text-indigo-200">
+                        Libere qualquer cliente pelo Nome e Celular/WhatsApp para estender o teste gratuito por mais 2 dias.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form de Liberação pelo Nome e Celular */}
+                <form onSubmit={handleLiberateClient} className="space-y-3 bg-white/5 border border-indigo-500/30 p-3.5 rounded-xl backdrop-blur-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-indigo-200 mb-1 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Nome do Cliente / Empresa:</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newClientName}
+                        onChange={(e) => setNewClientName(e.target.value)}
+                        placeholder="Ex: Mercado Central / João Silva"
+                        className="w-full px-3 py-2 bg-slate-950/80 border border-indigo-400/40 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:border-amber-400 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-indigo-200 mb-1 flex items-center gap-1">
+                        <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Celular / WhatsApp com DDD:</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={newClientPhone}
+                        onChange={(e) => setNewClientPhone(e.target.value)}
+                        placeholder="Ex: (91) 99319-2405 ou 91993192405"
+                        className="w-full px-3 py-2 bg-slate-950/80 border border-indigo-400/40 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:border-emerald-400 transition-all font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                    <span className="text-[10px] text-indigo-300 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-300 shrink-0" />
+                      Gera link exclusivo e mensagem pronta para WhatsApp
+                    </span>
+
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md cursor-pointer transition-all flex items-center gap-1.5"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>Liberar +2 Dias de Teste</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Card do Último Cliente Liberado */}
+                {lastLiberatedClient && (
+                  <div className="bg-emerald-950/60 border-2 border-emerald-400/60 rounded-xl p-3.5 space-y-2.5 animate-scale-up">
+                    <div className="flex items-center justify-between flex-wrap gap-1">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <div>
+                          <span className="text-xs font-black text-white">{lastLiberatedClient.clientName}</span>
+                          <span className="text-[11px] text-emerald-300 block font-mono">{lastLiberatedClient.clientPhone}</span>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-md">
+                        Liberado com Sucesso (+2 Dias)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSendClientWhatsApp(lastLiberatedClient)}
+                        className="flex-1 min-w-[200px] px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-xs font-black rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Enviar Liberação no WhatsApp</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyClientLink(lastLiberatedClient)}
+                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold rounded-xl border border-slate-700 cursor-pointer flex items-center gap-1.5 transition-all"
+                      >
+                        {copiedClientId === lastLiberatedClient.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedClientId === lastLiberatedClient.id ? 'Copiado!' : 'Copiar Link'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          extendTrialForCurrentDevice(2, lastLiberatedClient.clientName, lastLiberatedClient.clientPhone);
+                          setIsSubscriptionModalOpen(false);
+                        }}
+                        className="px-3 py-2 bg-indigo-600/70 hover:bg-indigo-600 active:scale-95 text-indigo-100 text-xs font-bold rounded-xl border border-indigo-400/40 cursor-pointer flex items-center gap-1.5 transition-all"
+                        title="Ativar +2 dias neste mesmo aparelho para testar"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Testar Neste Aparelho</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Histórico / Lista de Clientes com Teste Liberado */}
+                {extendedTrialClients.length > 0 && (
+                  <div className="space-y-2 pt-1 border-t border-indigo-800/60">
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setShowClientsList(!showClientsList)}
+                        className="text-xs font-bold text-indigo-200 hover:text-white flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Clientes Liberados no Sistema ({extendedTrialClients.length})</span>
+                        <span className="text-[10px] text-indigo-400">{showClientsList ? '▼ ocultar' : '▶ ver lista'}</span>
+                      </button>
+                    </div>
+
+                    {showClientsList && (
+                      <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                        {extendedTrialClients.map((client) => {
+                          const isCopied = copiedClientId === client.id;
+                          const expDate = new Date(client.expiresAt);
+                          const isStillActive = expDate.getTime() > Date.now();
+
+                          return (
+                            <div
+                              key={client.id}
+                              className="p-2.5 bg-slate-950/70 border border-indigo-500/20 rounded-xl flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-black text-xs text-white truncate">{client.clientName}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded font-mono">
+                                    {client.clientPhone}
+                                  </span>
+                                  {isStillActive ? (
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-emerald-600/30 text-emerald-300 rounded-full font-bold">
+                                      Ativo (+2d)
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] px-1.5 py-0.2 bg-slate-700 text-slate-300 rounded-full">
+                                      Expirado
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-400 block mt-0.5">
+                                  Liberado em: {new Date(client.extendedAt).toLocaleDateString('pt-BR')} • Válido até {expDate.toLocaleDateString('pt-BR')} {expDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendClientWhatsApp(client)}
+                                  className="p-1.5 bg-emerald-600/80 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold cursor-pointer transition-all"
+                                  title="Enviar WhatsApp com link de liberação"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyClientLink(client)}
+                                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold cursor-pointer transition-all"
+                                  title="Copiar link de liberação"
+                                >
+                                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => removeExtendedTrialClient(client.id)}
+                                  className="p-1.5 bg-rose-900/40 hover:bg-rose-900 text-rose-300 rounded-lg text-xs font-bold cursor-pointer transition-all"
+                                  title="Remover liberação"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

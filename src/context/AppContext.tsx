@@ -15,7 +15,8 @@ import {
   Category,
   SubscriptionState,
   CompanyAccount,
-  SellerProfile
+  SellerProfile,
+  ExtendedTrialClient
 } from '../types';
 import { sounds, formatCurrency, calculateNextDay5Expiry, formatDay5Date } from '../utils/pixHelper';
 import confetti from 'canvas-confetti';
@@ -155,6 +156,12 @@ interface AppContextType {
   isTestBlockMode: boolean;
   exitTestBlockMode: (masterPassword?: string) => boolean;
   renewSubscription: () => void;
+  // Extended Trial Clients (Liberar +2 Dias de Teste por Nome e Celular)
+  extendedTrialClients: ExtendedTrialClient[];
+  addExtendedTrialClient: (clientName: string, clientPhone: string, days?: number, notes?: string) => ExtendedTrialClient;
+  removeExtendedTrialClient: (id: string) => void;
+  extendTrialForCurrentDevice: (days?: number, clientName?: string, clientPhone?: string) => void;
+  checkAndApplyClientTrialExtension: (nameOrPhone: string) => boolean;
 
   // Multi-Company & Infinite Users Workspaces
   companyName: string;
@@ -200,6 +207,7 @@ const STORAGE_KEYS = {
 const DEFAULT_COMPANY_ID = 'empresa_principal';
 const STORAGE_COMPANIES_KEY = 'appvendas_companies_list_v1';
 const STORAGE_ACTIVE_COMPANY_KEY = 'appvendas_active_company_id_v1';
+const STORAGE_EXTENDED_TRIAL_CLIENTS_KEY = 'appvendas_extended_trial_clients_v1';
 
 export const getTenantKey = (baseKey: string, companyId: string) => {
   return `tenant_${companyId}_${baseKey}`;
@@ -671,6 +679,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [stockModalProduct, setStockModalProduct] = useState<Product | null>(null);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Extended Trial Clients state (Clientes autorizados para +2 dias adicionais de teste)
+  const [extendedTrialClients, setExtendedTrialClients] = useState<ExtendedTrialClient[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_EXTENDED_TRIAL_CLIENTS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_EXTENDED_TRIAL_CLIENTS_KEY, JSON.stringify(extendedTrialClients));
+    } catch {
+      // ignore
+    }
+  }, [extendedTrialClients]);
 
   // Simulation test block mode for the administrator to test unpaid blocking
   const [isTestBlockMode, setIsTestBlockMode] = useState<boolean>(() => {
@@ -1238,6 +1264,175 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentTimeMs(Date.now());
     showToast('success', '🎁 Teste Grátis de 2 Dias Liberado!', 'Você tem 48 horas de acesso completo com todas as ferramentas.');
   };
+
+  const extendTrialForCurrentDevice = (days: number = 2, clientName?: string, clientPhone?: string) => {
+    setIsTestBlockMode(false);
+    setIsAdmin(false);
+    try {
+      localStorage.removeItem('appvendas_test_block_active');
+      localStorage.removeItem('appvendas_pix_paid');
+    } catch {}
+
+    const nowIso = new Date().toISOString();
+    const updated: SubscriptionState = {
+      ...DEFAULT_SUBSCRIPTION,
+      trialStartDate: nowIso,
+      trialDurationDays: days,
+      isSubscribed: false,
+      planPrice: 94.98,
+      planName: `Plano Pro (+${days} Dias de Teste Liberado)`,
+      lastPaymentRef: clientName ? `LIBERACAO-${clientName.toUpperCase().replace(/\s+/g, '_')}` : undefined,
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEYS.SUBSCRIPTION, JSON.stringify(updated));
+    } catch {}
+
+    setSubscription(updated);
+    setCurrentTimeMs(Date.now());
+
+    try {
+      sounds.playBankNotification();
+      confetti({
+        particleCount: 110,
+        spread: 90,
+        origin: { y: 0.4 },
+      });
+    } catch {}
+
+    const targetGreeting = clientName ? `Olá ${clientName}! ` : '';
+    showToast(
+      'success',
+      '🎉 Teste Estendido por +2 Dias!',
+      `${targetGreeting}Seu acesso foi liberado com sucesso por mais 48 horas pela Administradora Márcia Alves!`
+    );
+  };
+
+  const addExtendedTrialClient = (
+    clientName: string, 
+    clientPhone: string, 
+    days: number = 2, 
+    notes?: string
+  ): ExtendedTrialClient => {
+    const trimmedName = clientName.trim() || 'Cliente';
+    const cleanPhone = clientPhone.replace(/\D/g, '');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+
+    const newRecord: ExtendedTrialClient = {
+      id: `ext_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      clientName: trimmedName,
+      clientPhone: clientPhone.trim(),
+      extendedAt: now.toISOString(),
+      expiresAt,
+      daysAdded: days,
+      status: 'ACTIVE',
+      notes: notes?.trim() || undefined,
+    };
+
+    setExtendedTrialClients(prev => {
+      // Remove any prior entry with exact same clean digits to avoid clutter
+      const filtered = prev.filter(c => {
+        const digits = c.clientPhone.replace(/\D/g, '');
+        return cleanPhone.length < 8 || digits !== cleanPhone;
+      });
+      const updated = [newRecord, ...filtered];
+      try {
+        localStorage.setItem(STORAGE_EXTENDED_TRIAL_CLIENTS_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      sounds.playPixSuccess();
+    } catch {}
+
+    showToast(
+      'success',
+      '✅ Cliente Liberado!',
+      `${trimmedName} (${clientPhone}) teve o teste estendido por mais ${days} dias com sucesso.`
+    );
+
+    return newRecord;
+  };
+
+  const removeExtendedTrialClient = (id: string) => {
+    setExtendedTrialClients(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      try {
+        localStorage.setItem(STORAGE_EXTENDED_TRIAL_CLIENTS_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    showToast('info', 'Liberação Removida', 'O registro de liberação foi excluído.');
+  };
+
+  const checkAndApplyClientTrialExtension = (nameOrPhone: string): boolean => {
+    const raw = (nameOrPhone || '').trim();
+    if (!raw) return false;
+
+    const queryDigits = raw.replace(/\D/g, '');
+    const queryLower = raw.toLowerCase();
+
+    let currentList = extendedTrialClients;
+    if (currentList.length === 0) {
+      try {
+        const saved = localStorage.getItem(STORAGE_EXTENDED_TRIAL_CLIENTS_KEY);
+        if (saved) currentList = JSON.parse(saved);
+      } catch {}
+    }
+
+    const matched = currentList.find(c => {
+      const clientDigits = c.clientPhone.replace(/\D/g, '');
+      const clientNameLower = c.clientName.toLowerCase();
+
+      // Check phone match
+      if (queryDigits.length >= 8 && clientDigits.length >= 8) {
+        if (clientDigits.includes(queryDigits) || queryDigits.includes(clientDigits) || clientDigits.endsWith(queryDigits.slice(-8))) {
+          return true;
+        }
+      }
+
+      // Check name match
+      if (queryLower.length >= 3) {
+        if (clientNameLower.includes(queryLower) || queryLower.includes(clientNameLower)) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (matched) {
+      extendTrialForCurrentDevice(matched.daysAdded || 2, matched.clientName, matched.clientPhone);
+      return true;
+    }
+
+    return false;
+  };
+
+  // Auto-activate trial extension if opened via custom link (?liberar=teste2dias or ?extensao=2dias)
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const urlParams = new URLSearchParams(window.location.search);
+      const liberar = urlParams.get('liberar') || urlParams.get('extensao');
+      if (liberar === 'teste2dias' || liberar === '2dias' || urlParams.has('liberar_teste')) {
+        const clientName = urlParams.get('cliente') || '';
+        const clientPhone = urlParams.get('celular') || '';
+        extendTrialForCurrentDevice(2, clientName, clientPhone);
+
+        // Clean parameters without page refresh
+        const url = new URL(window.location.href);
+        url.searchParams.delete('liberar');
+        url.searchParams.delete('extensao');
+        url.searchParams.delete('liberar_teste');
+        url.searchParams.delete('cliente');
+        url.searchParams.delete('celular');
+        window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+      }
+    } catch {}
+  }, []);
 
   const simulateTrialExpired = () => {
     setIsAdmin(false);
@@ -2368,6 +2563,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isTestBlockMode,
         exitTestBlockMode,
         renewSubscription,
+        // Extended Trial Clients (Liberar +2 Dias de Teste por Nome e Celular)
+        extendedTrialClients,
+        addExtendedTrialClient,
+        removeExtendedTrialClient,
+        extendTrialForCurrentDevice,
+        checkAndApplyClientTrialExtension,
         // Multi-Company & Infinite Users
         companyName,
         setCompanyName,

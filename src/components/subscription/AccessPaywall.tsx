@@ -23,7 +23,9 @@ import {
   Calendar,
   User,
   Phone,
-  Crown
+  Crown,
+  UserCheck,
+  Search
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -48,8 +50,33 @@ export const AccessPaywall: React.FC = () => {
     paymentSettings,
     isAccessAllowed,
     isTestBlockMode,
-    openAdminPasswordModal
+    openAdminPasswordModal,
+    checkAndApplyClientTrialExtension,
+    showToast
   } = useApp();
+
+  // Self-service validation for clients liberated by Admin Márcia
+  const [clientLookupInput, setClientLookupInput] = useState('');
+  const [lookupError, setLookupError] = useState('');
+  const [showClientValidation, setShowClientValidation] = useState(false);
+
+  const handleValidateClientLiberation = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLookupError('');
+    const query = clientLookupInput.trim();
+    if (!query) {
+      setLookupError('Digite seu nome ou número de celular/WhatsApp.');
+      return;
+    }
+
+    const success = checkAndApplyClientTrialExtension(query);
+    if (success) {
+      setClientLookupInput('');
+      setShowClientValidation(false);
+    } else {
+      setLookupError('Nome ou celular não localizado nas liberações ativas. Solicite a liberação com a Administradora Márcia Alves pelo WhatsApp.');
+    }
+  };
 
   // A área de vendas do cliente é SEMPRE liberada para compras!
   // O cliente NUNCA deve ser bloqueado de visualizar os produtos e fazer pedidos.
@@ -202,6 +229,84 @@ export const AccessPaywall: React.FC = () => {
               <Sparkles className="w-4 h-4 text-emerald-200" />
               <span>Liberar Teste de 2 Dias Grátis</span>
             </button>
+          </div>
+
+          {/* VALIDAÇÃO DE CLIENTE LIBERADO PELA ADMINISTRADORA MÁRCIA */}
+          <div className="bg-gradient-to-r from-indigo-50 via-slate-50 to-indigo-50 border-2 border-indigo-300 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-sm shrink-0">
+                  ✨
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-200 text-indigo-900 px-2 py-0.5 rounded-md">
+                      Extensão Autorizada
+                    </span>
+                    <span className="text-xs sm:text-sm font-black text-slate-900">
+                      Foi Liberado(a) pela Administradora Márcia?
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Se a Márcia estendeu seu teste por mais 2 dias, digite seu nome ou celular para desbloquear imediatamente.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowClientValidation(!showClientValidation)}
+                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <UserCheck className="w-4 h-4 text-indigo-200" />
+                <span>{showClientValidation ? 'Fechar Validação' : 'Validar Nome ou Celular'}</span>
+              </button>
+            </div>
+
+            {showClientValidation && (
+              <form onSubmit={handleValidateClientLiberation} className="pt-2 border-t border-indigo-200/80 space-y-2 animate-scale-up">
+                <label className="text-[11px] font-bold text-slate-700 block">
+                  Digite seu Nome ou Celular cadastrado na liberação:
+                </label>
+                <div className="flex items-center gap-2 flex-col sm:flex-row">
+                  <div className="relative flex-1 w-full">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={clientLookupInput}
+                      onChange={(e) => {
+                        setClientLookupInput(e.target.value);
+                        setLookupError('');
+                      }}
+                      placeholder="Ex: seu nome ou (91) 99319-2405"
+                      className="w-full pl-9 pr-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs text-slate-900 outline-none focus:border-indigo-600 shadow-2xs"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                    <span>Ativar Meus +2 Dias</span>
+                  </button>
+                </div>
+
+                {lookupError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start justify-between gap-2">
+                    <span>{lookupError}</span>
+                    <a
+                      href="https://wa.me/5591993192405?text=Ol%C3%A1%20M%C3%A1rcia!%20Gostaria%20de%20solicitar%20a%20libera%C3%A7%C3%A3o%20de%20mais%202%20dias%20de%20teste%20gr%C3%A1tis%20para%20o%20meu%20aplicativo."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-bold text-emerald-700 hover:underline shrink-0"
+                    >
+                      Falar no WhatsApp
+                    </a>
+                  </div>
+                )}
+              </form>
+            )}
           </div>
 
           {/* BOTÃO ADMINISTRADOR DE ACESSO VITALÍCIO */}
