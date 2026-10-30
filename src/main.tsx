@@ -165,16 +165,21 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = 'v21';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v21';
+const CURRENT_SW_VERSION = 'v25';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v25';
 
 if (typeof window !== 'undefined') {
+  // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
+  const params = new URLSearchParams(window.location.search);
+  const isForcedRefresh = params.has('atualizar') || params.has('limpar_cache') || params.has('novo_app');
+
   // Purge any old cache versions directly on the client
   if ('caches' in window) {
     try {
       caches.keys().then((keys) => {
         keys.forEach((key) => {
-          if (key !== CURRENT_CACHE_NAME) {
+          if (key !== CURRENT_CACHE_NAME || isForcedRefresh) {
+            console.log('[PWA] Purging outdated cache:', key);
             caches.delete(key).catch(() => {});
           }
         });
@@ -183,20 +188,34 @@ if (typeof window !== 'undefined') {
   }
 
   if ('serviceWorker' in navigator) {
-    let refreshing = false;
-
-    // Reload immediately when a new service worker takes over (so installed app updates right away)
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
+    const triggerSafeReload = () => {
+      const lastReloadKey = 'appvendas_last_sw_reload_ts';
+      const now = Date.now();
+      const last = parseInt(sessionStorage.getItem(lastReloadKey) || '0', 10);
+      // Throttle reload: max once every 12 seconds to avoid any reload loops
+      if (now - last > 12000) {
+        sessionStorage.setItem(lastReloadKey, now.toString());
         window.location.reload();
       }
+    };
+
+    // If forced refresh requested, unregister previous workers first
+    if (isForcedRefresh) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      }).catch(() => {});
+    }
+
+    // Reload safely when a new service worker takes over (so installed app updates right away)
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      triggerSafeReload();
     });
 
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'SW_VERSION_UPDATED' && !refreshing) {
-        refreshing = true;
-        window.location.reload();
+      if (event.data && event.data.type === 'SW_VERSION_UPDATED') {
+        triggerSafeReload();
       }
     });
 
@@ -228,10 +247,10 @@ if (typeof window !== 'undefined') {
           reg.update().catch(() => {});
         });
 
-        // Periodic background update check every 5 minutes
+        // Periodic background update check every 3 minutes
         setInterval(() => {
           reg.update().catch(() => {});
-        }, 5 * 60 * 1000);
+        }, 3 * 60 * 1000);
       })
       .catch((err) => {
         console.warn('[PWA] Service Worker registration:', err);

@@ -35,6 +35,21 @@ export class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  private handleClearCacheAndReload = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      sessionStorage.clear();
+    } catch {}
+    window.location.href = '/?atualizado=' + Date.now();
+  };
+
   private handleReset = () => {
     this.setState({ hasError: false, error: null });
   };
@@ -53,7 +68,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Sistema de Recuperação Ativo
               </h2>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                O aplicativo protegeu seus dados e evitou travamentos. Clique abaixo para continuar navegando normalmente.
+                O aplicativo protegeu seus dados e evitou travamentos. Clique abaixo para continuar navegando normalmente ou atualizar a versão instalada.
               </p>
             </div>
 
@@ -63,23 +78,34 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-2 pt-2">
-              <button
-                type="button"
-                onClick={this.handleReset}
-                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Continuar no App</span>
-              </button>
+            <div className="flex flex-col gap-2 pt-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={this.handleReset}
+                  className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Continuar no App</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={this.handleReload}
+                  className="py-3 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Home className="w-4 h-4" />
+                  <span>Recarregar</span>
+                </button>
+              </div>
 
               <button
                 type="button"
-                onClick={this.handleReload}
-                className="py-3 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                onClick={this.handleClearCacheAndReload}
+                className="w-full py-2.5 px-4 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/50 active:scale-95 text-indigo-300 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <Home className="w-4 h-4" />
-                <span>Recarregar</span>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Atualizar App Instalado e Limpar Cache</span>
               </button>
             </div>
           </div>
