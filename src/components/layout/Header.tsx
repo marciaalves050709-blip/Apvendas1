@@ -205,32 +205,20 @@ export const Header: React.FC = () => {
 
         {/* Quick App Refresh & Cache Clear */}
         <button
-          onClick={async () => {
+          type="button"
+          onClick={() => {
             showToast('info', 'Atualizando Aplicativo...', 'Limpando cache e carregando a versão mais recente...');
-            try {
-              if ('serviceWorker' in navigator) {
-                const regs = await navigator.serviceWorker.getRegistrations();
-                for (const r of regs) {
-                  await r.update();
-                }
-              }
-              if ('caches' in window) {
-                const keys = await caches.keys();
-                for (const k of keys) {
-                  if (k !== 'appvendas-pwa-v21') {
-                    await caches.delete(k);
-                  }
-                }
-              }
-            } catch {}
-            setTimeout(() => {
-              window.location.reload();
-            }, 300);
+            if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+              (window as any).__clearAppCacheAndReload();
+            } else {
+              window.location.href = window.location.pathname + '?atualizado=' + Date.now();
+            }
           }}
-          className="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-          title="Recarregar e atualizar aplicativo para a versão mais recente"
+          className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all cursor-pointer font-bold text-xs flex items-center gap-1 active:scale-95 shadow-2xs"
+          title="Recarregar e atualizar aplicativo para a versão mais recente (v4.0)"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin-hover" />
+          <span className="hidden sm:inline">Atualizar App</span>
         </button>
 
         {/* Share App / Catalog Link */}

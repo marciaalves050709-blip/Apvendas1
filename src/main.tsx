@@ -115,7 +115,7 @@ try {
       }
 
       // 4. Sanitize subscription: Ensure new users receive a 2-day free trial!
-      const TRIAL_2DAYS_KEY = 'appvendas_trial_2days_v19';
+      const TRIAL_2DAYS_KEY = 'appvendas_trial_2days_v40';
       const isUrlTrial = urlParams.has('teste') || urlParams.has('trial') || urlParams.has('novo') || urlParams.has('degustacao');
 
       if (localStorage.getItem(TRIAL_2DAYS_KEY) !== 'true' || isUrlTrial) {
@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = 'v30';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v30';
+const CURRENT_SW_VERSION = 'v40';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v40';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
