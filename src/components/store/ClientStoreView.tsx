@@ -657,18 +657,6 @@ export const ClientStoreView: React.FC = () => {
             <span className="sm:hidden">Empresa</span>
           </button>
 
-          {/* WhatsApp Destination Config */}
-          <button
-            onClick={() => setIsSellerWhatsappModalOpen(true)}
-            title="Configurar WhatsApp, Chave Pix e QR Code do Vendedor"
-            className="p-1.5 sm:p-2 text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-slate-200 bg-white shadow-2xs"
-          >
-            <Send className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span className="hidden sm:inline">WhatsApp & Pix:</span>
-            <span className="font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded-md text-[11px] truncate max-w-[90px] sm:max-w-none">
-              {activeSeller?.name || 'Vendedor'}
-            </span>
-          </button>
 
           {/* Share / Copy Updated Catalog Link Button */}
           <button
@@ -1621,14 +1609,8 @@ export const ClientStoreView: React.FC = () => {
                       </button>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-emerald-800 pt-1.5 border-t border-emerald-200/60">
-                      <span>Vendedor: <strong>{activeSeller?.name}</strong> ({activeBank.shortName})</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsSellerWhatsappModalOpen(true)}
-                        className="text-[10px] text-emerald-700 hover:text-emerald-900 underline font-bold cursor-pointer"
-                      >
-                        Alterar Pix / Vendedor
-                      </button>
+                      <span>Recebedor: <strong>{activeSeller?.merchantName || activeSeller?.name || currentCompany?.name}</strong></span>
+                      <span className="text-[10px] bg-emerald-200/70 text-emerald-900 font-bold px-1.5 py-0.5 rounded">Banco: {activeBank.shortName}</span>
                     </div>
                   </div>
                 )}

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp, checkIsMasterPassword } from '../../context/AppContext';
-import { Product, Category, Supplier } from '../../types';
-import { formatCurrency } from '../../utils/pixHelper';
+import { Product, Category, Supplier, BankProvider, SellerProfile } from '../../types';
+import { formatCurrency, generatePixPayload, BANKS_LIST, sounds } from '../../utils/pixHelper';
 import { getProductImage, CATEGORY_EMOJIS, ALL_ACTIVITY_CATEGORIES } from '../../utils/productImages';
+import QRCode from 'qrcode';
 import { 
   Building2, 
   Lock, 
@@ -34,7 +35,9 @@ import {
   Send,
   Copy,
   Clock,
-  UserCheck
+  UserCheck,
+  QrCode,
+  CreditCard
 } from 'lucide-react';
 
 export const CompanyManagementView: React.FC = () => {
@@ -54,17 +57,123 @@ export const CompanyManagementView: React.FC = () => {
     extendedTrialClients,
     addExtendedTrialClient,
     removeExtendedTrialClient,
-    extendTrialForCurrentDevice
+    extendTrialForCurrentDevice,
+    paymentSettings,
+    updatePaymentSettings,
+    activeSeller,
+    updateSeller,
+    sellers,
+    setIsSellerWhatsappModalOpen,
+    currentCompany
   } = useApp();
 
-  // Active Sub-tab inside Company Area: 'costs' | 'suppliers' | 'extend-trial' | 'security'
-  const [activeSubTab, setActiveSubTab] = useState<'costs' | 'suppliers' | 'extend-trial' | 'security'>('costs');
+  // Active Sub-tab inside Company Area: 'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security'
+  const [activeSubTab, setActiveSubTab] = useState<'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security'>('costs');
 
   // Extend Trial for Client state
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [lastLiberatedClient, setLastLiberatedClient] = useState<any>(null);
   const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
+
+  // Pix & WhatsApp Configuration state for the Company
+  const [pixKeyInput, setPixKeyInput] = useState(activeSeller?.pixKey || paymentSettings.pixKey || '');
+  const [pixKeyTypeInput, setPixKeyTypeInput] = useState<SellerProfile['pixKeyType']>(activeSeller?.pixKeyType || paymentSettings.pixKeyType || 'PHONE');
+  const [merchantNameInput, setMerchantNameInput] = useState(activeSeller?.merchantName || paymentSettings.merchantName || currentCompany?.name || 'Minha Loja');
+  const [merchantCityInput, setMerchantCityInput] = useState(activeSeller?.merchantCity || paymentSettings.merchantCity || 'Barcarena PA');
+  const [receivingBankInput, setReceivingBankInput] = useState<BankProvider>(activeSeller?.receivingBank || paymentSettings.receivingBank || 'NUBANK');
+  const [sellerNameInput, setSellerNameInput] = useState(activeSeller?.name || 'Atendente');
+  const [whatsappInput, setWhatsappInput] = useState(activeSeller?.whatsapp || paymentSettings.merchantWhatsapp || '');
+
+  // Live QR Code for Company Pix
+  const [pixPreviewQrUrl, setPixPreviewQrUrl] = useState<string>('');
+  const [pixPreviewPayload, setPixPreviewPayload] = useState<string>('');
+  const [copiedCompanyPix, setCopiedCompanyPix] = useState(false);
+
+  // Sync inputs if activeSeller changes
+  useEffect(() => {
+    if (activeSeller) {
+      setPixKeyInput(activeSeller.pixKey || paymentSettings.pixKey || '');
+      setPixKeyTypeInput(activeSeller.pixKeyType || paymentSettings.pixKeyType || 'PHONE');
+      setMerchantNameInput(activeSeller.merchantName || paymentSettings.merchantName || currentCompany?.name || 'Minha Loja');
+      setMerchantCityInput(activeSeller.merchantCity || paymentSettings.merchantCity || 'Barcarena PA');
+      setReceivingBankInput(activeSeller.receivingBank || paymentSettings.receivingBank || 'NUBANK');
+      setSellerNameInput(activeSeller.name || 'Atendente');
+      setWhatsappInput(activeSeller.whatsapp || paymentSettings.merchantWhatsapp || '');
+    }
+  }, [activeSeller, paymentSettings, currentCompany]);
+
+  // Live QR Code Generation for Company Pix
+  useEffect(() => {
+    const key = pixKeyInput.trim();
+    if (!key) {
+      setPixPreviewPayload('');
+      setPixPreviewQrUrl('');
+      return;
+    }
+    const name = (merchantNameInput.trim() || currentCompany?.name || 'MINHA LOJA').toUpperCase();
+    const city = (merchantCityInput.trim() || 'Barcarena PA');
+    try {
+      const payloadObj = generatePixPayload({
+        pixKey: key,
+        merchantName: name,
+        merchantCity: city,
+        amount: 25.00,
+        txId: '***'
+      });
+      setPixPreviewPayload(payloadObj.payload);
+      QRCode.toDataURL(payloadObj.payload, {
+        width: 220,
+        margin: 1.5,
+        color: { dark: '#0f172a', light: '#ffffff' }
+      }).then(url => setPixPreviewQrUrl(url)).catch(() => setPixPreviewQrUrl(''));
+    } catch {
+      setPixPreviewPayload('');
+      setPixPreviewQrUrl('');
+    }
+  }, [pixKeyInput, merchantNameInput, merchantCityInput, currentCompany]);
+
+  const handleSaveCompanyPix = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanKey = pixKeyInput.trim();
+    if (!cleanKey) {
+      showToast('error', 'Chave Pix Obrigatória', 'Informe a Chave Pix da empresa.');
+      return;
+    }
+    const cleanWhatsapp = whatsappInput.trim();
+    if (!cleanWhatsapp) {
+      showToast('error', 'WhatsApp Obrigatório', 'Informe o número do WhatsApp para receber pedidos.');
+      return;
+    }
+
+    const updatedData = {
+      name: sellerNameInput.trim() || 'Atendente',
+      whatsapp: cleanWhatsapp,
+      pixKey: cleanKey,
+      pixKeyType: pixKeyTypeInput,
+      merchantName: merchantNameInput.trim() || currentCompany?.name || 'Minha Loja',
+      merchantCity: merchantCityInput.trim() || 'Barcarena PA',
+      receivingBank: receivingBankInput
+    };
+
+    if (activeSeller?.id) {
+      updateSeller(activeSeller.id, updatedData);
+    }
+    updatePaymentSettings({
+      pixKey: cleanKey,
+      pixKeyType: pixKeyTypeInput,
+      merchantName: merchantNameInput.trim() || currentCompany?.name || 'Minha Loja',
+      merchantCity: merchantCityInput.trim() || 'Barcarena PA',
+      merchantWhatsapp: cleanWhatsapp,
+      receivingBank: receivingBankInput
+    });
+
+    try {
+      sounds.playMoneyReceivedSound();
+    } catch {}
+
+    showToast('success', 'Chave Pix da Empresa Atualizada!', 'A nova chave Pix e WhatsApp já estão ativos na loja do cliente.');
+  };
 
   // Search & Category Filter for Costs Table
   const [searchTerm, setSearchTerm] = useState('');
@@ -265,17 +374,30 @@ export const CompanyManagementView: React.FC = () => {
           </div>
         </div>
 
-        {/* Action: Lock Back to Client Sales Area */}
-        <button
-          type="button"
-          onClick={lockCompanyArea}
-          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-          title="Bloquear imediatamente e voltar para a Loja do Cliente"
-        >
-          <Lock className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Bloquear e Voltar ao Cliente</span>
-          <span className="sm:hidden">Bloquear</span>
-        </button>
+        {/* Actions: Edit Pix & Lock Back to Client Sales Area */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('pix-whatsapp')}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+            title="Configurar a chave Pix e WhatsApp da empresa"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Configurar Pix da Empresa</span>
+            <span className="sm:hidden">Pix</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={lockCompanyArea}
+            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+            title="Bloquear imediatamente e voltar para a Loja do Cliente"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Bloquear e Voltar ao Cliente</span>
+            <span className="sm:hidden">Bloquear</span>
+          </button>
+        </div>
       </div>
 
       {/* Metric Summary Cards */}
@@ -361,6 +483,19 @@ export const CompanyManagementView: React.FC = () => {
         >
           <Truck className="w-4 h-4 text-emerald-600" />
           <span>Gestão de Fornecedores ({suppliers.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('pix-whatsapp')}
+          className={`py-2.5 px-4 rounded-t-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border-b-2 whitespace-nowrap ${
+            activeSubTab === 'pix-whatsapp'
+              ? 'border-indigo-600 text-indigo-700 bg-white shadow-2xs'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <QrCode className="w-4 h-4 text-emerald-600" />
+          <span>Configurar Pix & WhatsApp da Empresa</span>
         </button>
 
         <button
@@ -725,6 +860,262 @@ export const CompanyManagementView: React.FC = () => {
                   <p className="text-xs text-slate-500 mt-1">Cadastre seus parceiros para gerenciar custos de reposição.</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: CONFIGURAR PIX & WHATSAPP ======================= */}
+        {activeSubTab === 'pix-whatsapp' && (
+          <div className="max-w-4xl mx-auto space-y-6 animate-scale-up">
+            {/* Header Card */}
+            <div className="bg-gradient-to-r from-emerald-600 via-teal-700 to-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center font-black text-2xl shadow-inner shrink-0">
+                  💳
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-md">
+                      Área da Empresa
+                    </span>
+                    <span className="text-xs text-emerald-200 font-bold">
+                      Gestão Exclusiva do Lojista
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-white mt-0.5">
+                    Configuração de Pix & WhatsApp de Vendas
+                  </h3>
+                  <p className="text-xs text-emerald-100 max-w-lg mt-0.5">
+                    Defina a chave Pix onde você recebe o dinheiro dos clientes e o número de WhatsApp que recebe os pedidos gerados no catálogo.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Button to Open Multi-Seller Modal */}
+              <button
+                type="button"
+                onClick={() => setIsSellerWhatsappModalOpen(true)}
+                className="px-4 py-2.5 bg-white text-slate-900 hover:bg-emerald-50 active:scale-95 text-xs font-black rounded-xl shadow-md cursor-pointer transition-all flex items-center gap-2 shrink-0"
+              >
+                <UserPlus className="w-4 h-4 text-emerald-600" />
+                <span>Gerenciar Múltiplos Vendedores</span>
+              </button>
+            </div>
+
+            {/* Main Form & Live Preview Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form Column */}
+              <form onSubmit={handleSaveCompanyPix} className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                  <QrCode className="w-5 h-5 text-emerald-600" />
+                  <h4 className="font-bold text-sm text-slate-900 uppercase tracking-wide">
+                    Dados do Pix da Empresa
+                  </h4>
+                </div>
+
+                {/* Pix Key and Key Type */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <span>Chave Pix da Empresa *</span>
+                      <span className="text-[10px] text-emerald-700 font-semibold">Usada pelos clientes para pagar</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: 91993192405 ou email@loja.com ou 00.000.000/0001-00"
+                      value={pixKeyInput}
+                      onChange={e => setPixKeyInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 shadow-2xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Tipo da Chave Pix
+                      </label>
+                      <select
+                        value={pixKeyTypeInput}
+                        onChange={e => setPixKeyTypeInput(e.target.value as any)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none cursor-pointer focus:bg-white focus:border-emerald-600"
+                      >
+                        <option value="PHONE">Telefone / Celular</option>
+                        <option value="CPF">CPF</option>
+                        <option value="CNPJ">CNPJ</option>
+                        <option value="EMAIL">E-mail</option>
+                        <option value="RANDOM">Chave Aleatória (EVP)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Banco de Recebimento
+                      </label>
+                      <select
+                        value={receivingBankInput}
+                        onChange={e => setReceivingBankInput(e.target.value as any)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none cursor-pointer focus:bg-white focus:border-emerald-600"
+                      >
+                        {BANKS_LIST.map(bank => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Nome do Titular / Beneficiário
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Minha Loja ou Nome Completo"
+                        value={merchantNameInput}
+                        onChange={e => setMerchantNameInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Cidade do Titular da Conta
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Barcarena PA"
+                        value={merchantCityInput}
+                        onChange={e => setMerchantCityInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-5 h-5 text-emerald-600" />
+                    <h4 className="font-bold text-sm text-slate-900 uppercase tracking-wide">
+                      WhatsApp para Receber os Pedidos
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span>Número do WhatsApp *</span>
+                        <span className="text-[10px] text-slate-400">com DDD</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="Ex: 5591993192405 ou (91) 99319-2405"
+                        value={whatsappInput}
+                        onChange={e => setWhatsappInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 shadow-2xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Nome do Atendente / Vendedor
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Atendente Comercial"
+                        value={sellerNameInput}
+                        onChange={e => setSellerNameInput(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3">
+                  <button
+                    type="submit"
+                    className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                    <span>Salvar Chave Pix & WhatsApp da Empresa</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Preview Column */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-2xs space-y-4 text-center">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      <span>Prévia do QR Code Pix</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                      Ao Vivo
+                    </span>
+                  </div>
+
+                  {pixPreviewQrUrl ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-3 bg-white border-2 border-emerald-300 rounded-2xl shadow-sm inline-block">
+                        <img
+                          src={pixPreviewQrUrl}
+                          alt="QR Code Pix"
+                          className="w-44 h-44 object-contain rounded-lg mx-auto"
+                        />
+                      </div>
+
+                      <div className="text-center">
+                        <p className="text-xs font-black text-slate-900">
+                          {merchantNameInput || currentCompany?.name || 'Minha Empresa'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                          Chave: <strong>{pixKeyInput}</strong>
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Banco: {BANKS_LIST.find(b => b.id === receivingBankInput)?.name || 'Nubank'}
+                        </p>
+                      </div>
+
+                      {pixPreviewPayload && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(pixPreviewPayload);
+                            setCopiedCompanyPix(true);
+                            showToast('success', 'Código Copiado!', 'Código Pix Copia e Cola copiado com sucesso.');
+                            setTimeout(() => setCopiedCompanyPix(false), 2500);
+                          }}
+                          className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          {copiedCompanyPix ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                          <span>{copiedCompanyPix ? 'Código Copiado!' : 'Copiar Código Copia e Cola'}</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-12 px-4 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                      <QrCode className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-700">Nenhuma chave Pix configurada</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Preencha o formulário ao lado para gerar o QR Code oficial da sua empresa.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Info Card */}
+                <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-black text-emerald-900">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Segurança da Empresa</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Apenas a empresa autenticada por senha tem permissão para alterar a chave Pix e o WhatsApp de recebimento. Seus clientes só visualizam a chave no momento de pagar e não podem alterá-la.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}
