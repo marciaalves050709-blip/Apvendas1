@@ -57,35 +57,14 @@ export const Header: React.FC = () => {
     openAdminPasswordModal,
     isCompanyAreaUnlocked,
     lockCompanyArea,
-    openCompanyAreaUnlock
+    openCompanyAreaUnlock,
+    openShareModal
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
 
-  const handleShareApp = async () => {
-    const shareUrl = `${window.location.origin}/?tab=client-store`;
-    const shareData = {
-      title: `${currentCompany?.name || 'appvendas'} - Catálogo & Loja Virtual`,
-      text: `Acesse o catálogo da ${currentCompany?.name || 'nossa loja'} e faça seus pedidos diretamente pelo WhatsApp!`,
-      url: shareUrl
-    };
-
-    try {
-      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-        await navigator.share(shareData);
-        showToast('success', 'Compartilhado com Sucesso!', 'Link do catálogo compartilhado.');
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie para seus clientes no WhatsApp.');
-      }
-    } catch {
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie para seus clientes no WhatsApp.');
-      } catch {
-        showToast('info', 'Link do Catálogo:', shareUrl);
-      }
-    }
+  const handleShareApp = () => {
+    openShareModal(currentCompany);
   };
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;

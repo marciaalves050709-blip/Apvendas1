@@ -16,7 +16,9 @@ import {
   SubscriptionState,
   CompanyAccount,
   SellerProfile,
-  ExtendedTrialClient
+  ExtendedTrialClient,
+  BankProvider,
+  UnitType
 } from '../types';
 import { sounds, formatCurrency, calculateNextDay5Expiry, formatDay5Date } from '../utils/pixHelper';
 import confetti from 'canvas-confetti';
@@ -338,9 +340,36 @@ const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Helper to normalize strings for robust company matching by slug or name
+  const normalizeStoreSlug = (str?: string) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+  };
+
   // Check URL params for deep-linking directly to a specific company/store
   const initialUrlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const initialCompanyFromUrl = initialUrlParams?.get('empresa') || initialUrlParams?.get('loja');
+  
+  // Also check pathname (e.g. /loja/minha-empresa)
+  let pathLojaName = '';
+  if (typeof window !== 'undefined' && window.location.pathname) {
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    if (parts[0] === 'loja' && parts[1]) {
+      pathLojaName = decodeURIComponent(parts[1]);
+    }
+  }
+
+  const rawUrlStore = initialUrlParams?.get('loja') || 
+                      initialUrlParams?.get('nome') ||
+                      initialUrlParams?.get('empresa') || 
+                      initialUrlParams?.get('company') || 
+                      initialUrlParams?.get('companyId') ||
+                      pathLojaName;
+
+  const initialCompanyFromUrl = rawUrlStore;
   const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
 
   const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
@@ -373,7 +402,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [shareModalCompany, setShareModalCompany] = useState<CompanyAccount | null>(null);
 
   const openShareModal = (comp?: CompanyAccount) => {
-    setShareModalCompany(comp || currentCompany);
+    const target = comp 
+      ? (companies.find(c => c.id === comp.id) || comp) 
+      : (companies.find(c => c.id === activeCompanyId) || currentCompany);
+    setShareModalCompany(target);
     setIsShareModalOpen(true);
   };
 
@@ -457,9 +489,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Multi-Company (Infinite Users) Workspaces
   const [companies, setCompanies] = useState<CompanyAccount[]>(() => {
-    const urlCompName = initialUrlParams?.get('nome');
+    const urlCompName = initialUrlParams?.get('nome') || (initialUrlParams?.get('loja') ? initialUrlParams.get('loja')!.replace(/[-_]/g, ' ') : pathLojaName.replace(/[-_]/g, ' '));
     const urlCompEmoji = initialUrlParams?.get('emoji');
     const urlCompZap = initialUrlParams?.get('zap');
+    const urlCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa');
 
     const list: CompanyAccount[] = (() => {
       try {
@@ -503,26 +536,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }];
     })();
 
-    // If a shared company was accessed via URL and isn't registered, register it
-    if (initialCompanyFromUrl && !list.some(c => c.id === initialCompanyFromUrl)) {
-      list.push({
-        id: initialCompanyFromUrl,
-        name: urlCompName || 'Minha Loja',
-        slug: (urlCompName || 'loja').toLowerCase().replace(/\s+/g, '-'),
-        ownerName: 'Lojista',
-        phone: urlCompZap || '',
-        email: '',
-        category: 'Comércio & Serviços',
-        logoEmoji: urlCompEmoji || '🏪',
-        createdAt: new Date().toISOString()
-      });
+    // If a shared company was accessed via URL (by name, slug, or id), match or register it
+    if (rawUrlStore) {
+      const targetNormalized = normalizeStoreSlug(rawUrlStore);
+      const existingIdx = list.findIndex(c => 
+        (urlCompId && c.id === urlCompId) ||
+        c.id === rawUrlStore ||
+        normalizeStoreSlug(c.slug) === targetNormalized ||
+        normalizeStoreSlug(c.name) === targetNormalized ||
+        (list.length === 1 && !urlCompId)
+      );
+
+      if (existingIdx >= 0) {
+        list[existingIdx] = {
+          ...list[existingIdx],
+          name: urlCompName || list[existingIdx].name,
+          logoEmoji: urlCompEmoji || list[existingIdx].logoEmoji,
+          phone: urlCompZap || list[existingIdx].phone,
+        };
+      } else {
+        const newId = urlCompId || `empresa_${Date.now()}`;
+        list.push({
+          id: newId,
+          name: urlCompName || rawUrlStore.replace(/[-_]/g, ' '),
+          slug: (urlCompName || rawUrlStore).toLowerCase().replace(/\s+/g, '-'),
+          ownerName: 'Lojista',
+          phone: urlCompZap || '',
+          email: '',
+          category: 'Comércio & Serviços',
+          logoEmoji: urlCompEmoji || '🏪',
+          createdAt: new Date().toISOString()
+        });
+      }
     }
 
     return list;
   });
 
   const [activeCompanyId, setActiveCompanyId] = useState<string>(() => {
-    if (initialCompanyFromUrl) return initialCompanyFromUrl;
+    if (rawUrlStore) {
+      const targetNormalized = normalizeStoreSlug(rawUrlStore);
+      const urlCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa');
+      const found = companies.find(c => 
+        (urlCompId && c.id === urlCompId) ||
+        c.id === rawUrlStore ||
+        normalizeStoreSlug(c.slug) === targetNormalized ||
+        normalizeStoreSlug(c.name) === targetNormalized ||
+        (companies.length === 1 && !urlCompId)
+      );
+      if (found) return found.id;
+    }
     try {
       const saved = localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY);
       if (saved) return saved;
@@ -559,8 +622,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const urlZap = initialUrlParams?.get('zap');
       const urlPix = initialUrlParams?.get('pix');
-      const urlBanco = initialUrlParams?.get('banco');
-      const urlNome = initialUrlParams?.get('nome');
+      const rawBanco = initialUrlParams?.get('banco');
+      const urlBanco: BankProvider | undefined = rawBanco ? (rawBanco as BankProvider) : undefined;
+      const urlNome = initialUrlParams?.get('nome') || (initialUrlParams?.get('loja') ? decodeURIComponent(initialUrlParams.get('loja')!).replace(/[-_]/g, ' ') : undefined);
 
       const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
@@ -627,28 +691,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>(() => {
     // Check if products are passed directly in URL from a promotional shared link
     if (initialUrlParams) {
+      // 1. Ultra-compact format 'p' (Format: Name_Price_Stock_Unit_Category_WholesalePrice_WholesaleQty joined by '*')
+      const pParam = initialUrlParams.get('p');
+      if (pParam) {
+        try {
+          const rawItems = pParam.split('*').filter(Boolean);
+          const parsedList: Product[] = rawItems.map((itemStr, idx) => {
+            const parts = itemStr.split('_');
+            const name = decodeURIComponent(parts[0] || `Produto ${idx + 1}`);
+            const salePrice = parseFloat(parts[1]) || 0;
+            const currentStock = parseInt(parts[2], 10) || 50;
+            const unit = (parts[3] as UnitType) || 'UN';
+            const category = (decodeURIComponent(parts[4] || 'Outros') as Category);
+            const wholesalePrice = parts[5] ? parseFloat(parts[5]) : undefined;
+            const wholesaleMinQty = parts[6] ? parseInt(parts[6], 10) : undefined;
+            return {
+              id: `p_share_${idx + 1}`,
+              name,
+              sku: `PROD-${idx + 1}`,
+              barcode: '',
+              salePrice,
+              costPrice: 0,
+              currentStock,
+              minStock: 2,
+              maxStock: 1000,
+              unit,
+              category,
+              itemsPerUnit: 1,
+              description: '',
+              wholesalePrice,
+              wholesaleMinQty,
+              updatedAt: new Date().toISOString()
+            };
+          });
+
+          if (parsedList.length > 0) {
+            try {
+              localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(parsedList));
+            } catch {}
+            return parsedList;
+          }
+        } catch (e) {
+          console.error('Error unpacking compact products:', e);
+        }
+      }
+
+      // 2. Legacy 'pdata' format
       const pdataParam = initialUrlParams.get('pdata');
       if (pdataParam) {
         try {
-          const raw = decodeURIComponent(pdataParam);
+          let raw = pdataParam;
+          if (raw.startsWith('%')) {
+            try { raw = decodeURIComponent(raw); } catch {}
+          }
           const compactList = JSON.parse(raw);
           if (Array.isArray(compactList) && compactList.length > 0) {
-            return compactList.map((item: any, idx: number) => ({
-              id: item.id || `shared_${idx}`,
+            const parsedList: Product[] = compactList.map((item: any, idx: number) => ({
+              id: item.id || `shared_${idx + 1}`,
               name: item.n || 'Produto',
               salePrice: Number(item.p) || 0,
               costPrice: 0,
               currentStock: Number(item.s) || 50,
               minStock: 2,
+              maxStock: 1000,
               category: (item.c as Category) || 'Outros',
-              unit: item.u || 'UN',
+              unit: (item.u as UnitType) || 'UN',
               itemsPerUnit: 1,
               sku: `PROD-${idx + 1}`,
+              barcode: '',
               description: item.d || '',
               wholesalePrice: item.w ? Number(item.w) : undefined,
               wholesaleMinQty: item.wq ? Number(item.wq) : undefined,
-              createdAt: new Date().toISOString()
+              updatedAt: new Date().toISOString()
             }));
+            try {
+              localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(parsedList));
+            } catch {}
+            return parsedList;
           }
         } catch {}
       }
@@ -1508,6 +1627,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, []);
 
+  // Real-time URL Store Listener: ensures that opening a shared link (?loja=... or ?nome=...)
+  // immediately updates the active company, store title, and merchant name on any device or PWA
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const params = new URLSearchParams(window.location.search);
+      const urlLoja = params.get('loja');
+      const urlNome = params.get('nome');
+      const urlCompId = params.get('empresa') || params.get('id');
+      const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
+
+      if (incomingName && incomingName !== 'minha loja' && incomingName !== 'loja') {
+        const targetSlug = incomingName.toLowerCase().replace(/\s+/g, '-');
+        setCompanies(prev => {
+          const targetId = urlCompId || activeCompanyId;
+          const idx = prev.findIndex(c => 
+            (urlCompId && c.id === urlCompId) || 
+            normalizeStoreSlug(c.slug) === normalizeStoreSlug(targetSlug) || 
+            normalizeStoreSlug(c.name) === normalizeStoreSlug(incomingName)
+          );
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = {
+              ...updated[idx],
+              name: incomingName,
+              slug: targetSlug,
+              logoEmoji: params.get('emoji') || updated[idx].logoEmoji,
+              phone: params.get('zap') || updated[idx].phone,
+            };
+            try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(updated)); } catch {}
+            return updated;
+          } else {
+            const newComp: CompanyAccount = {
+              id: urlCompId || `empresa_${Date.now()}`,
+              name: incomingName,
+              slug: targetSlug,
+              ownerName: 'Lojista',
+              phone: params.get('zap') || '',
+              email: '',
+              category: 'Comércio & Serviços',
+              logoEmoji: params.get('emoji') || '🏪',
+              createdAt: new Date().toISOString()
+            };
+            const updated = [...prev, newComp];
+            try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(updated)); } catch {}
+            return updated;
+          }
+        });
+
+        setPaymentSettings(ps => ({
+          ...ps,
+          merchantName: incomingName,
+          sellers: ps.sellers ? ps.sellers.map(s => ({ ...s, merchantName: incomingName })) : ps.sellers
+        }));
+
+        if (typeof document !== 'undefined') {
+          document.title = `${incomingName} - Catálogo & Pedidos`;
+        }
+      }
+    } catch {}
+  }, []);
+
   const simulateTrialExpired = () => {
     setIsAdmin(false);
     try {
@@ -1646,6 +1827,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updatePaymentSettings = (newSettings: Partial<PaymentSettings>) => {
     setPaymentSettings(prev => ({ ...prev, ...newSettings }));
+    if (newSettings.merchantName && newSettings.merchantName.trim()) {
+      const cleanName = newSettings.merchantName.trim();
+      setCompanies(prev => {
+        const next = prev.map(c => c.id === activeCompanyId ? {
+          ...c,
+          name: cleanName,
+          slug: cleanName.toLowerCase().replace(/\s+/g, '-')
+        } : c);
+        try {
+          localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      if (typeof document !== 'undefined') {
+        document.title = `${cleanName} - Gestão & Vendas`;
+      }
+    }
     showToast('success', 'Configurações Salvas', 'Preferências salvas com sucesso.');
   };
 
@@ -1760,8 +1958,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setCompanyName = (newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    setCompanies(prev => prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: trimmed.toLowerCase().replace(/\s+/g, '-') } : c));
-    setPaymentSettings(prev => ({ ...prev, merchantName: trimmed }));
+    setCompanies(prev => {
+      const next = prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: trimmed.toLowerCase().replace(/\s+/g, '-') } : c);
+      try {
+        localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    setPaymentSettings(prev => ({ 
+      ...prev, 
+      merchantName: trimmed,
+      sellers: prev.sellers ? prev.sellers.map(s => ({ ...s, merchantName: trimmed })) : prev.sellers
+    }));
     if (typeof document !== 'undefined') {
       document.title = `${trimmed} - Gestão & Vendas`;
     }
@@ -1777,20 +1985,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       checkAndApplyAdminCredentials(checkName, checkPhone);
     }
 
-    setCompanies(prev => prev.map(c => {
-      if (c.id === activeCompanyId) {
-        const updated = { ...c, ...data };
-        if (data.name) {
-          updated.slug = data.name.trim().toLowerCase().replace(/\s+/g, '-');
-          setPaymentSettings(ps => ({ ...ps, merchantName: data.name!.trim() }));
-          if (typeof document !== 'undefined') {
-            document.title = `${data.name.trim()} - Gestão & Vendas`;
+    setCompanies(prev => {
+      const next = prev.map(c => {
+        if (c.id === activeCompanyId) {
+          const updated = { ...c, ...data };
+          if (data.name) {
+            const cleanName = data.name.trim();
+            updated.name = cleanName;
+            updated.slug = cleanName.toLowerCase().replace(/\s+/g, '-');
           }
+          return updated;
         }
-        return updated;
+        return c;
+      });
+      try {
+        localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (data.name) {
+      const cleanName = data.name.trim();
+      setPaymentSettings(ps => ({ 
+        ...ps, 
+        merchantName: cleanName,
+        sellers: ps.sellers ? ps.sellers.map(s => ({ ...s, merchantName: cleanName })) : ps.sellers
+      }));
+      if (typeof document !== 'undefined') {
+        document.title = `${cleanName} - Gestão & Vendas`;
       }
-      return c;
-    }));
+    }
   };
 
   const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }): CompanyAccount => {

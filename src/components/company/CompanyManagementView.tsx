@@ -66,6 +66,7 @@ export const CompanyManagementView: React.FC = () => {
     sellers,
     setIsSellerWhatsappModalOpen,
     currentCompany,
+    updateCurrentCompany,
     openShareModal
   } = useApp();
 
@@ -161,10 +162,14 @@ export const CompanyManagementView: React.FC = () => {
     if (activeSeller?.id) {
       updateSeller(activeSeller.id, updatedData);
     }
+    const cleanStoreName = merchantNameInput.trim() || currentCompany?.name || 'Minha Loja';
+    updateCurrentCompany({
+      name: cleanStoreName
+    });
     updatePaymentSettings({
       pixKey: cleanKey,
       pixKeyType: pixKeyTypeInput,
-      merchantName: merchantNameInput.trim() || currentCompany?.name || 'Minha Loja',
+      merchantName: cleanStoreName,
       merchantCity: merchantCityInput.trim() || 'Barcarena PA',
       merchantWhatsapp: cleanWhatsapp,
       receivingBank: receivingBankInput
