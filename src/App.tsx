@@ -28,6 +28,8 @@ import { AccessPaywall } from './components/subscription/AccessPaywall';
 import { AdminPasswordModal } from './components/subscription/AdminPasswordModal';
 import { MobileInstallBanner } from './components/pwa/MobileInstallBanner';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
+import { AppUpdateModal } from './components/pwa/AppUpdateModal';
+import { AppUpdateBanner } from './components/pwa/AppUpdateBanner';
 
 const MainLayout: React.FC = () => {
   const { 
@@ -48,7 +50,10 @@ const MainLayout: React.FC = () => {
     paymentSettings,
     activeSeller,
     products,
-    showToast
+    showToast,
+    isUpdateModalOpen,
+    openUpdateModal,
+    closeUpdateModal
   } = useApp();
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
@@ -78,6 +83,7 @@ const MainLayout: React.FC = () => {
   if (isClientStoreTab) {
     return (
       <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans overflow-hidden flex-col">
+        <AppUpdateBanner onOpenUpdateModal={openUpdateModal} />
         <ClientStoreView />
 
         {/* Modais Globais necessários */}
@@ -99,6 +105,7 @@ const MainLayout: React.FC = () => {
           products={products}
           onShowToast={showToast}
         />
+        <AppUpdateModal isOpen={isUpdateModalOpen} onClose={closeUpdateModal} />
         <OfflineIndicator />
         <ToastContainer />
       </div>
@@ -114,6 +121,7 @@ const MainLayout: React.FC = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+        <AppUpdateBanner onOpenUpdateModal={openUpdateModal} />
         <MobileInstallBanner />
         <TrialBanner />
         <Header />
@@ -167,6 +175,7 @@ const MainLayout: React.FC = () => {
         products={products}
         onShowToast={showToast}
       />
+      <AppUpdateModal isOpen={isUpdateModalOpen} onClose={closeUpdateModal} />
       <OfflineIndicator />
       <ToastContainer />
     </div>

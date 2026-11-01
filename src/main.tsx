@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = 'v55';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v55';
+const CURRENT_SW_VERSION = 'v56';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v56';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
@@ -202,6 +202,7 @@ if (typeof window !== 'undefined') {
         reg.update().catch(() => {});
         if (reg.waiting) {
           reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          window.dispatchEvent(new CustomEvent('app-update-available', { detail: { registration: reg } }));
         }
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
@@ -209,6 +210,7 @@ if (typeof window !== 'undefined') {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 newWorker.postMessage({ type: 'SKIP_WAITING' });
+                window.dispatchEvent(new CustomEvent('app-update-available', { detail: { registration: reg } }));
               }
             });
           }

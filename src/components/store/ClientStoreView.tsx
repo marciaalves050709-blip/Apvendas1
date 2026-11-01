@@ -110,7 +110,8 @@ export const ClientStoreView: React.FC = () => {
     lockCompanyArea,
     setIsSellerWhatsappModalOpen,
     checkAndApplyAdminCredentials,
-    openShareModal
+    openShareModal,
+    openUpdateModal
   } = useApp();
 
   // Client Session State
@@ -652,16 +653,9 @@ export const ClientStoreView: React.FC = () => {
           {/* Quick App Refresh & Update Button */}
           <button
             type="button"
-            onClick={() => {
-              showToast('info', 'Atualizando Aplicativo...', 'Verificando a versão mais recente e limpando cache...');
-              if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                (window as any).__clearAppCacheAndReload();
-              } else {
-                window.location.href = window.location.pathname + '?atualizado=' + Date.now();
-              }
-            }}
+            onClick={openUpdateModal}
             className="p-1.5 sm:px-2.5 sm:py-2 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl transition-all cursor-pointer border border-emerald-200 bg-white shadow-2xs active:scale-95 flex items-center gap-1 font-bold text-xs"
-            title="Atualizar aplicativo para a versão mais recente (v4.0)"
+            title="Verificar e atualizar aplicativo instalado para a versão mais recente (v56)"
           >
             <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
             <span className="hidden sm:inline">Atualizar</span>

@@ -198,6 +198,12 @@ interface AppContextType {
   shareModalCompany: CompanyAccount | null;
   openShareModal: (company?: CompanyAccount) => void;
   closeShareModal: () => void;
+
+  // App Installed Update Modal
+  isUpdateModalOpen: boolean;
+  setIsUpdateModalOpen: (open: boolean) => void;
+  openUpdateModal: () => void;
+  closeUpdateModal: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -413,6 +419,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsShareModalOpen(false);
     setShareModalCompany(null);
   };
+
+  // App Installed Update Modal State
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const openUpdateModal = () => setIsUpdateModalOpen(true);
+  const closeUpdateModal = () => setIsUpdateModalOpen(false);
 
   // Confidential Company Management Area (starts LOCKED so clients never see company costs, POS, sales or suppliers)
   const [isCompanyAreaUnlocked, setIsCompanyAreaUnlocked] = useState<boolean>(() => {
@@ -2901,6 +2912,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         shareModalCompany,
         openShareModal,
         closeShareModal,
+        // App Installed Update Modal
+        isUpdateModalOpen,
+        setIsUpdateModalOpen,
+        openUpdateModal,
+        closeUpdateModal,
       }}
     >
       {children}

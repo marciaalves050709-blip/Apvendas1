@@ -58,7 +58,8 @@ export const Header: React.FC = () => {
     isCompanyAreaUnlocked,
     lockCompanyArea,
     openCompanyAreaUnlock,
-    openShareModal
+    openShareModal,
+    openUpdateModal
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
@@ -185,16 +186,9 @@ export const Header: React.FC = () => {
         {/* Quick App Refresh & Cache Clear */}
         <button
           type="button"
-          onClick={() => {
-            showToast('info', 'Atualizando Aplicativo...', 'Limpando cache e carregando a versão mais recente...');
-            if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-              (window as any).__clearAppCacheAndReload();
-            } else {
-              window.location.href = window.location.pathname + '?atualizado=' + Date.now();
-            }
-          }}
+          onClick={openUpdateModal}
           className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all cursor-pointer font-bold text-xs flex items-center gap-1 active:scale-95 shadow-2xs"
-          title="Recarregar e atualizar aplicativo para a versão mais recente (v4.0)"
+          title="Verificar e atualizar aplicativo instalado para a versão mais recente (v56)"
         >
           <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin-hover" />
           <span className="hidden sm:inline">Atualizar App</span>
