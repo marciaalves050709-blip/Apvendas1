@@ -19,6 +19,7 @@ import { ProductFormModal } from './components/modals/ProductFormModal';
 import { CompanySettingsModal } from './components/modals/CompanySettingsModal';
 import { CompanyPasswordModal } from './components/modals/CompanyPasswordModal';
 import { SellerWhatsappModal } from './components/modals/SellerWhatsappModal';
+import { ShareCompanyModal } from './components/modals/ShareCompanyModal';
 import { CompanyProtectedView } from './components/common/CompanyProtectedView';
 import { ToastContainer } from './components/ui/ToastContainer';
 import { TrialBanner } from './components/subscription/TrialBanner';
@@ -39,7 +40,15 @@ const MainLayout: React.FC = () => {
     isMasterAdmin,
     isTestBlockMode,
     isCompanyAreaUnlocked,
-    openCompanyAreaUnlock
+    openCompanyAreaUnlock,
+    isShareModalOpen,
+    closeShareModal,
+    shareModalCompany,
+    currentCompany,
+    paymentSettings,
+    activeSeller,
+    products,
+    showToast
   } = useApp();
 
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
@@ -80,6 +89,15 @@ const MainLayout: React.FC = () => {
         <SellerWhatsappModal 
           isOpen={isSellerWhatsappModalOpen} 
           onClose={() => setIsSellerWhatsappModalOpen(false)} 
+        />
+        <ShareCompanyModal
+          isOpen={isShareModalOpen}
+          onClose={closeShareModal}
+          company={shareModalCompany || currentCompany}
+          paymentSettings={paymentSettings}
+          activeSeller={activeSeller}
+          products={products}
+          onShowToast={showToast}
         />
         <OfflineIndicator />
         <ToastContainer />
@@ -139,6 +157,15 @@ const MainLayout: React.FC = () => {
       <SellerWhatsappModal 
         isOpen={isSellerWhatsappModalOpen} 
         onClose={() => setIsSellerWhatsappModalOpen(false)} 
+      />
+      <ShareCompanyModal
+        isOpen={isShareModalOpen}
+        onClose={closeShareModal}
+        company={shareModalCompany || currentCompany}
+        paymentSettings={paymentSettings}
+        activeSeller={activeSeller}
+        products={products}
+        onShowToast={showToast}
       />
       <OfflineIndicator />
       <ToastContainer />

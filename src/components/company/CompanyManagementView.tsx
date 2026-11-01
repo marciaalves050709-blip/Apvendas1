@@ -37,7 +37,8 @@ import {
   Clock,
   UserCheck,
   QrCode,
-  CreditCard
+  CreditCard,
+  Share2
 } from 'lucide-react';
 
 export const CompanyManagementView: React.FC = () => {
@@ -64,7 +65,8 @@ export const CompanyManagementView: React.FC = () => {
     updateSeller,
     sellers,
     setIsSellerWhatsappModalOpen,
-    currentCompany
+    currentCompany,
+    openShareModal
   } = useApp();
 
   // Active Sub-tab inside Company Area: 'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security'
@@ -374,8 +376,19 @@ export const CompanyManagementView: React.FC = () => {
           </div>
         </div>
 
-        {/* Actions: Edit Pix & Lock Back to Client Sales Area */}
+        {/* Actions: Divulgar, Edit Pix & Lock Back to Client Sales Area */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => openShareModal(currentCompany)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+            title="Divulgar e compartilhar o catálogo desta empresa para clientes"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Divulgar Empresa</span>
+            <span className="sm:hidden">Divulgar</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveSubTab('pix-whatsapp')}
@@ -899,6 +912,35 @@ export const CompanyManagementView: React.FC = () => {
               >
                 <UserPlus className="w-4 h-4 text-emerald-600" />
                 <span>Gerenciar Múltiplos Vendedores</span>
+              </button>
+            </div>
+
+            {/* Banner de Divulgação da Empresa no WhatsApp & Redes */}
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border-2 border-emerald-300 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-2xl shadow-md shrink-0">
+                  📢
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 flex items-center gap-2 flex-wrap">
+                    <span>Divulgar Catálogo & Link desta Empresa</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black uppercase">
+                      WhatsApp & Redes
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-0.5 max-w-xl leading-relaxed">
+                    Envie o catálogo da <strong>{currentCompany.name}</strong> para seus clientes comprarem online, escolherem entrega ou retirada e pagarem pelo Pix direto no WhatsApp!
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openShareModal(currentCompany)}
+                className="w-full sm:w-auto px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Divulgar Minha Loja no WhatsApp</span>
               </button>
             </div>
 

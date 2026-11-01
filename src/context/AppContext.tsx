@@ -189,6 +189,13 @@ interface AppContextType {
   isCompanyPasswordModalOpen: boolean;
   setIsCompanyPasswordModalOpen: (open: boolean) => void;
   openCompanyAreaUnlock: (redirectTab?: ActiveTab) => void;
+
+  // Company Sharing & Promotion Modal (Divulgação no WhatsApp, Redes & Link)
+  isShareModalOpen: boolean;
+  setIsShareModalOpen: (open: boolean) => void;
+  shareModalCompany: CompanyAccount | null;
+  openShareModal: (company?: CompanyAccount) => void;
+  closeShareModal: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -361,6 +368,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedCategory, setSelectedCategory] = useState<Category | 'ALL'>('ALL');
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
 
+  // Company Sharing & Promotion Modal (Divulgação no WhatsApp, Redes & Link)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalCompany, setShareModalCompany] = useState<CompanyAccount | null>(null);
+
+  const openShareModal = (comp?: CompanyAccount) => {
+    setShareModalCompany(comp || currentCompany);
+    setIsShareModalOpen(true);
+  };
+
+  const closeShareModal = () => {
+    setIsShareModalOpen(false);
+    setShareModalCompany(null);
+  };
+
   // Confidential Company Management Area (starts LOCKED so clients never see company costs, POS, sales or suppliers)
   const [isCompanyAreaUnlocked, setIsCompanyAreaUnlocked] = useState<boolean>(() => {
     try {
@@ -436,49 +457,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Multi-Company (Infinite Users) Workspaces
   const [companies, setCompanies] = useState<CompanyAccount[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_COMPANIES_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // If stored as Marcia Alves for a regular client, sanitize to user's own store
-          return parsed.map(c => ({
-            ...c,
-            name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || !c.name) ? 'Minha Loja' : c.name,
-            ownerName: (c.ownerName === 'Marcia Alves' || c.ownerName === 'MARCIA ALVES' || c.ownerName === 'Administrador' || c.ownerName === 'Meu Usuário' || !c.ownerName) ? 'Lojista' : c.ownerName,
-            email: c.email === 'marciaalves050709@gmail.com' ? '' : (c.email || '')
-          }));
-        }
-      }
-    } catch {
-      // fallback
-    }
+    const urlCompName = initialUrlParams?.get('nome');
+    const urlCompEmoji = initialUrlParams?.get('emoji');
+    const urlCompZap = initialUrlParams?.get('zap');
 
-    const legacySettings = (() => {
+    const list: CompanyAccount[] = (() => {
       try {
-        const s = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
-        return s ? JSON.parse(s) : null;
-      } catch {
-        return null;
-      }
+        const saved = localStorage.getItem(STORAGE_COMPANIES_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map(c => ({
+              ...c,
+              name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || !c.name) ? 'Minha Loja' : c.name,
+              ownerName: (c.ownerName === 'Marcia Alves' || c.ownerName === 'MARCIA ALVES' || c.ownerName === 'Administrador' || c.ownerName === 'Meu Usuário' || !c.ownerName) ? 'Lojista' : c.ownerName,
+              email: c.email === 'marciaalves050709@gmail.com' ? '' : (c.email || '')
+            }));
+          }
+        }
+      } catch {}
+
+      const legacySettings = (() => {
+        try {
+          const s = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
+          return s ? JSON.parse(s) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      const initialName = (legacySettings?.merchantName === 'MARCIA ALVES' || legacySettings?.merchantName === 'appvendas' || !legacySettings?.merchantName)
+        ? 'Minha Loja'
+        : legacySettings.merchantName;
+
+      return [{
+        id: DEFAULT_COMPANY_ID,
+        name: initialName,
+        slug: initialName.toLowerCase().replace(/\s+/g, '-'),
+        ownerName: 'Lojista',
+        phone: legacySettings?.merchantWhatsapp || '',
+        email: '',
+        category: 'Comércio & Serviços',
+        logoEmoji: '🏪',
+        createdAt: new Date().toISOString()
+      }];
     })();
 
-    const initialName = (legacySettings?.merchantName === 'MARCIA ALVES' || legacySettings?.merchantName === 'appvendas' || !legacySettings?.merchantName)
-      ? 'Minha Loja'
-      : legacySettings.merchantName;
+    // If a shared company was accessed via URL and isn't registered, register it
+    if (initialCompanyFromUrl && !list.some(c => c.id === initialCompanyFromUrl)) {
+      list.push({
+        id: initialCompanyFromUrl,
+        name: urlCompName || 'Minha Loja',
+        slug: (urlCompName || 'loja').toLowerCase().replace(/\s+/g, '-'),
+        ownerName: 'Lojista',
+        phone: urlCompZap || '',
+        email: '',
+        category: 'Comércio & Serviços',
+        logoEmoji: urlCompEmoji || '🏪',
+        createdAt: new Date().toISOString()
+      });
+    }
 
-    const initialCompany: CompanyAccount = {
-      id: DEFAULT_COMPANY_ID,
-      name: initialName,
-      slug: initialName.toLowerCase().replace(/\s+/g, '-'),
-      ownerName: 'Lojista',
-      phone: legacySettings?.merchantWhatsapp || '',
-      email: '',
-      category: 'Comércio & Serviços',
-      logoEmoji: '🏪',
-      createdAt: new Date().toISOString()
-    };
-    return [initialCompany];
+    return list;
   });
 
   const [activeCompanyId, setActiveCompanyId] = useState<string>(() => {
@@ -486,9 +526,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const saved = localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY);
       if (saved) return saved;
-    } catch {
-      // fallback
-    }
+    } catch {}
     return DEFAULT_COMPANY_ID;
   });
 
@@ -519,22 +557,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Persistence loader for PaymentSettings (customized per company workspace)
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
+      const urlZap = initialUrlParams?.get('zap');
+      const urlPix = initialUrlParams?.get('pix');
+      const urlBanco = initialUrlParams?.get('banco');
+      const urlNome = initialUrlParams?.get('nome');
+
       const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
-        const normKey = parsed.pixKey || '';
-        const normWhatsapp = parsed.merchantWhatsapp || '';
-        const normMerchant = (parsed.merchantName === 'MARCIA ALVES' || parsed.merchantName === 'appvendas' || !parsed.merchantName)
+        const normKey = urlPix || parsed.pixKey || '';
+        const normWhatsapp = urlZap || parsed.merchantWhatsapp || '';
+        const normMerchant = urlNome || (parsed.merchantName === 'MARCIA ALVES' || parsed.merchantName === 'appvendas' || !parsed.merchantName
           ? currentCompany.name
-          : parsed.merchantName;
+          : parsed.merchantName);
 
         const normSellers: SellerProfile[] = (parsed.sellers && parsed.sellers.length > 0)
           ? parsed.sellers.map((s: SellerProfile) => ({ 
               ...s, 
               name: (s.name === 'Márcia Alves' || s.name === 'Marcia Alves') ? 'Atendente' : s.name,
               merchantName: (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'Márcia Alves') ? normMerchant : (s.merchantName || normMerchant),
-              pixKey: s.pixKey || normKey,
-              whatsapp: s.whatsapp || normWhatsapp,
-              merchantCity: sanitizeMerchantCity(s.merchantCity) 
+              pixKey: urlPix || s.pixKey || normKey,
+              whatsapp: urlZap || s.whatsapp || normWhatsapp,
+              merchantCity: sanitizeMerchantCity(s.merchantCity),
+              receivingBank: urlBanco || s.receivingBank || 'NUBANK'
             }))
           : [
               {
@@ -545,7 +589,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 pixKeyType: parsed.pixKeyType || 'PHONE',
                 merchantName: normMerchant,
                 merchantCity: normCity,
-                receivingBank: parsed.receivingBank || 'NUBANK',
+                receivingBank: urlBanco || parsed.receivingBank || 'NUBANK',
                 isDefault: true,
               }
             ];
@@ -557,6 +601,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           merchantWhatsapp: normWhatsapp,
           merchantCity: normCity,
           merchantName: normMerchant,
+          receivingBank: urlBanco || parsed.receivingBank || 'NUBANK',
           sellers: normSellers,
           activeSellerId: parsed.activeSellerId || normSellers[0]?.id || 'vendedor_principal',
         };
@@ -572,14 +617,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(saved);
         return normalizeSettings({ ...parsed, merchantName: currentCompany.name });
       }
-      return { ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name };
+      return normalizeSettings({ ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name });
     } catch {
       return { ...DEFAULT_PAYMENT_SETTINGS, merchantName: currentCompany.name };
     }
   });
 
-  // Products state (isolated per company)
+  // Products state (isolated per company, supports shared catalog unpack)
   const [products, setProducts] = useState<Product[]>(() => {
+    // Check if products are passed directly in URL from a promotional shared link
+    if (initialUrlParams) {
+      const pdataParam = initialUrlParams.get('pdata');
+      if (pdataParam) {
+        try {
+          const raw = decodeURIComponent(pdataParam);
+          const compactList = JSON.parse(raw);
+          if (Array.isArray(compactList) && compactList.length > 0) {
+            return compactList.map((item: any, idx: number) => ({
+              id: item.id || `shared_${idx}`,
+              name: item.n || 'Produto',
+              salePrice: Number(item.p) || 0,
+              costPrice: 0,
+              currentStock: Number(item.s) || 50,
+              minStock: 2,
+              category: (item.c as Category) || 'Outros',
+              unit: item.u || 'UN',
+              itemsPerUnit: 1,
+              sku: `PROD-${idx + 1}`,
+              description: item.d || '',
+              wholesalePrice: item.w ? Number(item.w) : undefined,
+              wholesaleMinQty: item.wq ? Number(item.wq) : undefined,
+              createdAt: new Date().toISOString()
+            }));
+          }
+        } catch {}
+      }
+    }
+
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('products', activeCompanyId));
       if (tenantSaved) return JSON.parse(tenantSaved);
@@ -2594,6 +2668,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isCompanyPasswordModalOpen,
         setIsCompanyPasswordModalOpen,
         openCompanyAreaUnlock,
+        // Company Sharing & Promotion Modal
+        isShareModalOpen,
+        setIsShareModalOpen,
+        shareModalCompany,
+        openShareModal,
+        closeShareModal,
       }}
     >
       {children}

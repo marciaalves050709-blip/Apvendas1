@@ -109,7 +109,8 @@ export const ClientStoreView: React.FC = () => {
     openCompanyAreaUnlock,
     lockCompanyArea,
     setIsSellerWhatsappModalOpen,
-    checkAndApplyAdminCredentials
+    checkAndApplyAdminCredentials,
+    openShareModal
   } = useApp();
 
   // Client Session State
@@ -560,31 +561,9 @@ export const ClientStoreView: React.FC = () => {
     setTimeout(() => setCopiedOrderText(false), 2500);
   };
 
-  // Share or Copy Customer Store Link
-  const handleShareStoreLink = async () => {
-    const storeUrl = `${window.location.origin}/?tab=client-store`;
-    const shareData = {
-      title: `${paymentSettings.merchantName || currentCompany?.name || 'Catálogo de Produtos'}`,
-      text: `Acesse nosso catálogo e faça suas compras direto pelo WhatsApp!`,
-      url: storeUrl,
-    };
-
-    try {
-      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-        await navigator.share(shareData);
-        showToast('success', 'Catálogo Compartilhado!', 'Link da loja enviado com sucesso.');
-      } else {
-        await navigator.clipboard.writeText(storeUrl);
-        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie no WhatsApp para seus clientes.');
-      }
-    } catch {
-      try {
-        await navigator.clipboard.writeText(storeUrl);
-        showToast('success', '🔗 Link Copiado!', 'Link do catálogo copiado! Envie no WhatsApp para seus clientes.');
-      } catch {
-        showToast('info', 'Link do Catálogo:', storeUrl);
-      }
-    }
+  // Share or Promote Customer Store Link
+  const handleShareStoreLink = () => {
+    openShareModal(currentCompany);
   };
 
 

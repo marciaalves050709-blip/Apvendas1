@@ -56,7 +56,8 @@ export const CompanySettingsModal: React.FC = () => {
     openAdminPasswordModal,
     setClientTestMode,
     companyPassword,
-    setCompanyPassword
+    setCompanyPassword,
+    openShareModal
   } = useApp();
 
   // Active Tab inside modal: 'edit' | 'list' | 'create' | 'password'
@@ -500,6 +501,32 @@ export const CompanySettingsModal: React.FC = () => {
                 </p>
               </div>
 
+              {/* Divulgar & Compartilhar Minha Loja (WhatsApp, Redes, Link & QR Code) */}
+              <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Share2 className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-emerald-950 truncate flex items-center gap-1.5">
+                      <span>Divulgar Catálogo desta Empresa</span>
+                      <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-900 rounded text-[9px] font-bold">WhatsApp</span>
+                    </p>
+                    <p className="text-[11px] text-emerald-800 truncate mt-0.5">
+                      Envie o link e o catálogo para seus clientes comprarem online
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openShareModal(currentCompany)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-xl shrink-0 cursor-pointer transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Divulgar Loja</span>
+                </button>
+              </div>
+
               {/* Senha de Acesso da Empresa (Protege custos e fornecedores) */}
               <div className="p-3.5 bg-amber-50/60 border border-amber-200 rounded-2xl flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -686,12 +713,12 @@ export const CompanySettingsModal: React.FC = () => {
                       <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                         <button
                           type="button"
-                          onClick={() => handleCopyStoreLink(comp.id, comp.name)}
-                          title="Copiar link da Loja Virtual desta empresa"
-                          className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          onClick={() => openShareModal(comp)}
+                          title="Divulgar e compartilhar o catálogo desta empresa no WhatsApp e redes sociais"
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                         >
-                          <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="hidden sm:inline">Link da Loja</span>
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span>Divulgar Loja</span>
                         </button>
 
                         {!isActive ? (
