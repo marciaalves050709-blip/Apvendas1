@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 50 (Live Network-First & Instant Auto-Update)
-const CACHE_NAME = 'appvendas-pwa-v50';
+// appvendas Service Worker (PWA) - Version 55 (Live Network-First & Smooth Loading)
+const CACHE_NAME = 'appvendas-pwa-v55';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -25,31 +25,21 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: Delete ALL old caches and force-reload all open windows
+// Activate: Delete ALL old caches and claim clients smoothly without interrupting navigation
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((name) => {
-          console.log('[SW] Deleting stale cache:', name);
-          return caches.delete(name);
+          if (name !== CACHE_NAME) {
+            console.log('[SW] Deleting stale cache:', name);
+            return caches.delete(name);
+          }
+          return Promise.resolve(false);
         })
       );
     })
     .then(() => self.clients.claim())
-    .then(async () => {
-      // Force reload all open client windows so they get fresh server code immediately
-      const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      for (const client of allClients) {
-        try {
-          if ('navigate' in client) {
-            client.navigate(client.url || '/');
-          } else {
-            client.postMessage({ type: 'SW_VERSION_UPDATED', version: 'v40' });
-          }
-        } catch (e) {}
-      }
-    })
   );
 });
 

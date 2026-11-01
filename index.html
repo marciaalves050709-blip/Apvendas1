@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '53';
+        var APP_BUILD_VER = '55';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer !== APP_BUILD_VER) {
@@ -40,27 +40,11 @@
             if ('caches' in window) {
               caches.keys().then(function(keys) {
                 keys.forEach(function(k) {
-                  if (k !== 'appvendas-pwa-v53') {
+                  if (k !== 'appvendas-pwa-v55') {
                     caches.delete(k);
                   }
                 });
               });
-            }
-            if (storedVer) {
-              // Existing device upgrade: preserve all current search parameters (shared catalog, company, tab)
-              var searchParams = new URLSearchParams(window.location.search);
-              searchParams.set('v', APP_BUILD_VER);
-              searchParams.set('t', Date.now().toString());
-              var nextUrl = window.location.pathname + '?' + searchParams.toString() + window.location.hash;
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(regs) {
-                  Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
-                    window.location.replace(nextUrl);
-                  });
-                });
-              } else {
-                window.location.replace(nextUrl);
-              }
             }
           }
         } catch(e) {}

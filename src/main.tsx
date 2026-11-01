@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = 'v50';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v50';
+const CURRENT_SW_VERSION = 'v55';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v55';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
@@ -188,17 +188,6 @@ if (typeof window !== 'undefined') {
   }
 
   if ('serviceWorker' in navigator) {
-    const triggerSafeReload = () => {
-      const lastReloadKey = 'appvendas_last_sw_reload_ts';
-      const now = Date.now();
-      const last = parseInt(sessionStorage.getItem(lastReloadKey) || '0', 10);
-      // Throttle reload: max once every 12 seconds to avoid any reload loops
-      if (now - last > 12000) {
-        sessionStorage.setItem(lastReloadKey, now.toString());
-        window.location.replace(window.location.pathname + '?atualizado=' + Date.now());
-      }
-    };
-
     // If forced refresh requested, unregister previous workers first
     if (isForcedRefresh) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -207,17 +196,6 @@ if (typeof window !== 'undefined') {
         }
       }).catch(() => {});
     }
-
-    // Reload safely when a new service worker takes over (so installed app updates right away)
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      triggerSafeReload();
-    });
-
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'SW_VERSION_UPDATED') {
-        triggerSafeReload();
-      }
-    });
 
     navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/' })
       .then((reg) => {

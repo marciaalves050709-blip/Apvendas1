@@ -776,11 +776,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('products', activeCompanyId));
       if (tenantSaved) return JSON.parse(tenantSaved);
-      if (activeCompanyId === DEFAULT_COMPANY_ID) {
-        const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-        return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+      const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch {}
       }
-      return [];
+      return INITIAL_PRODUCTS;
     } catch {
       return INITIAL_PRODUCTS;
     }
