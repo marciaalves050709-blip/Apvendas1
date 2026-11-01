@@ -719,40 +719,188 @@ export const ClientStoreView: React.FC = () => {
         </div>
       </header>
 
-      {/* Quick Delivery & Payment status strip */}
-      <div className="bg-emerald-50/90 border-b border-emerald-200/80 px-3 py-1.5 flex items-center justify-between text-[11px] shrink-0">
-        <div className="flex items-center gap-1.5 truncate">
-          <span className="font-bold text-emerald-950 flex items-center gap-1 shrink-0">
-            {clientUser.deliveryType === 'ENTREGA' ? (
-              <>
-                <Truck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>🛵 Entrega:</span>
-              </>
-            ) : (
-              <>
-                <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>🏪 Retirada:</span>
-              </>
-            )}
-          </span>
-          <span className="text-emerald-800 truncate font-medium">
-            {clientUser.deliveryType === 'ENTREGA'
-              ? (clientUser.address ? clientUser.address : 'Clique em Alterar para adicionar endereço')
-              : 'Balcão da loja'}
-          </span>
+      {/* PAINEL VISÍVEL NA ÁREA DO CLIENTE: ENTREGA, PAGAMENTO E ENVIAR PEDIDO PRO WHATSAPP */}
+      <div className="bg-white border-b-2 border-emerald-200/90 p-3 sm:p-4 shrink-0 shadow-xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          
+          {/* 1. SELEÇÃO DE RECEBIMENTO: RETIRAR NO LOCAL OU ENTREGA LOCAL */}
+          <div className="flex-1 space-y-1.5">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <span>Como deseja receber o pedido?</span>
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = { ...clientUser, deliveryType: 'RETIRADA' as const };
+                  setClientUser(updated);
+                  localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
+                }}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                  clientUser.deliveryType === 'RETIRADA'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Store className="w-4 h-4" />
+                <span>🏪 Retirar no Local</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = { ...clientUser, deliveryType: 'ENTREGA' as const };
+                  setClientUser(updated);
+                  localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
+                }}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                  clientUser.deliveryType === 'ENTREGA'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Truck className="w-4 h-4" />
+                <span>🛵 Entrega Local</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 2. SELEÇÃO DE PAGAMENTO: PIX OU CARTÃO OU DINHEIRO */}
+          <div className="flex-1 space-y-1.5">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <span>Forma de Pagamento:</span>
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              {/* Botão Pix */}
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('PIX')}
+                className={`py-2 px-2 rounded-xl border text-xs font-black flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                  paymentMethod === 'PIX'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <QrCode className="w-4 h-4 text-emerald-400" />
+                <span>⚡ Pix</span>
+              </button>
+
+              {/* Botão Cartão */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (paymentMethod !== 'CARTAO_CREDITO' && paymentMethod !== 'CARTAO_DEBITO') {
+                    setPaymentMethod('CARTAO_CREDITO');
+                  }
+                }}
+                className={`py-2 px-2 rounded-xl border text-xs font-black flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                  paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-500/20'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <CreditCard className="w-4 h-4 text-blue-400" />
+                <span>💳 Cartão</span>
+              </button>
+
+              {/* Botão Dinheiro */}
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('DINHEIRO')}
+                className={`py-2 px-2 rounded-xl border text-xs font-black flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                  paymentMethod === 'DINHEIRO'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-500/20'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Banknote className="w-4 h-4 text-amber-400" />
+                <span>💵 Dinheiro</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. BOTÃO PRA ENVIAR PAGAMENTO / PEDIDO PRO WHATSAPP */}
+          <div className="shrink-0 flex flex-col justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                if (detailedCart.length === 0) {
+                  showToast('info', 'Sacola Vazia', 'Adicione produtos abaixo à sua sacola para enviar o pedido.');
+                  return;
+                }
+                handleSendOrderToWhatsApp();
+              }}
+              className={`w-full lg:w-auto py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md active:scale-95 ${
+                detailedCart.length > 0
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+              }`}
+              title="Finalizar compra e enviar detalhes e comprovante direto para o WhatsApp"
+            >
+              <Send className="w-4 h-4 text-emerald-200" />
+              <span>
+                {detailedCart.length > 0 
+                  ? `Enviar Pedido WhatsApp (${formatCurrency(cartTotal)})`
+                  : 'Enviar Pedido pro WhatsApp'}
+              </span>
+            </button>
+          </div>
+
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="font-bold text-slate-700 bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
-            {paymentMethod === 'PIX' ? '⚡ Pix' : (paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO') ? '💳 Cartão' : '💵 Dinheiro'}
-          </span>
-          <button
-            type="button"
-            onClick={() => setIsCartOpen(true)}
-            className="text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer text-[10px]"
-          >
-            Alterar
-          </button>
-        </div>
+
+        {/* CAMPO DE ENDEREÇO QUANDO ENTREGA LOCAL ESTIVER SELECIONADA */}
+        {clientUser.deliveryType === 'ENTREGA' && (
+          <div className="p-2.5 bg-emerald-50/90 border border-emerald-200 rounded-xl space-y-1 animate-scale-up">
+            <label className="text-[11px] font-black text-emerald-950 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Adicione seu Endereço para Entrega Local:</span>
+              </span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-1.5 py-0.2 rounded">
+                Obrigatório para entrega
+              </span>
+            </label>
+            <input
+              type="text"
+              placeholder="Ex: Rua, número, bairro, complemento ou ponto de referência"
+              value={clientUser.address}
+              onChange={e => {
+                const updated = { ...clientUser, address: e.target.value };
+                setClientUser(updated);
+                localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
+              }}
+              className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-medium text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+        )}
+
+        {/* SUB-MODALIDADES DO CARTÃO (CRÉDITO / DÉBITO) */}
+        {(paymentMethod === 'CARTAO_CREDITO' || paymentMethod === 'CARTAO_DEBITO') && (
+          <div className="flex items-center gap-2 p-2 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-950 animate-scale-up">
+            <CreditCard className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="font-bold text-[11px]">Tipo de Cartão na Maquininha:</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('CARTAO_CREDITO')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                  paymentMethod === 'CARTAO_CREDITO' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-200 text-blue-800'
+                }`}
+              >
+                Crédito
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('CARTAO_DEBITO')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                  paymentMethod === 'CARTAO_DEBITO' ? 'bg-blue-600 text-white' : 'bg-white border border-blue-200 text-blue-800'
+                }`}
+              >
+                Débito
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search & Category Filter Section */}

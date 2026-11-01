@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 40 (Live Network-First & Instant Auto-Update)
-const CACHE_NAME = 'appvendas-pwa-v40';
+// appvendas Service Worker (PWA) - Version 50 (Live Network-First & Instant Auto-Update)
+const CACHE_NAME = 'appvendas-pwa-v50';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',

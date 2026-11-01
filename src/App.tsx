@@ -62,10 +62,34 @@ const MainLayout: React.FC = () => {
   }, [setActiveTab, isBlocked, isCompanyAreaUnlocked, openCompanyAreaUnlock]);
 
   const isRestrictedTab = activeTab !== 'client-store';
+  const isClientStoreTab = activeTab === 'client-store';
+
+  // Quando estiver na Loja do Cliente (vendas diretas), renderiza 100% em tela cheia,
+  // SEM a barra lateral de gestão (Sidebar), SEM cabeçalho duplicado e SEM a barra de abas de gestão!
+  if (isClientStoreTab) {
+    return (
+      <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans overflow-hidden flex-col">
+        <ClientStoreView />
+
+        {/* Modais Globais necessários */}
+        <AccessPaywall />
+        <AdminPasswordModal />
+        <SubscriptionModal />
+        <CompanyPasswordModal />
+        <CompanySettingsModal />
+        <SellerWhatsappModal 
+          isOpen={isSellerWhatsappModalOpen} 
+          onClose={() => setIsSellerWhatsappModalOpen(false)} 
+        />
+        <OfflineIndicator />
+        <ToastContainer />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
-      {/* Sidebar (Desktop) */}
+      {/* Sidebar (Desktop) - Apenas na Área de Gestão */}
       <div className="hidden md:flex h-full shrink-0">
         <Sidebar />
       </div>
@@ -78,8 +102,6 @@ const MainLayout: React.FC = () => {
 
         {/* Dynamic Views with Password Shield Protection */}
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-          {activeTab === 'client-store' && <ClientStoreView />}
-
           {/* If company area is locked, ANY internal view is blocked by CompanyProtectedView */}
           {isRestrictedTab && !isCompanyAreaUnlocked && (
             <CompanyProtectedView tab={activeTab} />
@@ -102,7 +124,7 @@ const MainLayout: React.FC = () => {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Mobile Bottom Navigation Bar - Apenas na Área de Gestão */}
       <MobileNavBar />
 
       {/* Global Modals, Paywall, PWA & Notifications */}
