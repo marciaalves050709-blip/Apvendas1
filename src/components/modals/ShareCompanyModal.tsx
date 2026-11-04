@@ -24,7 +24,8 @@ import {
   RefreshCw,
   Zap,
   Scissors,
-  Edit3
+  Edit3,
+  Layers
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -62,12 +63,23 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   const [shortUrl, setShortUrl] = useState<string>('');
   const [isShortening, setIsShortening] = useState<boolean>(false);
 
+  // Selected company state inside modal so user can switch between companies
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => {
+    return company?.id || currentCompany?.id || 'empresa_principal';
+  });
+
+  useEffect(() => {
+    if (company?.id) {
+      setSelectedCompanyId(company.id);
+    }
+  }, [company?.id]);
+
   // Always resolve the freshest company data from AppContext
   const effectiveCompany = useMemo(() => {
-    const targetId = company?.id || currentCompany?.id;
+    const targetId = selectedCompanyId || company?.id || currentCompany?.id;
     const found = companies.find(c => c.id === targetId);
-    return found || currentCompany || company;
-  }, [company, currentCompany, companies]);
+    return found || company || currentCompany;
+  }, [selectedCompanyId, company, currentCompany, companies]);
 
   // Inline Store Name Editor state
   const [editingStoreName, setEditingStoreName] = useState(effectiveCompany?.name || 'Minha Loja');
@@ -95,29 +107,70 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   const effectiveProducts = useMemo(() => {
     try {
       if (effectiveCompany?.id) {
-        const tenantKey = `appvendas_tenant_${effectiveCompany.id}_products`;
+        // 1. If effectiveCompany is the current active company, products in memory is the freshest state!
+        if (effectiveCompany.id === currentCompany?.id && products && products.length > 0) {
+          return products;
+        }
+
+        // 2. Check the primary tenant products key from AppContext
+        const tenantKey = `tenant_${effectiveCompany.id}_products`;
         const saved = localStorage.getItem(tenantKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
+
+        // 3. If default company, check root products storage
+        if (effectiveCompany.id === 'empresa_principal') {
+          const rootSaved = localStorage.getItem('descart_clean_products_v1');
+          if (rootSaved) {
+            const parsed = JSON.parse(rootSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        }
+
+        // 4. Check legacy appvendas_tenant prefix
+        const legacyKey = `appvendas_tenant_${effectiveCompany.id}_products`;
+        const legacySaved = localStorage.getItem(legacyKey);
+        if (legacySaved) {
+          const parsed = JSON.parse(legacySaved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
       }
     } catch {}
-    return products || [];
-  }, [products, effectiveCompany?.id]);
+
+    // Fallback: If effectiveCompany is current company, return current products
+    if (effectiveCompany?.id === currentCompany?.id) {
+      return products || [];
+    }
+
+    if (companies.length <= 1 && products && products.length > 0) {
+      return products;
+    }
+
+    return [];
+  }, [products, effectiveCompany?.id, currentCompany?.id, companies.length]);
 
   const effectiveSettings = useMemo(() => {
     try {
       if (effectiveCompany?.id) {
-        const tenantKey = `appvendas_tenant_${effectiveCompany.id}_payment_settings`;
+        if (effectiveCompany.id === currentCompany?.id && (paymentSettings || globalSettings)) {
+          return paymentSettings || globalSettings;
+        }
+        const tenantKey = `tenant_${effectiveCompany.id}_payment_settings`;
         const saved = localStorage.getItem(tenantKey);
         if (saved) {
           return { ...globalSettings, ...paymentSettings, ...JSON.parse(saved) };
         }
+        const legacyKey = `appvendas_tenant_${effectiveCompany.id}_payment_settings`;
+        const legacySaved = localStorage.getItem(legacyKey);
+        if (legacySaved) {
+          return { ...globalSettings, ...paymentSettings, ...JSON.parse(legacySaved) };
+        }
       }
     } catch {}
     return paymentSettings || globalSettings;
-  }, [paymentSettings, globalSettings, effectiveCompany?.id]);
+  }, [paymentSettings, globalSettings, effectiveCompany?.id, currentCompany?.id]);
 
   const effectiveSeller = useMemo(() => {
     if (effectiveSettings?.sellers && effectiveSettings.sellers.length > 0) {
@@ -127,14 +180,13 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     return activeSeller;
   }, [effectiveSettings, activeSeller]);
 
-  // Clean direct short URL that features the store name directly in the link
-  const cleanUrl = useMemo(() => {
-    return buildStoreCleanUrl(effectiveCompany, effectiveSettings);
-  }, [effectiveCompany, effectiveSettings]);
-
-  // Full share URL with products and pix embedded
+  // Full share URL with store name and all products of the specific company embedded!
   const shareUrl = useMemo(() => {
     return buildStoreShareUrl(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts);
+  }, [effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
+
+  const cleanUrl = useMemo(() => {
+    return buildStoreCleanUrl(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts);
   }, [effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
 
   // Automatic Link Shortening in the background with company name
@@ -156,21 +208,18 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   // Only trigger shortening if user explicitly switches to 'short' mode and doesn't have a shortUrl yet
   useEffect(() => {
-    if (isOpen && urlMode === 'short' && !shortUrl && cleanUrl) {
-      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+    if (isOpen && urlMode === 'short' && !shortUrl && shareUrl) {
+      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
     }
-  }, [isOpen, urlMode, shortUrl, cleanUrl, effectiveCompany?.name]);
+  }, [isOpen, urlMode, shortUrl, shareUrl, effectiveCompany?.name]);
 
-  // Active URL to share: defaults to official verified direct store URL
+  // Active URL to share: ALWAYS includes the store name and all products of the company!
   const activeUrl = useMemo(() => {
-    if (urlMode === 'store_name') {
-      return cleanUrl;
+    if (urlMode === 'short') {
+      return shortUrl || shareUrl;
     }
-    if (urlMode === 'full') {
-      return shareUrl;
-    }
-    return shortUrl || cleanUrl;
-  }, [urlMode, shortUrl, cleanUrl, shareUrl]);
+    return shareUrl;
+  }, [urlMode, shortUrl, shareUrl]);
 
   const shareMessage = useMemo(() => {
     return buildStoreShareMessage(effectiveCompany, activeUrl, effectiveSeller, effectiveSettings);
@@ -320,6 +369,39 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
             </button>
           </div>
 
+          {/* Seletor de Empresa para Compartilhar (Multi-empresa) */}
+          {companies.length > 1 && (
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+              <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Escolha qual empresa divulgar:</span>
+              </label>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {companies.map(c => {
+                  const isSel = c.id === effectiveCompany.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCompanyId(c.id);
+                        setShortUrl('');
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                        isSel
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{c.logoEmoji || '🏪'}</span>
+                      <span className="truncate max-w-[140px]">{c.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* INLINE STORE NAME EDITOR: O lojista pode editar e atualizar o nome da empresa aqui mesmo */}
           <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl space-y-2">
             <div className="flex items-center justify-between">
@@ -387,48 +469,59 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
             )}
           </div>
 
+          {/* PRODUTOS SINCRONIZADOS NO LINK: Mostra em tempo real os produtos da empresa que estão no link */}
+          <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Produtos Sincronizados no Link ({effectiveProducts.length})</span>
+              </span>
+              <span className="text-[10px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase">
+                {effectiveProducts.length > 0 ? 'Catálogo Pronto' : 'Sem Produtos'}
+              </span>
+            </div>
+
+            {effectiveProducts.length > 0 ? (
+              <div className="text-[11px] text-emerald-900 leading-relaxed font-medium bg-white/70 p-2 rounded-xl border border-emerald-100 truncate">
+                {effectiveProducts.slice(0, 6).map(p => `${p.name} (R$ ${Number(p.salePrice).toFixed(2).replace('.', ',')})`).join(' • ')}
+                {effectiveProducts.length > 6 && ` e mais +${effectiveProducts.length - 6} produto(s)`}
+              </div>
+            ) : (
+              <div className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-xl border border-amber-200">
+                Esta empresa ainda não possui produtos cadastrados. Adicione produtos na área de gestão para que saiam no link.
+              </div>
+            )}
+          </div>
+
           {/* Link Box with Store Name Highlight & One-Click Copy */}
           <div className="p-3.5 bg-slate-50 border-2 border-emerald-200/80 rounded-2xl space-y-2.5">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                 <Store className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Link Personalizado da Loja</span>
+                <span>Link Oficial do Catálogo da Loja</span>
               </span>
 
-              {/* Mode Toggle: Link Oficial Direto vs Catálogo Completo vs Link Curto */}
+              {/* Mode Toggle: Link Oficial Direto vs Link Curto */}
               <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-xl text-[10px] font-bold flex-wrap">
                 <button
                   type="button"
                   onClick={() => setUrlMode('store_name')}
                   className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                    urlMode === 'store_name'
+                    urlMode !== 'short'
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Link oficial direto verificado com o nome da empresa. Abre 100% sem erros no WhatsApp e no celular."
+                  title="Link oficial direto verificado com o nome da empresa e catálogo completo de produtos."
                 >
                   <Store className="w-3 h-3" />
-                  <span>Link Oficial da Loja (Recomendado)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUrlMode('full')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                    urlMode === 'full'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Catálogo completo com todos os produtos embutidos"
-                >
-                  <LinkIcon className="w-3 h-3" />
-                  <span>Catálogo Completo</span>
+                  <span>Link Oficial com Produtos (Recomendado)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setUrlMode('short');
                     if (!shortUrl) {
-                      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+                      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
                     }
                   }}
                   className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${

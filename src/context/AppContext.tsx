@@ -596,7 +596,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (companies.length === 1 && !urlCompId)
       );
       if (found) return found.id;
+      if (urlCompId) return urlCompId;
     }
+    const directCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa');
+    if (directCompId) return directCompId;
     try {
       const saved = localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY);
       if (saved) return saved;
@@ -1641,8 +1644,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, []);
 
-  // Real-time URL Store Listener: ensures that opening a shared link (?loja=... or ?nome=...)
-  // immediately updates the active company, store title, and merchant name on any device or PWA
+  // Real-time URL Store Listener: ensures that opening a shared link (?loja=... or ?nome=... or ?p=...)
+  // immediately updates the active company, store title, products catalog, and merchant name on any device or PWA
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
@@ -1651,6 +1654,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const urlNome = params.get('nome');
       const urlCompId = params.get('empresa') || params.get('id');
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
+
+      // 1. Unpack products if passed in URL (?p=...)
+      const pParam = params.get('p');
+      if (pParam) {
+        try {
+          const rawItems = pParam.split('*').filter(Boolean);
+          const parsedList: Product[] = rawItems.map((itemStr, idx) => {
+            const parts = itemStr.split('_');
+            const rawName = (parts[0] || '').replace(/\+/g, ' ');
+            const name = decodeURIComponent(rawName) || `Produto ${idx + 1}`;
+            const salePrice = parseFloat(parts[1]) || 0;
+            const currentStock = parseInt(parts[2], 10) || 50;
+            const unit = (parts[3] as UnitType) || 'UN';
+            const rawCat = (parts[4] || 'Outros').replace(/\+/g, ' ');
+            const category = (decodeURIComponent(rawCat) as Category);
+            const wholesalePrice = parts[5] ? parseFloat(parts[5]) : undefined;
+            const wholesaleMinQty = parts[6] ? parseInt(parts[6], 10) : undefined;
+            return {
+              id: `p_share_${idx + 1}`,
+              name,
+              sku: `PROD-${idx + 1}`,
+              barcode: '',
+              salePrice,
+              costPrice: 0,
+              currentStock,
+              minStock: 2,
+              maxStock: 1000,
+              unit,
+              category,
+              itemsPerUnit: 1,
+              description: '',
+              wholesalePrice,
+              wholesaleMinQty,
+              updatedAt: new Date().toISOString()
+            };
+          });
+
+          if (parsedList.length > 0) {
+            setProducts(parsedList);
+            const targetId = urlCompId || activeCompanyId;
+            try {
+              localStorage.setItem(getTenantKey('products', targetId), JSON.stringify(parsedList));
+              if (targetId === DEFAULT_COMPANY_ID) {
+                localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(parsedList));
+              }
+            } catch {}
+          }
+        } catch (e) {
+          console.error('Error unpacking compact products in URL listener:', e);
+        }
+      }
+
+      if (urlCompId && urlCompId !== activeCompanyId) {
+        setActiveCompanyId(urlCompId);
+        try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, urlCompId); } catch {}
+      }
 
       if (incomingName && incomingName !== 'minha loja' && incomingName !== 'loja') {
         const targetSlug = incomingName.toLowerCase().replace(/\s+/g, '-');

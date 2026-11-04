@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '56';
+        var APP_BUILD_VER = '57';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer !== APP_BUILD_VER) {
@@ -40,7 +40,7 @@
             if ('caches' in window) {
               caches.keys().then(function(keys) {
                 keys.forEach(function(k) {
-                  if (k !== 'appvendas-pwa-v56') {
+                  if (k !== 'appvendas-pwa-v57') {
                     caches.delete(k);
                   }
                 });
@@ -68,27 +68,49 @@
 
       // Global cache-busting helper for existing installed apps
       window.__clearAppCacheAndReload = function() {
+        try {
+          document.body.style.opacity = '0.5';
+        } catch(e) {}
+
+        var performReload = function() {
+          try { 
+            sessionStorage.clear(); 
+            localStorage.setItem('appvendas_client_build_ver', '57');
+          } catch(e) {}
+          try {
+            var curUrl = new URL(window.location.href);
+            curUrl.searchParams.set('v', '57');
+            curUrl.searchParams.set('atualizado', Date.now());
+            window.location.replace(curUrl.toString());
+          } catch(e) {
+            window.location.reload();
+          }
+        };
+
+        var tasks = [];
         if ('caches' in window) {
-          caches.keys().then(function(keys) {
-            return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-          }).catch(function() {});
+          tasks.push(
+            caches.keys().then(function(keys) {
+              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+            }).catch(function() {})
+          );
         }
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(function(regs) {
-            return Promise.all(regs.map(function(r) { return r.unregister(); }));
-          }).catch(function() {});
+          tasks.push(
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              return Promise.all(regs.map(function(r) { return r.unregister(); }));
+            }).catch(function() {})
+          );
         }
-        try { 
-          sessionStorage.clear(); 
-          localStorage.setItem('appvendas_client_build_ver', '56');
-        } catch(e) {}
-        try {
-          var curUrl = new URL(window.location.href);
-          curUrl.searchParams.set('atualizado', Date.now());
-          window.location.href = curUrl.toString();
-        } catch(e) {
-          window.location.href = window.location.pathname + '?atualizado=' + Date.now();
-        }
+
+        var safetyTimer = setTimeout(performReload, 600);
+        Promise.all(tasks).then(function() {
+          clearTimeout(safetyTimer);
+          performReload();
+        }).catch(function() {
+          clearTimeout(safetyTimer);
+          performReload();
+        });
       };
 
       // Failsafe error catcher for early script errors

@@ -99,11 +99,11 @@ export function buildStoreShareUrl(
     url.searchParams.set('vendedor', sellerName);
   }
 
-  // Ultra-compact product serializer (up to 30 products)
+  // Ultra-compact product serializer (up to 50 products)
   // Format: Name_Price_Stock_Unit_Category_WholesalePrice_WholesaleQty joined by '*'
   if (products && products.length > 0) {
     try {
-      const compactItems = products.slice(0, 30).map(p => {
+      const compactItems = products.slice(0, 50).map(p => {
         // Sanitize delimiters from name and category
         const safeName = (p.name || 'Produto').replace(/[_*~|]/g, ' ').trim().slice(0, 32);
         const safeCat = (p.category || 'Outros').replace(/[_*~|]/g, ' ').trim().slice(0, 20);
@@ -163,30 +163,16 @@ Acesse o catálogo da ${compName} e aproveite!`
 }
 
 /**
- * Builds a minimalist, clean direct URL with the store name clearly in the link.
- * E.g.: https://ais-pre-...run.app/?loja=Minha-Empresa
+ * Builds a direct URL with the store name clearly in the link AND all company products included.
+ * E.g.: https://ais-pre-...run.app/?loja=Minha-Empresa&p=...
  */
-export function buildStoreCleanUrl(company: CompanyAccount, paymentSettings?: PaymentSettings): string {
-  let origin = typeof window !== 'undefined' && window.location.origin 
-    ? window.location.origin 
-    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
-  
-  if (origin.includes('ais-dev-')) {
-    origin = origin.replace('ais-dev-', 'ais-pre-');
-  }
-
-  const pathname = typeof window !== 'undefined' && window.location.pathname ? window.location.pathname : '/';
-  const url = new URL(pathname, origin);
-
-  const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
-  const storeSlug = rawStoreName
-    .replace(/\s+/g, '-')
-    .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '') || 'loja';
-
-  // Super clean direct URL with only the store name
-  url.searchParams.set('loja', storeSlug);
-
-  return url.toString();
+export function buildStoreCleanUrl(
+  company: CompanyAccount, 
+  paymentSettings?: PaymentSettings,
+  activeSeller?: SellerProfile,
+  products?: Product[]
+): string {
+  return buildStoreShareUrl(company, paymentSettings, activeSeller, products);
 }
 
 /**

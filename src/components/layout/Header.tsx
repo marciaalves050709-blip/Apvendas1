@@ -64,6 +64,15 @@ export const Header: React.FC = () => {
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
 
+  const handleQuickAppUpdate = () => {
+    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v57)...');
+    if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+      (window as any).__clearAppCacheAndReload();
+    } else {
+      openUpdateModal();
+    }
+  };
+
   const handleShareApp = () => {
     openShareModal(currentCompany);
   };
@@ -186,9 +195,9 @@ export const Header: React.FC = () => {
         {/* Quick App Refresh & Cache Clear */}
         <button
           type="button"
-          onClick={openUpdateModal}
+          onClick={handleQuickAppUpdate}
           className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all cursor-pointer font-bold text-xs flex items-center gap-1 active:scale-95 shadow-2xs"
-          title="Verificar e atualizar aplicativo instalado para a versão mais recente (v56)"
+          title="Atualizar aplicativo instalado para a versão mais recente (v57) em 1 clique"
         >
           <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin-hover" />
           <span className="hidden sm:inline">Atualizar App</span>
