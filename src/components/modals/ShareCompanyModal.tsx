@@ -6,7 +6,8 @@ import {
   buildStoreShareUrl, 
   buildStoreCleanUrl, 
   buildStoreShareMessage, 
-  shortenUrl 
+  shortenUrl,
+  syncStoreToServer 
 } from '../../utils/shareHelper';
 import { 
   X, 
@@ -180,14 +181,17 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     return activeSeller;
   }, [effectiveSettings, activeSeller]);
 
-  // Full share URL with store name and all products of the specific company embedded!
-  const shareUrl = useMemo(() => {
-    return buildStoreShareUrl(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts);
-  }, [effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
-
+  // Clean short store URL containing ONLY the company name (no extra parameters)
   const cleanUrl = useMemo(() => {
-    return buildStoreCleanUrl(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts);
-  }, [effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
+    return buildStoreCleanUrl(effectiveCompany, effectiveSettings);
+  }, [effectiveCompany, effectiveSettings]);
+
+  // Sync company catalog and settings to backend whenever modal opens or data changes
+  useEffect(() => {
+    if (isOpen && effectiveCompany) {
+      syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
+    }
+  }, [isOpen, effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
 
   // Automatic Link Shortening in the background with company name
   const triggerShorten = async (targetUrl: string, storeName: string) => {
@@ -206,20 +210,20 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
   };
 
-  // Only trigger shortening if user explicitly switches to 'short' mode and doesn't have a shortUrl yet
+  // Pre-generate shortened URL with company name in the background
   useEffect(() => {
-    if (isOpen && urlMode === 'short' && !shortUrl && shareUrl) {
-      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    if (isOpen && cleanUrl) {
+      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
     }
-  }, [isOpen, urlMode, shortUrl, shareUrl, effectiveCompany?.name]);
+  }, [isOpen, cleanUrl, effectiveCompany?.name]);
 
-  // Active URL to share: ALWAYS includes the store name and all products of the company!
+  // Active URL to share: Clean link with ONLY the company name (or external short link)
   const activeUrl = useMemo(() => {
     if (urlMode === 'short') {
-      return shortUrl || shareUrl;
+      return shortUrl || cleanUrl;
     }
-    return shareUrl;
-  }, [urlMode, shortUrl, shareUrl]);
+    return cleanUrl;
+  }, [urlMode, shortUrl, cleanUrl]);
 
   const shareMessage = useMemo(() => {
     return buildStoreShareMessage(effectiveCompany, activeUrl, effectiveSeller, effectiveSettings);
@@ -501,7 +505,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                 <span>Link Oficial do Catálogo da Loja</span>
               </span>
 
-              {/* Mode Toggle: Link Oficial Direto vs Link Curto */}
+              {/* Mode Toggle: Link Direto com Nome da Loja vs Link Super Encurtado */}
               <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-xl text-[10px] font-bold flex-wrap">
                 <button
                   type="button"
@@ -511,17 +515,17 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Link oficial direto verificado com o nome da empresa e catálogo completo de produtos."
+                  title="Link limpo contendo apenas o nome da empresa"
                 >
                   <Store className="w-3 h-3" />
-                  <span>Link Oficial com Produtos (Recomendado)</span>
+                  <span>Link com Nome da Loja (Limpo)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setUrlMode('short');
                     if (!shortUrl) {
-                      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+                      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
                     }
                   }}
                   className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
@@ -529,10 +533,10 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Encurtador externo de link"
+                  title="Encurtador de link com o nome da empresa"
                 >
                   <Scissors className="w-3 h-3" />
-                  <span>Link Curto Externo</span>
+                  <span>Link Super Encurtado</span>
                 </button>
               </div>
             </div>

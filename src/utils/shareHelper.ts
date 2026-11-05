@@ -41,15 +41,12 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * Builds the canonical public store URL for sharing.
- * If running on ais-dev-, converts to ais-pre- so outside clients can open it without auth.
- * Encodes store metadata and a compact catalog payload that fits effortlessly under WhatsApp & Cloud Run URL limits.
+ * Builds the clean public store URL for sharing containing ONLY the company name.
+ * E.g.: https://ais-pre-...run.app/?loja=Minha-Empresa
  */
-export function buildStoreShareUrl(
+export function buildStoreCleanUrl(
   company: CompanyAccount,
-  paymentSettings?: PaymentSettings,
-  activeSeller?: SellerProfile,
-  products?: Product[]
+  paymentSettings?: PaymentSettings
 ): string {
   let origin = typeof window !== 'undefined' && window.location.origin 
     ? window.location.origin 
@@ -59,78 +56,69 @@ export function buildStoreShareUrl(
     origin = origin.replace('ais-dev-', 'ais-pre-');
   }
 
-  const pathname = typeof window !== 'undefined' && window.location.pathname ? window.location.pathname : '/';
-  const url = new URL(pathname, origin);
-
-  // Nome da loja limpo e garantido no link
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
   const storeSlug = rawStoreName
     .replace(/\s+/g, '-')
     .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '') || 'loja';
 
-  // 1. O nome da loja é o primeiro parâmetro visível no link
-  url.searchParams.set('loja', storeSlug);
-  url.searchParams.set('nome', rawStoreName);
-  url.searchParams.set('tab', 'client-store');
-  url.searchParams.set('empresa', company?.id || 'empresa_principal');
+  return `${origin}/?loja=${encodeURIComponent(storeSlug)}`;
+}
 
-  if (company?.logoEmoji) {
-    url.searchParams.set('emoji', company.logoEmoji);
+/**
+ * Builds the canonical public store URL for sharing.
+ * Short, clean, and contains ONLY the company name in the link.
+ */
+export function buildStoreShareUrl(
+  company: CompanyAccount,
+  paymentSettings?: PaymentSettings,
+  activeSeller?: SellerProfile,
+  products?: Product[]
+): string {
+  // Automatically sync to backend in background if products are available
+  if (typeof window !== 'undefined' && (products || company)) {
+    syncStoreToServer(company, paymentSettings, activeSeller, products).catch(() => {});
   }
 
-  const zap = activeSeller?.whatsapp || paymentSettings?.merchantWhatsapp || company?.phone;
-  if (zap) {
-    const cleanZap = zap.replace(/\D/g, '');
-    if (cleanZap) url.searchParams.set('zap', cleanZap);
+  return buildStoreCleanUrl(company, paymentSettings);
+}
+
+/**
+ * Syncs the store catalog and payment data to the backend /api/stores/:slug.
+ * Allows any device or customer to open the clean ?loja=nome link and see all products.
+ */
+export async function syncStoreToServer(
+  company: CompanyAccount,
+  paymentSettings?: PaymentSettings,
+  activeSeller?: SellerProfile,
+  products?: Product[]
+): Promise<boolean> {
+  try {
+    const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
+    const storeSlug = rawStoreName
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '')
+      .toLowerCase() || 'loja';
+
+    const res = await fetch(`/api/stores/${encodeURIComponent(storeSlug)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company,
+        paymentSettings,
+        activeSeller,
+        products: products || []
+      })
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[SyncStore] Offline or sync skipped:', err);
+    return false;
   }
-
-  const pix = activeSeller?.pixKey || paymentSettings?.pixKey;
-  if (pix && pix.trim()) {
-    url.searchParams.set('pix', pix.trim());
-  }
-
-  const bank = activeSeller?.receivingBank || paymentSettings?.receivingBank;
-  if (bank) {
-    url.searchParams.set('banco', bank);
-  }
-
-  const sellerName = activeSeller?.name;
-  if (sellerName && sellerName !== 'Atendente') {
-    url.searchParams.set('vendedor', sellerName);
-  }
-
-  // Ultra-compact product serializer (up to 50 products)
-  // Format: Name_Price_Stock_Unit_Category_WholesalePrice_WholesaleQty joined by '*'
-  if (products && products.length > 0) {
-    try {
-      const compactItems = products.slice(0, 50).map(p => {
-        // Sanitize delimiters from name and category
-        const safeName = (p.name || 'Produto').replace(/[_*~|]/g, ' ').trim().slice(0, 32);
-        const safeCat = (p.category || 'Outros').replace(/[_*~|]/g, ' ').trim().slice(0, 20);
-        const price = Number(p.salePrice) || 0;
-        const stock = Number(p.currentStock) || 0;
-        const unit = (p.unit || 'UN').replace(/[_*~|]/g, '').trim().slice(0, 6);
-        const wp = p.wholesalePrice ? Number(p.wholesalePrice) : '';
-        const wq = p.wholesaleMinQty ? Number(p.wholesaleMinQty) : '';
-        
-        if (wp && wq) {
-          return `${safeName}_${price}_${stock}_${unit}_${safeCat}_${wp}_${wq}`;
-        }
-        return `${safeName}_${price}_${stock}_${unit}_${safeCat}`;
-      });
-
-      url.searchParams.set('p', compactItems.join('*'));
-    } catch {
-      // ignore serialization errors
-    }
-  }
-
-  return url.toString();
 }
 
 /**
  * Builds a ready-to-share promotional message for WhatsApp & social media.
- * Ensures the link is cleanly isolated on its own line so WhatsApp converts it to a rich clickable card preview.
+ * Uses the short, clean link containing only the company name.
  */
 export function buildStoreShareMessage(
   company: CompanyAccount,
@@ -160,19 +148,6 @@ ${shareUrl}
 ${sellerInfo}
 Acesse o catálogo da ${compName} e aproveite!`
   );
-}
-
-/**
- * Builds a direct URL with the store name clearly in the link AND all company products included.
- * E.g.: https://ais-pre-...run.app/?loja=Minha-Empresa&p=...
- */
-export function buildStoreCleanUrl(
-  company: CompanyAccount, 
-  paymentSettings?: PaymentSettings,
-  activeSeller?: SellerProfile,
-  products?: Product[]
-): string {
-  return buildStoreShareUrl(company, paymentSettings, activeSeller, products);
 }
 
 /**

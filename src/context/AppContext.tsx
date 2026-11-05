@@ -31,6 +31,7 @@ import {
   INITIAL_SHIFT,
   DEMO_PRODUCTS
 } from '../data/mockDisposables';
+import { syncStoreToServer } from '../utils/shareHelper';
 
 interface Toast {
   id: string;
@@ -1655,7 +1656,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const urlCompId = params.get('empresa') || params.get('id');
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
 
-      // 1. Unpack products if passed in URL (?p=...)
+      // 0. Fetch store catalog and settings from backend API if opened via clean ?loja=... link
+      const storeSlug = urlLoja ? normalizeStoreSlug(urlLoja) : '';
+      if (storeSlug) {
+        fetch(`/api/stores/${encodeURIComponent(storeSlug)}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data) {
+              if (Array.isArray(data.products) && data.products.length > 0) {
+                setProducts(data.products);
+                const targetCompId = data.company?.id || urlCompId || activeCompanyId;
+                try {
+                  localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
+                } catch {}
+              }
+              if (data.company && data.company.name) {
+                setCompanies(prev => {
+                  const targetCompId = data.company.id || urlCompId || activeCompanyId;
+                  const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === storeSlug);
+                  if (idx >= 0) {
+                    const copy = [...prev];
+                    copy[idx] = { ...copy[idx], ...data.company };
+                    return copy;
+                  }
+                  return [...prev, data.company];
+                });
+                if (data.company.id) {
+                  setActiveCompanyId(data.company.id);
+                  try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
+                }
+              }
+              if (data.paymentSettings) {
+                setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
+              }
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 1. Unpack products if passed in legacy URL (?p=...)
       const pParam = params.get('p');
       if (pParam) {
         try {
@@ -1948,6 +1987,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const found = sellers.find(s => s.id === activeSellerId);
     return found || sellers[0];
   }, [sellers, activeSellerId]);
+
+  // Auto-sync company store to backend so clean links (?loja=...) always have up-to-date products
+  useEffect(() => {
+    if (currentCompany && currentCompany.name && products && products.length > 0) {
+      syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+    }
+  }, [currentCompany?.name, currentCompany?.id, products, paymentSettings, activeSeller]);
 
   const setActiveSellerId = (id: string) => {
     const target = sellers.find(s => s.id === id);

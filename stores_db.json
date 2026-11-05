@@ -1,0 +1,20 @@
+{
+  "minha-empresa": {
+    "slug": "minha-empresa",
+    "company": {
+      "name": "Minha Empresa"
+    },
+    "paymentSettings": {},
+    "products": [
+      {
+        "name": "Prato",
+        "salePrice": 10,
+        "currentStock": 50,
+        "unit": "UN",
+        "category": "Outros"
+      }
+    ],
+    "activeSeller": null,
+    "updatedAt": "2026-11-05T22:51:31.256Z"
+  }
+}
