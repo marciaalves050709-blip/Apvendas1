@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = 'v57';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v57';
+const CURRENT_SW_VERSION = 'v58';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v58';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
@@ -196,6 +196,14 @@ if (typeof window !== 'undefined') {
         }
       }).catch(() => {});
     }
+
+    // Listen for activation messages from the new Service Worker
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'SW_ACTIVATED') {
+        console.log('[PWA] New service worker version active:', event.data.version);
+        window.dispatchEvent(new CustomEvent('app-update-available'));
+      }
+    });
 
     navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/' })
       .then((reg) => {
@@ -227,10 +235,10 @@ if (typeof window !== 'undefined') {
           reg.update().catch(() => {});
         });
 
-        // Periodic background update check every 3 minutes
+        // Periodic background update check every 2 minutes
         setInterval(() => {
           reg.update().catch(() => {});
-        }, 3 * 60 * 1000);
+        }, 2 * 60 * 1000);
       })
       .catch((err) => {
         console.warn('[PWA] Service Worker registration:', err);

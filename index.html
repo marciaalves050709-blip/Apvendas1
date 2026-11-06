@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '57';
+        var APP_BUILD_VER = '58';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer !== APP_BUILD_VER) {
@@ -40,7 +40,7 @@
             if ('caches' in window) {
               caches.keys().then(function(keys) {
                 keys.forEach(function(k) {
-                  if (k !== 'appvendas-pwa-v57') {
+                  if (k !== 'appvendas-pwa-v58') {
                     caches.delete(k);
                   }
                 });
@@ -75,11 +75,11 @@
         var performReload = function() {
           try { 
             sessionStorage.clear(); 
-            localStorage.setItem('appvendas_client_build_ver', '57');
+            localStorage.setItem('appvendas_client_build_ver', '58');
           } catch(e) {}
           try {
             var curUrl = new URL(window.location.href);
-            curUrl.searchParams.set('v', '57');
+            curUrl.searchParams.set('v', '58');
             curUrl.searchParams.set('atualizado', Date.now());
             window.location.replace(curUrl.toString());
           } catch(e) {

@@ -64,7 +64,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
                   Atualizar Aplicativo
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950 uppercase">
-                  Versão 57
+                  Versão 58
                 </span>
               </div>
               <p className="text-xs text-indigo-200 truncate mt-0.5">
@@ -121,7 +121,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
                 Deseja atualizar para a versão mais recente agora?
               </h4>
               <p className="text-[11px] text-slate-600 mt-1 max-w-sm mx-auto leading-relaxed">
-                Ao clicar no botão abaixo, o aplicativo limpa caches antigos e carrega as últimas correções do link da loja, Pix e catálogo instantaneamente.
+                Ao clicar no botão abaixo, o aplicativo limpa caches antigos e carrega as últimas correções do link encurtado, produtos e catálogo instantaneamente.
               </p>
             </div>
 
@@ -145,16 +145,16 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
             <div className="flex items-center gap-1.5 text-slate-900 font-black text-[11px] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>O que foi atualizado nesta versão:</span>
+              <span>O que há de novo na versão 58:</span>
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-[11px]">
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-slate-900 block font-bold">Link Oficial da Loja 100% Corrigido</strong>
+                  <strong className="text-slate-900 block font-bold">Link Encurtado Oficial com Todos os Produtos</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    O link direto com o nome da sua empresa (<code className="bg-slate-100 px-1 rounded font-mono text-[10px]">?loja=NomeDaLoja</code>) agora abre sem nenhum erro no WhatsApp e celulares.
+                    O link de compartilhamento agora sai super curto com o nome da empresa (ex: <code className="bg-slate-100 px-1 rounded font-mono text-[10px]">is.gd/loja_suaempresa</code>) e entrega todos os produtos para os clientes comprarem.
                   </span>
                 </div>
               </div>
@@ -162,9 +162,9 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-slate-900 block font-bold">Atualização do Nome da Loja em Tempo Real</strong>
+                  <strong className="text-slate-900 block font-bold">Atualização Imediata de Aplicativos Instalados</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    Você pode trocar o nome da empresa e o link de divulgação se atualiza na mesma hora.
+                    Celulares com o app instalado na tela inicial agora recebem as atualizações automaticamente sem travar no cache antigo.
                   </span>
                 </div>
               </div>
@@ -172,9 +172,9 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-slate-900 block font-bold">Pix e WhatsApp da Empresa</strong>
+                  <strong className="text-slate-900 block font-bold">Instalação Facilitada para Novos Usuários</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    Ajustes para que o lojista edite o Pix da empresa diretamente na área de configurações.
+                    Novos clientes e visitantes recebem botão e banner para instalar o aplicativo direto no celular em 1 toque no Android ou iPhone.
                   </span>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
         {/* Footer */}
         <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-slate-500 font-medium">
-            Versão do Sistema: <strong>v57 (Novembro/2026)</strong>
+            Versão do Sistema: <strong>v58 (Novembro/2026)</strong>
           </span>
           <button
             type="button"

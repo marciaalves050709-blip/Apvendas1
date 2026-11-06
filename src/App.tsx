@@ -84,6 +84,7 @@ const MainLayout: React.FC = () => {
     return (
       <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans overflow-hidden flex-col">
         <AppUpdateBanner onOpenUpdateModal={openUpdateModal} />
+        <MobileInstallBanner />
         <ClientStoreView />
 
         {/* Modais Globais necessários */}

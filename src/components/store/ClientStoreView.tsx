@@ -568,7 +568,7 @@ export const ClientStoreView: React.FC = () => {
   };
 
   const handleQuickAppUpdate = () => {
-    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v57)...');
+    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v58)...');
     if (typeof (window as any).__clearAppCacheAndReload === 'function') {
       (window as any).__clearAppCacheAndReload();
     } else {
@@ -664,7 +664,7 @@ export const ClientStoreView: React.FC = () => {
             type="button"
             onClick={handleQuickAppUpdate}
             className="p-1.5 sm:px-2.5 sm:py-2 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl transition-all cursor-pointer border border-emerald-200 bg-white shadow-2xs active:scale-95 flex items-center gap-1 font-bold text-xs"
-            title="Atualizar aplicativo instalado para a versão mais recente (v57) em 1 clique"
+            title="Atualizar aplicativo instalado para a versão mais recente (v58) em 1 clique"
           >
             <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
             <span className="hidden sm:inline">Atualizar</span>

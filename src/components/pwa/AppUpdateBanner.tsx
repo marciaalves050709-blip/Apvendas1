@@ -28,7 +28,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
     // 3. Fallback check: Compare current build ver with stored ver
     try {
       const stored = localStorage.getItem('appvendas_client_build_ver');
-      if (stored && stored !== '57') {
+      if (stored && stored !== '58') {
         setUpdateAvailable(true);
       }
     } catch {}
@@ -49,7 +49,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
     } else {
       try {
         const curUrl = new URL(window.location.href);
-        curUrl.searchParams.set('v', '57');
+        curUrl.searchParams.set('v', '58');
         curUrl.searchParams.set('atualizado', Date.now().toString());
         window.location.replace(curUrl.toString());
       } catch {
@@ -77,7 +77,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-xs text-white truncate">
-              Nova Atualização Disponível (v57)
+              Nova Atualização Disponível (v58)
             </span>
             <span className="text-[10px] bg-emerald-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
               Recente
