@@ -78,12 +78,6 @@ export const AccessPaywall: React.FC = () => {
     }
   };
 
-  // A área de vendas do cliente é SEMPRE liberada para compras!
-  // O cliente NUNCA deve ser bloqueado de visualizar os produtos e fazer pedidos.
-  if (activeTab === 'client-store') {
-    return null;
-  }
-
   const isBlocked = Boolean(isTestBlockMode || (!isAdmin && !isMasterAdmin && !isAccessAllowed));
 
   const { isInstalled, isIOS } = usePWAInstall();
@@ -100,12 +94,18 @@ export const AccessPaywall: React.FC = () => {
 
   // Live Radar Pulse Animation
   useEffect(() => {
-    if (!isBlocked) return;
+    if (!isBlocked || activeTab === 'client-store') return;
     const interval = setInterval(() => {
       setRadarPulseCount(c => c + 1);
     }, 1400);
     return () => clearInterval(interval);
-  }, [isBlocked]);
+  }, [isBlocked, activeTab]);
+
+  // A área de vendas do cliente é SEMPRE liberada para compras!
+  // O cliente NUNCA deve ser bloqueado de visualizar os produtos e fazer pedidos.
+  if (activeTab === 'client-store') {
+    return null;
+  }
 
   // Only render if access is blocked (either test block, trial expired or Day 5 passed without payment)
   if (!isBlocked) {
