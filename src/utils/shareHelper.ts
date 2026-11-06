@@ -58,8 +58,13 @@ export function buildStoreCleanUrl(
 
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
   const storeSlug = rawStoreName
-    .replace(/\s+/g, '-')
-    .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '') || 'loja';
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .trim() || 'loja';
 
   return `${origin}/?loja=${encodeURIComponent(storeSlug)}`;
 }
@@ -155,9 +160,13 @@ export async function syncStoreToServer(
   try {
     const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
     const storeSlug = rawStoreName
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '')
-      .toLowerCase() || 'loja';
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .trim() || 'loja';
 
     const res = await fetch(`/api/stores/${encodeURIComponent(storeSlug)}`, {
       method: 'POST',

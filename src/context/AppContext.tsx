@@ -90,6 +90,7 @@ interface AppContextType {
     options?: { reason?: string; documentRef?: string; unitCost?: number; user?: string }
   ) => boolean;
   quickStockAdjustment: (productId: string, newStock: number, reason: string) => boolean;
+  refreshStoreCatalog: () => Promise<boolean>;
 
   // Customer Actions
   addCustomer: (customerData: Omit<Customer, 'id' | 'totalPurchased'>) => Customer;
@@ -354,7 +355,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '');
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .trim();
   };
 
   // Check URL params for deep-linking directly to a specific company/store (handles both & and encoded %26)
@@ -1669,43 +1673,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const urlCompId = params.get('empresa') || params.get('id');
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
 
-      // 0. Fetch store catalog and settings from backend API if opened via clean ?loja=... link
-      const storeSlug = urlLoja ? normalizeStoreSlug(urlLoja) : '';
-      if (storeSlug) {
-        fetch(`/api/stores/${encodeURIComponent(storeSlug)}`)
-          .then(res => res.ok ? res.json() : null)
-          .then(data => {
-            if (data) {
-              if (Array.isArray(data.products) && data.products.length > 0) {
-                setProducts(data.products);
-                const targetCompId = data.company?.id || urlCompId || activeCompanyId;
-                try {
-                  localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
-                } catch {}
-              }
-              if (data.company && data.company.name) {
-                setCompanies(prev => {
-                  const targetCompId = data.company.id || urlCompId || activeCompanyId;
-                  const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === storeSlug);
-                  if (idx >= 0) {
-                    const copy = [...prev];
-                    copy[idx] = { ...copy[idx], ...data.company };
-                    return copy;
-                  }
-                  return [...prev, data.company];
-                });
-                if (data.company.id) {
-                  setActiveCompanyId(data.company.id);
-                  try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
+      // 0. Fetch store catalog and settings from backend API (live network check with no-store)
+      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (urlCompId || 'latest');
+      fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data) {
+            if (Array.isArray(data.products) && data.products.length > 0) {
+              setProducts(data.products);
+              const targetCompId = data.company?.id || urlCompId || activeCompanyId;
+              try {
+                localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
+                if (targetCompId === DEFAULT_COMPANY_ID) {
+                  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
                 }
-              }
-              if (data.paymentSettings) {
-                setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
+              } catch {}
+            }
+            if (data.company && data.company.name) {
+              setCompanies(prev => {
+                const targetCompId = data.company.id || urlCompId || activeCompanyId;
+                const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(data.slug));
+                if (idx >= 0) {
+                  const copy = [...prev];
+                  copy[idx] = { ...copy[idx], ...data.company };
+                  return copy;
+                }
+                return [...prev, data.company];
+              });
+              if (data.company.id) {
+                setActiveCompanyId(data.company.id);
+                try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
               }
             }
-          })
-          .catch(() => {});
-      }
+            if (data.paymentSettings) {
+              setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
+            }
+          }
+        })
+        .catch(() => {});
 
       // 1. Unpack products if passed in legacy URL (?p=...)
       const pParam = params.get('p');
@@ -2609,7 +2614,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Product Operations
+  // Product Operations (Immediate real-time server & storage sync)
   const addProduct = (productData: Omit<Product, 'id' | 'updatedAt'>) => {
     const newProduct: Product = {
       ...productData,
@@ -2617,7 +2622,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    setProducts(prev => [newProduct, ...prev]);
+    const nextProducts = [newProduct, ...products];
+    setProducts(nextProducts);
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
 
     // Initial stock movement record if stock > 0
     if (newProduct.currentStock > 0) {
@@ -2638,22 +2645,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setMovements(prev => [newMovement, ...prev]);
     }
 
-    showToast('success', 'Produto Criado', `"${newProduct.name}" cadastrado com sucesso.`);
+    showToast('success', 'Produto Criado', `"${newProduct.name}" cadastrado e sincronizado no catálogo.`);
     return newProduct;
   };
 
   const updateProduct = (id: string, productData: Partial<Product>) => {
-    setProducts(prev =>
-      prev.map(p => (p.id === id ? { ...p, ...productData, updatedAt: new Date().toISOString() } : p))
-    );
-    showToast('success', 'Produto Atualizado', 'As informações foram salvas.');
+    const nextProducts = products.map(p => (p.id === id ? { ...p, ...productData, updatedAt: new Date().toISOString() } : p));
+    setProducts(nextProducts);
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
+    showToast('success', 'Produto Atualizado', 'As informações foram salvas e sincronizadas.');
   };
 
   const deleteProduct = (id: string) => {
     const prod = products.find(p => p.id === id);
     if (!prod) return;
-    setProducts(prev => prev.filter(p => p.id !== id));
+    const nextProducts = products.filter(p => p.id !== id);
+    setProducts(nextProducts);
     setCart(prev => prev.filter(item => item.product.id !== id));
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
     showToast('info', 'Produto Removido', `O item "${prod.name}" foi excluído.`);
   };
 
@@ -2699,18 +2708,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: new Date().toISOString(),
     };
 
-    setProducts(prev =>
-      prev.map(p =>
-        p.id === productId
-          ? {
-              ...p,
-              currentStock: newStock,
-              costPrice: options?.unitCost && options.unitCost > 0 ? options.unitCost : p.costPrice,
-              updatedAt: new Date().toISOString(),
-            }
-          : p
-      )
+    const nextProducts = products.map(p =>
+      p.id === productId
+        ? {
+            ...p,
+            currentStock: newStock,
+            costPrice: options?.unitCost && options.unitCost > 0 ? options.unitCost : p.costPrice,
+            updatedAt: new Date().toISOString(),
+          }
+        : p
     );
+    setProducts(nextProducts);
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
 
     setMovements(prev => [movement, ...prev]);
     showToast(
@@ -2744,12 +2753,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: new Date().toISOString(),
     };
 
-    setProducts(prev =>
-      prev.map(p => (p.id === productId ? { ...p, currentStock: newStock, updatedAt: new Date().toISOString() } : p))
-    );
+    const nextProducts = products.map(p => (p.id === productId ? { ...p, currentStock: newStock, updatedAt: new Date().toISOString() } : p));
+    setProducts(nextProducts);
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
     setMovements(prev => [movement, ...prev]);
     showToast('success', 'Estoque Ajustado', `Estoque de "${prod.name}" alterado de ${previousStock} para ${newStock}.`);
     return true;
+  };
+
+  // Live Refresh for Client Store & Installed App (Guarantees freshest products on demand)
+  const refreshStoreCatalog = async (): Promise<boolean> => {
+    try {
+      const targetQuery = currentCompany?.slug || currentCompany?.name || 'latest';
+      const res = await fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.products)) {
+          setProducts(data.products);
+          localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(data.products));
+          if (activeCompanyId === DEFAULT_COMPANY_ID) {
+            localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
+          }
+          return true;
+        }
+      }
+    } catch {}
+    return false;
   };
 
   // Customers
@@ -2947,6 +2976,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteProduct,
         addStockMovement,
         quickStockAdjustment,
+        refreshStoreCatalog,
         addCustomer,
         updateCustomer,
         addSupplier,

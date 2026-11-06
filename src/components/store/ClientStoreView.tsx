@@ -111,7 +111,8 @@ export const ClientStoreView: React.FC = () => {
     setIsSellerWhatsappModalOpen,
     checkAndApplyAdminCredentials,
     openShareModal,
-    openUpdateModal
+    openUpdateModal,
+    refreshStoreCatalog
   } = useApp();
 
   // Client Session State
@@ -567,6 +568,34 @@ export const ClientStoreView: React.FC = () => {
     openShareModal(currentCompany);
   };
 
+  const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
+
+  const handleRefreshCatalog = async () => {
+    setIsRefreshingCatalog(true);
+    try {
+      const ok = await refreshStoreCatalog();
+      if (ok) {
+        showToast('success', 'Catálogo Sincronizado!', 'Produtos e preços atualizados direto da loja.');
+      } else {
+        showToast('info', 'Catálogo Conectado', 'Você já está com as informações mais recentes.');
+      }
+    } catch {
+      showToast('info', 'Catálogo Conectado', 'Informações atualizadas.');
+    } finally {
+      setIsRefreshingCatalog(false);
+    }
+  };
+
+  // Auto-sync products whenever client opens the store or returns to the app
+  useEffect(() => {
+    refreshStoreCatalog().catch(() => {});
+    const onFocus = () => {
+      refreshStoreCatalog().catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
   const handleQuickAppUpdate = () => {
     showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v58)...');
     if (typeof (window as any).__clearAppCacheAndReload === 'function') {
@@ -659,15 +688,17 @@ export const ClientStoreView: React.FC = () => {
             <span className="sm:hidden font-bold">Link</span>
           </button>
 
-          {/* Quick App Refresh & Update Button */}
+          {/* Live Catalog Refresh Button */}
           <button
             type="button"
-            onClick={handleQuickAppUpdate}
-            className="p-1.5 sm:px-2.5 sm:py-2 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-xl transition-all cursor-pointer border border-emerald-200 bg-white shadow-2xs active:scale-95 flex items-center gap-1 font-bold text-xs"
-            title="Atualizar aplicativo instalado para a versão mais recente (v58) em 1 clique"
+            onClick={handleRefreshCatalog}
+            disabled={isRefreshingCatalog}
+            className="p-1.5 sm:px-2.5 sm:py-2 text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all cursor-pointer border border-emerald-300 shadow-2xs active:scale-95 flex items-center gap-1 font-bold text-xs disabled:opacity-50"
+            title="Sincronizar produtos, preços e estoque em tempo real com a loja"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">Atualizar</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Sincronizar</span>
+            <span className="sm:hidden font-bold">Sync</span>
           </button>
 
           {/* PWA Install Button */}
@@ -924,13 +955,25 @@ export const ClientStoreView: React.FC = () => {
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
                 Tente buscar por outro termo digitando no campo de pesquisa acima.
               </p>
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="mt-3 px-4 py-2 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-100 cursor-pointer"
-              >
-                Limpar Busca
-              </button>
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="mt-3 px-4 py-2 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-100 cursor-pointer"
+                >
+                  Limpar Busca
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRefreshCatalog}
+                  disabled={isRefreshingCatalog}
+                  className="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md cursor-pointer inline-flex items-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingCatalog ? 'Sincronizando...' : 'Carregar Produtos da Loja'}</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">

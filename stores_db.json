@@ -16,5 +16,20 @@
     ],
     "activeSeller": null,
     "updatedAt": "2026-11-05T22:51:31.256Z"
+  },
+  "teste": {
+    "slug": "teste",
+    "company": {
+      "name": "Teste"
+    },
+    "paymentSettings": {},
+    "products": [
+      {
+        "name": "Item 1",
+        "salePrice": 25
+      }
+    ],
+    "activeSeller": null,
+    "updatedAt": "2026-11-06T17:22:20.516Z"
   }
 }

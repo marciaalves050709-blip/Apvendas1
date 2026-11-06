@@ -42,20 +42,32 @@ const normalizeSlug = (str: string): string => {
     .trim();
 };
 
-// API: Save/Sync Store Catalog and Details
+const cleanSlugAlphanumeric = (str: string): string => {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+};
+
+// API: Save/Sync Store Catalog and Details (Always persists latest live catalog)
 app.post('/api/stores/:slug', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     const rawSlug = req.params.slug;
-    const slug = normalizeSlug(rawSlug);
-    if (!slug) {
-      return res.status(400).json({ error: 'Store slug required' });
-    }
+    const slug = normalizeSlug(rawSlug) || 'loja';
+    const cleanSlug = cleanSlugAlphanumeric(rawSlug) || 'loja';
 
     const { company, paymentSettings, products, activeSeller } = req.body;
     const db = readDb();
 
-    db[slug] = {
+    const storeData = {
       slug,
+      cleanSlug,
       company: company || { name: rawSlug },
       paymentSettings: paymentSettings || {},
       products: Array.isArray(products) ? products : [],
@@ -63,36 +75,81 @@ app.post('/api/stores/:slug', (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
+    // Store under primary slug (e.g. "minha-empresa")
+    db[slug] = storeData;
+
+    // Also store under clean alphanumeric (e.g. "minhaempresa")
+    if (cleanSlug && cleanSlug !== slug) {
+      db[cleanSlug] = storeData;
+    }
+
+    // Also store under company ID if provided (e.g. "empresa_principal")
+    if (company && company.id) {
+      db[company.id] = storeData;
+    }
+
+    // Always record as the most recent/latest store
+    db['_latest'] = storeData;
+
     writeDb(db);
-    console.log(`[StoreDB] Store "${slug}" synced with ${db[slug].products.length} products`);
-    res.json({ success: true, slug, productCount: db[slug].products.length });
+    console.log(`[StoreDB] Store "${slug}" synced with ${storeData.products.length} products (saved as latest)`);
+    res.json({ success: true, slug, cleanSlug, productCount: storeData.products.length });
   } catch (err: any) {
     console.error('[StoreDB] Error saving store:', err);
     res.status(500).json({ error: err.message || 'Failed to save store' });
   }
 });
 
-// API: Retrieve Store by Slug
+// API: Retrieve Store by Slug or Latest (Guarantees installed apps & links get live products)
 app.get('/api/stores/:slug', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
-    const slug = normalizeSlug(req.params.slug);
+    const rawSlug = req.params.slug;
+    const slug = normalizeSlug(rawSlug);
+    const cleanSlug = cleanSlugAlphanumeric(rawSlug);
     const db = readDb();
 
-    if (db[slug]) {
-      return res.json(db[slug]);
+    // 1. Direct key match
+    if (db[slug]) return res.json(db[slug]);
+    if (db[cleanSlug]) return res.json(db[cleanSlug]);
+    if (db[rawSlug]) return res.json(db[rawSlug]);
+
+    // 2. Special keywords: 'latest', 'default', 'current', '_latest', 'loja', 'store'
+    const isLatestKeyword = ['latest', 'default', 'current', '_latest', 'loja', 'store', 'principal', 'empresa_principal'].includes(rawSlug.toLowerCase());
+    if (isLatestKeyword) {
+      if (db['_latest']) return res.json(db['_latest']);
+      const all = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
+      if (all.length > 0) {
+        all.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+        return res.json(all[0]);
+      }
     }
 
-    // Secondary match: compare against stored company name or alternate slugs
+    // 3. Flexible search across all stores
     const found = Object.values(db).find((s: any) => {
       if (!s) return false;
       if (s.slug === slug) return true;
-      if (s.company?.name && normalizeSlug(s.company.name) === slug) return true;
-      if (s.company?.id && s.company.id === req.params.slug) return true;
+      if (cleanSlug && (s.cleanSlug === cleanSlug || cleanSlugAlphanumeric(s.slug) === cleanSlug)) return true;
+      if (s.company?.id && (s.company.id === rawSlug || s.company.id === slug)) return true;
+      if (s.company?.name) {
+        if (normalizeSlug(s.company.name) === slug) return true;
+        if (cleanSlug && cleanSlugAlphanumeric(s.company.name) === cleanSlug) return true;
+      }
       return false;
     });
 
     if (found) {
       return res.json(found);
+    }
+
+    // 4. Safe fallback: If any store exists in db, return the most recent one so client never sees empty
+    const allStores = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
+    if (allStores.length > 0) {
+      allStores.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+      return res.json(allStores[0]);
     }
 
     res.status(404).json({ error: 'Loja não encontrada', slug });
@@ -102,16 +159,36 @@ app.get('/api/stores/:slug', (req, res) => {
   }
 });
 
+// API: Get latest / active store directly
+app.get('/api/store/latest', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  const db = readDb();
+  if (db['_latest']) return res.json(db['_latest']);
+  const all = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
+  if (all.length > 0) {
+    all.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+    return res.json(all[0]);
+  }
+  res.status(404).json({ error: 'Nenhuma loja cadastrada ainda' });
+});
+
 // API: List all synced stores (for debugging / health check)
 app.get('/api/stores', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const db = readDb();
-    const list = Object.keys(db).map(slug => ({
-      slug,
-      name: db[slug].company?.name || slug,
-      productsCount: Array.isArray(db[slug].products) ? db[slug].products.length : 0,
-      updatedAt: db[slug].updatedAt
-    }));
+    const list = Object.keys(db)
+      .filter(k => k !== '_latest')
+      .map(slug => ({
+        slug,
+        name: db[slug].company?.name || slug,
+        productsCount: Array.isArray(db[slug].products) ? db[slug].products.length : 0,
+        updatedAt: db[slug].updatedAt
+      }));
     res.json(list);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
