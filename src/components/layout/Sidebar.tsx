@@ -445,7 +445,18 @@ export const Sidebar: React.FC = () => {
         {/* System Version & Company Name */}
         <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
           <span className="truncate font-semibold text-slate-600">{currentCompany?.name || 'appvendas'}</span>
-          <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">v1.0</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+                (window as any).__clearAppCacheAndReload();
+              }
+            }}
+            className="text-[10px] bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+            title="Versão 58 Oficial - Toque para atualizar o app instalado"
+          >
+            v58
+          </button>
         </div>
       </div>
     </aside>

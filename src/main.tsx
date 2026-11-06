@@ -165,7 +165,7 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = 'v58';
+const CURRENT_SW_VERSION = '58';
 const CURRENT_CACHE_NAME = 'appvendas-pwa-v58';
 
 if (typeof window !== 'undefined') {
@@ -197,6 +197,17 @@ if (typeof window !== 'undefined') {
       }).catch(() => {});
     }
 
+    // Only reload on controllerchange if there was ALREADY an active controller (upgrade)
+    // AND we haven't reloaded yet in this session (prevents screen jumping loop)
+    const hadPreviousController = Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadPreviousController && !sessionStorage.getItem('pwa_controller_reloaded')) {
+        sessionStorage.setItem('pwa_controller_reloaded', 'true');
+        console.log('[PWA] Controller changed -> Refreshing once to load new version');
+        window.location.reload();
+      }
+    });
+
     // Listen for activation messages from the new Service Worker
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'SW_ACTIVATED') {
@@ -204,6 +215,27 @@ if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('app-update-available'));
       }
     });
+
+    // Check server version once on startup to upgrade installed apps running older code
+    fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.version) {
+          const serverVer = String(data.version).replace(/^v/i, '').trim();
+          const clientVer = String(CURRENT_SW_VERSION).replace(/^v/i, '').trim();
+          if (serverVer && clientVer && serverVer !== clientVer) {
+            const reloadGuardKey = `pwa_version_upgraded_${serverVer}`;
+            if (!sessionStorage.getItem(reloadGuardKey)) {
+              sessionStorage.setItem(reloadGuardKey, 'true');
+              console.log(`[PWA] Upgrading installed app from v${clientVer} to v${serverVer}...`);
+              if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+                (window as any).__clearAppCacheAndReload();
+              }
+            }
+          }
+        }
+      })
+      .catch(() => {});
 
     navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/' })
       .then((reg) => {

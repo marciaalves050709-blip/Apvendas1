@@ -1117,11 +1117,24 @@ export const ClientStoreView: React.FC = () => {
           )}
 
           {/* Footer Signature */}
-          <div className="mt-10 pt-6 pb-4 text-center border-t border-slate-200">
+          <div className="mt-10 pt-6 pb-4 text-center border-t border-slate-200 space-y-1">
             <p className="text-xs font-bold text-slate-700">{currentCompany?.name || 'Loja Virtual'}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-slate-400">
               Catálogo de Produtos & Pedidos Rápidos via WhatsApp
             </p>
+            <div className="pt-1 flex items-center justify-center gap-2">
+              <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Versão 58 Oficial
+              </span>
+              <button
+                type="button"
+                onClick={handleQuickAppUpdate}
+                className="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
+              >
+                Atualizar App
+              </button>
+            </div>
           </div>
         </div>
       </div>

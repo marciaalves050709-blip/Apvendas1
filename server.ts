@@ -217,6 +217,23 @@ app.post('/api/shorten', async (req, res) => {
   }
 });
 
+// API: System Version Check (Guarantees installed apps detect updates on startup)
+app.get('/api/version', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json({
+    version: '58',
+    versionName: 'v58.0',
+    buildDate: new Date().toISOString(),
+    features: [
+      'Link super encurtado oficial com todos os produtos',
+      'Atualização automática de apps instalados no celular',
+      'Sincronização em tempo real de produtos e Pix'
+    ]
+  });
+});
+
 // Direct Short URL Redirect: e.g. /loja/minha-empresa -> /?loja=minha-empresa
 app.get('/loja/:slug', (req, res) => {
   const slug = encodeURIComponent(req.params.slug);

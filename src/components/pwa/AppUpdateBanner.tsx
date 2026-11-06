@@ -11,9 +11,9 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // 1. Check if user already dismissed banner this session
+    // 1. Check if user already dismissed banner this session for this specific version
     try {
-      if (sessionStorage.getItem('appvendas_update_banner_dismissed') === 'true') {
+      if (sessionStorage.getItem('appvendas_update_banner_dismissed_ver') === '58') {
         setDismissed(true);
       }
     } catch {}
@@ -21,6 +21,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
     // 2. Listen to custom event when a new service worker is installed/waiting
     const handleUpdateAvailable = () => {
       setUpdateAvailable(true);
+      setDismissed(false);
     };
 
     window.addEventListener('app-update-available', handleUpdateAvailable);
@@ -30,6 +31,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
       const stored = localStorage.getItem('appvendas_client_build_ver');
       if (stored && stored !== '58') {
         setUpdateAvailable(true);
+        setDismissed(false);
       }
     } catch {}
 
@@ -61,7 +63,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
   const handleDismiss = () => {
     setDismissed(true);
     try {
-      sessionStorage.setItem('appvendas_update_banner_dismissed', 'true');
+      sessionStorage.setItem('appvendas_update_banner_dismissed_ver', '58');
     } catch {}
   };
 
