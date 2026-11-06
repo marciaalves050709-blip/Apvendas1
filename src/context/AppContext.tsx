@@ -357,8 +357,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .replace(/[^a-z0-9]/g, '');
   };
 
-  // Check URL params for deep-linking directly to a specific company/store
-  const initialUrlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  // Check URL params for deep-linking directly to a specific company/store (handles both & and encoded %26)
+  const initialUrlParams = typeof window !== 'undefined' 
+    ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) 
+    : null;
   
   // Also check pathname (e.g. /loja/minha-empresa)
   let pathLojaName = '';
@@ -713,11 +715,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const rawItems = pParam.split('*').filter(Boolean);
           const parsedList: Product[] = rawItems.map((itemStr, idx) => {
             const parts = itemStr.split('_');
-            const name = decodeURIComponent(parts[0] || `Produto ${idx + 1}`);
+            let name = `Produto ${idx + 1}`;
+            try {
+              name = decodeURIComponent((parts[0] || '').replace(/\+/g, ' ')) || name;
+            } catch {
+              name = (parts[0] || '').replace(/\+/g, ' ') || name;
+            }
             const salePrice = parseFloat(parts[1]) || 0;
             const currentStock = parseInt(parts[2], 10) || 50;
             const unit = (parts[3] as UnitType) || 'UN';
-            const category = (decodeURIComponent(parts[4] || 'Outros') as Category);
+            let category: Category = 'Outros';
+            try {
+              category = (decodeURIComponent((parts[4] || 'Outros').replace(/\+/g, ' ')) as Category) || 'Outros';
+            } catch {
+              category = (parts[4] as Category) || 'Outros';
+            }
             const wholesalePrice = parts[5] ? parseFloat(parts[5]) : undefined;
             const wholesaleMinQty = parts[6] ? parseInt(parts[6], 10) : undefined;
             return {
@@ -1650,7 +1662,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
-      const params = new URLSearchParams(window.location.search);
+      const cleanSearch = (window.location.search || '').replace(/%26/gi, '&');
+      const params = new URLSearchParams(cleanSearch);
       const urlLoja = params.get('loja');
       const urlNome = params.get('nome');
       const urlCompId = params.get('empresa') || params.get('id');
@@ -1702,12 +1715,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const parsedList: Product[] = rawItems.map((itemStr, idx) => {
             const parts = itemStr.split('_');
             const rawName = (parts[0] || '').replace(/\+/g, ' ');
-            const name = decodeURIComponent(rawName) || `Produto ${idx + 1}`;
+            let name = `Produto ${idx + 1}`;
+            try {
+              name = decodeURIComponent(rawName) || name;
+            } catch {
+              name = rawName || name;
+            }
             const salePrice = parseFloat(parts[1]) || 0;
             const currentStock = parseInt(parts[2], 10) || 50;
             const unit = (parts[3] as UnitType) || 'UN';
             const rawCat = (parts[4] || 'Outros').replace(/\+/g, ' ');
-            const category = (decodeURIComponent(rawCat) as Category);
+            let category: Category = 'Outros';
+            try {
+              category = (decodeURIComponent(rawCat) as Category) || 'Outros';
+            } catch {
+              category = (rawCat as Category) || 'Outros';
+            }
             const wholesalePrice = parts[5] ? parseFloat(parts[5]) : undefined;
             const wholesaleMinQty = parts[6] ? parseInt(parts[6], 10) : undefined;
             return {

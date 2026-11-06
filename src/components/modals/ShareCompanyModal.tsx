@@ -60,7 +60,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
-  const [urlMode, setUrlMode] = useState<'store_name' | 'full' | 'short'>('store_name');
+  const [urlMode, setUrlMode] = useState<'short' | 'store_name'>('short');
   const [shortUrl, setShortUrl] = useState<string>('');
   const [isShortening, setIsShortening] = useState<boolean>(false);
 
@@ -181,6 +181,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     return activeSeller;
   }, [effectiveSettings, activeSeller]);
 
+  // Full Store Share URL containing the company AND all available products
+  const shareUrl = useMemo(() => {
+    return buildStoreShareUrl(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts);
+  }, [effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
+
   // Clean short store URL containing ONLY the company name (no extra parameters)
   const cleanUrl = useMemo(() => {
     return buildStoreCleanUrl(effectiveCompany, effectiveSettings);
@@ -193,31 +198,34 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
   }, [isOpen, effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
 
-  // Automatic Link Shortening in the background with company name
-  const triggerShorten = async (targetUrl: string, storeName: string) => {
+  // Automatic Link Shortening in the background with company name & all products
+  const triggerShorten = async (targetUrl: string, storeName: string): Promise<string> => {
     setIsShortening(true);
     try {
       const res = await shortenUrl(targetUrl, storeName);
       if (res && res.startsWith('http')) {
         setShortUrl(res);
+        return res;
       } else {
-        setShortUrl(targetUrl);
+        setShortUrl(cleanUrl);
+        return cleanUrl;
       }
     } catch {
-      setShortUrl(targetUrl);
+      setShortUrl(cleanUrl);
+      return cleanUrl;
     } finally {
       setIsShortening(false);
     }
   };
 
-  // Pre-generate shortened URL with company name in the background
+  // Pre-generate shortened URL with company name & all products in the background
   useEffect(() => {
-    if (isOpen && cleanUrl) {
-      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+    if (isOpen && shareUrl) {
+      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
     }
-  }, [isOpen, cleanUrl, effectiveCompany?.name]);
+  }, [isOpen, shareUrl, effectiveCompany?.name]);
 
-  // Active URL to share: Clean link with ONLY the company name (or external short link)
+  // Active URL to share: Defaults to the shortened link containing all products
   const activeUrl = useMemo(() => {
     if (urlMode === 'short') {
       return shortUrl || cleanUrl;
@@ -248,8 +256,13 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   if (!isOpen) return null;
 
   // 1. Direct WhatsApp Share
-  const handleShareToWhatsApp = () => {
-    const encoded = encodeURIComponent(shareMessage);
+  const handleShareToWhatsApp = async () => {
+    let finalUrl = activeUrl;
+    if (urlMode === 'short' && !shortUrl) {
+      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    }
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
+    const encoded = encodeURIComponent(finalMsg);
     const waUrl = `https://api.whatsapp.com/send?text=${encoded}`;
     try {
       const win = window.open(waUrl, '_blank');
@@ -259,15 +272,21 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     } catch {
       window.location.href = waUrl;
     }
-    onShowToast('success', 'WhatsApp Aberto!', `Catálogo da loja ${effectiveCompany.name} pronto para envio.`);
+    onShowToast('success', 'WhatsApp Aberto!', `Catálogo encurtado da loja ${effectiveCompany.name} com ${effectiveProducts.length} produtos pronto para envio.`);
   };
 
   // 2. Native Mobile Web Share API
   const handleNativeShare = async () => {
+    let finalUrl = activeUrl;
+    if (urlMode === 'short' && !shortUrl) {
+      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    }
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
+
     const shareData = {
       title: `${effectiveCompany.name || 'Loja Virtual'} - Catálogo & Pedidos`,
-      text: shareMessage,
-      url: activeUrl,
+      text: finalMsg,
+      url: finalUrl,
     };
 
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -286,26 +305,35 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   // 3. Copy Link with robust clipboard fallback
   const handleCopyLink = async () => {
-    const success = await copyTextToClipboard(activeUrl);
+    let finalUrl = activeUrl;
+    if (urlMode === 'short' && !shortUrl) {
+      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    }
+    const success = await copyTextToClipboard(finalUrl);
     if (success) {
       setCopiedLink(true);
       onShowToast(
         'success', 
-        'Link da Loja Copiado!', 
-        `Link com o nome da loja (${effectiveCompany.name}) copiado com sucesso.`
+        'Link Encurtado Copiado!', 
+        `Link da loja (${effectiveCompany.name}) com todos os ${effectiveProducts.length} produtos copiado!`
       );
       setTimeout(() => setCopiedLink(false), 2500);
     } else {
-      onShowToast('info', 'Link do Catálogo:', activeUrl);
+      onShowToast('info', 'Link do Catálogo:', finalUrl);
     }
   };
 
   // 4. Copy Full Promotional Message
   const handleCopyMessage = async () => {
-    const success = await copyTextToClipboard(shareMessage);
+    let finalUrl = activeUrl;
+    if (urlMode === 'short' && !shortUrl) {
+      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    }
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
+    const success = await copyTextToClipboard(finalMsg);
     if (success) {
       setCopiedMessage(true);
-      onShowToast('success', 'Mensagem Copiada!', 'Texto de divulgação com o nome da loja pronto para colar no WhatsApp!');
+      onShowToast('success', 'Mensagem Copiada!', 'Texto pronto com link encurtado e todos os produtos para colar no WhatsApp!');
       setTimeout(() => setCopiedMessage(false), 2500);
     } else {
       onShowToast('info', 'Mensagem Pronta', 'Copie o texto acima.');
@@ -505,38 +533,38 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                 <span>Link Oficial do Catálogo da Loja</span>
               </span>
 
-              {/* Mode Toggle: Link Direto com Nome da Loja vs Link Super Encurtado */}
+              {/* Mode Toggle: Link Super Encurtado Oficial vs Link Direto */}
               <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-xl text-[10px] font-bold flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setUrlMode('store_name')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                    urlMode !== 'short'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Link limpo contendo apenas o nome da empresa"
-                >
-                  <Store className="w-3 h-3" />
-                  <span>Link com Nome da Loja (Limpo)</span>
-                </button>
                 <button
                   type="button"
                   onClick={() => {
                     setUrlMode('short');
                     if (!shortUrl) {
-                      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+                      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
                     }
                   }}
                   className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     urlMode === 'short'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Link super encurtado com o nome da empresa e todos os produtos cadastrados"
+                >
+                  <Scissors className="w-3 h-3" />
+                  <span>Link Encurtado (Com Todos os Produtos)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUrlMode('store_name')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                    urlMode !== 'short'
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Encurtador de link com o nome da empresa"
+                  title="Link direto com o endereço da plataforma e nome da empresa"
                 >
-                  <Scissors className="w-3 h-3" />
-                  <span>Link Super Encurtado</span>
+                  <Store className="w-3 h-3" />
+                  <span>Link Direto da Loja</span>
                 </button>
               </div>
             </div>
@@ -545,10 +573,10 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
             <div className="flex items-center gap-2">
               <div className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 truncate select-all flex items-center justify-between gap-2 shadow-2xs">
                 <span className="truncate font-bold text-slate-900">
-                  {isShortening ? 'Encurtando link com o nome da empresa...' : activeUrl}
+                  {isShortening && !shortUrl ? 'Encurtando link com nome da loja e produtos...' : activeUrl}
                 </span>
                 <span className="shrink-0 px-2 py-0.5 bg-emerald-100 text-emerald-800 font-sans font-black text-[9px] rounded uppercase tracking-wider">
-                  Loja: {effectiveCompany.name || 'Minha Loja'}
+                  {effectiveProducts.length} {effectiveProducts.length === 1 ? 'Produto' : 'Produtos'}
                 </span>
               </div>
 
@@ -563,7 +591,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                   }
                 }}
                 className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
-                title="Abrir e testar o link agora no navegador para confirmar que abre sem erro"
+                title="Abrir e testar o link agora no navegador para confirmar que abre com todos os produtos"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Testar</span>
@@ -586,12 +614,12 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
             <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-emerald-800 font-medium pt-0.5">
               <span className="flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Link verificado: abre sem erros no WhatsApp e em qualquer celular com o nome <strong>{(effectiveCompany.name || 'Minha Loja')}</strong>.</span>
+                <span>Link encurtado verificado: abre direto no catálogo com <strong>{effectiveProducts.length} {effectiveProducts.length === 1 ? 'produto disponível' : 'produtos disponíveis'}</strong> para compra.</span>
               </span>
               {urlMode === 'short' && (
                 <button
                   type="button"
-                  onClick={() => triggerShorten(cleanUrl, effectiveCompany?.name || 'loja')}
+                  onClick={() => triggerShorten(shareUrl, effectiveCompany?.name || 'loja')}
                   disabled={isShortening}
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer disabled:opacity-50"
                 >

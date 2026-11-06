@@ -118,6 +118,105 @@ app.get('/api/stores', (_req, res) => {
   }
 });
 
+// API: Fast, reliable server-side URL shortener (bypasses browser CORS & adblockers)
+app.post('/api/shorten', async (req, res) => {
+  try {
+    const { url, storeName } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const cleanSlug = storeName
+      ? String(storeName)
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .slice(0, 16)
+      : '';
+
+    // 1. Try is.gd with custom slug: loja_${cleanSlug}
+    if (cleanSlug) {
+      try {
+        const customParam = `loja_${cleanSlug}`;
+        const resp = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(url)}`, {
+          signal: AbortSignal.timeout(3500)
+        });
+        if (resp.ok) {
+          const text = (await resp.text()).trim();
+          if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
+            return res.json({ shortUrl: text });
+          }
+        }
+      } catch {}
+
+      // 1b. Try is.gd with custom slug + random suffix
+      try {
+        const rand = Math.floor(Math.random() * 900 + 100);
+        const customParam = `loja_${cleanSlug.slice(0, 12)}_${rand}`;
+        const resp = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(url)}`, {
+          signal: AbortSignal.timeout(3500)
+        });
+        if (resp.ok) {
+          const text = (await resp.text()).trim();
+          if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
+            return res.json({ shortUrl: text });
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Try da.gd with custom slug
+    if (cleanSlug) {
+      try {
+        const customParam = `loja_${cleanSlug}`;
+        const resp = await fetch(`https://da.gd/s?url=${encodeURIComponent(url)}&shorturl=${encodeURIComponent(customParam)}`, {
+          signal: AbortSignal.timeout(3500)
+        });
+        if (resp.ok) {
+          const text = (await resp.text()).trim();
+          if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
+            return res.json({ shortUrl: text });
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Try standard is.gd
+    try {
+      const resp = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(3500)
+      });
+      if (resp.ok) {
+        const text = (await resp.text()).trim();
+        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
+          return res.json({ shortUrl: text });
+        }
+      }
+    } catch {}
+
+    // 4. Try TinyURL
+    try {
+      const resp = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(3500)
+      });
+      if (resp.ok) {
+        const text = (await resp.text()).trim();
+        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
+          return res.json({ shortUrl: text });
+        }
+      }
+    } catch {}
+
+    // Fallback: return the original url
+    res.json({ shortUrl: url });
+  } catch (err: any) {
+    console.error('[ShortenAPI] Error:', err);
+    res.status(500).json({ error: err.message || 'Shorten failed' });
+  }
+});
+
 // Direct Short URL Redirect: e.g. /loja/minha-empresa -> /?loja=minha-empresa
 app.get('/loja/:slug', (req, res) => {
   const slug = encodeURIComponent(req.params.slug);
