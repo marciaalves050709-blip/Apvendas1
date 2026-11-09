@@ -361,6 +361,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .trim();
   };
 
+  const cleanSlugAlphanumeric = (str?: string) => {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  };
+
   // Check URL params for deep-linking directly to a specific company/store (handles both & and encoded %26)
   const initialUrlParams = typeof window !== 'undefined' 
     ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) 
@@ -1690,14 +1700,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const urlCompId = params.get('empresa') || params.get('id');
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
 
+      // Persist active store slug so installed apps opened from home screen (which have no query params) load the right store
+      if (urlLoja) {
+        try {
+          const norm = normalizeStoreSlug(urlLoja);
+          localStorage.setItem('appvendas_last_visited_store_slug', norm);
+          localStorage.setItem('appvendas_last_store_slug', norm);
+        } catch {}
+      }
+      if (incomingName) {
+        try {
+          localStorage.setItem('appvendas_last_visited_store_name', incomingName);
+        } catch {}
+      }
+
+      const savedSlug = localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug');
+      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (savedSlug || urlCompId || 'latest');
+
       // 0. Fetch store catalog and settings from backend API (live network check with no-store)
-      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (urlCompId || 'latest');
       fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' })
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data) {
             if (Array.isArray(data.products) && data.products.length > 0) {
-              setProducts(data.products);
+              setProducts(prev => {
+                const prevStr = JSON.stringify(prev);
+                const newStr = JSON.stringify(data.products);
+                return prevStr === newStr ? prev : data.products;
+              });
               const targetCompId = data.company?.id || urlCompId || activeCompanyId;
               try {
                 localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
@@ -1845,6 +1875,140 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch {}
   }, []);
+
+  // Real-Time Live Push Synchronization via Server-Sent Events (SSE)
+  // Ensures all installed PWAs and open devices receive product, stock, and price changes instantly
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let isDisposed = false;
+
+    const connectLiveSync = () => {
+      if (isDisposed) return;
+      try {
+        eventSource = new EventSource('/api/live-sync');
+
+        eventSource.onmessage = (e) => {
+          try {
+            if (!e.data) return;
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'STORE_UPDATED' && msg.storeData) {
+              const updatedSlug = msg.slug;
+              const updatedCleanSlug = msg.cleanSlug;
+              const updatedCompId = msg.companyId;
+
+              // Check if this update matches our current store / company
+              const activeTargetSlug = normalizeStoreSlug(
+                currentCompany?.slug || 
+                currentCompany?.name || 
+                localStorage.getItem('appvendas_last_visited_store_slug') || 
+                ''
+              );
+              const activeTargetClean = cleanSlugAlphanumeric(activeTargetSlug);
+
+              const isMatch = 
+                !activeTargetSlug ||
+                activeTargetSlug === 'latest' ||
+                activeTargetSlug === updatedSlug ||
+                activeTargetClean === updatedCleanSlug ||
+                (updatedCompId && updatedCompId === activeCompanyId) ||
+                (currentCompany?.name && normalizeStoreSlug(currentCompany.name) === updatedSlug);
+
+              if (isMatch && Array.isArray(msg.storeData.products)) {
+                // Update products in real time without screen jump
+                setProducts(prevProducts => {
+                  const prevStr = JSON.stringify(prevProducts);
+                  const newStr = JSON.stringify(msg.storeData.products);
+                  if (prevStr === newStr) return prevProducts;
+                  return msg.storeData.products;
+                });
+
+                // Update company details if name changed
+                if (msg.storeData.company && msg.storeData.company.name) {
+                  updateCurrentCompany(msg.storeData.company);
+                }
+
+                // Update payment settings if provided
+                if (msg.storeData.paymentSettings) {
+                  setPaymentSettings(prev => ({ ...prev, ...msg.storeData.paymentSettings }));
+                }
+
+                // Persist to tenant storage
+                try {
+                  const compId = msg.storeData.company?.id || activeCompanyId;
+                  localStorage.setItem(getTenantKey('products', compId), JSON.stringify(msg.storeData.products));
+                  if (compId === DEFAULT_COMPANY_ID) {
+                    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(msg.storeData.products));
+                  }
+                } catch {}
+              }
+            }
+          } catch (err) {
+            console.warn('[LiveSync] Parse error:', err);
+          }
+        };
+
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          if (!isDisposed) {
+            reconnectTimeout = setTimeout(connectLiveSync, 3000);
+          }
+        };
+      } catch (err) {
+        console.warn('[LiveSync] Connection failed:', err);
+        if (!isDisposed) {
+          reconnectTimeout = setTimeout(connectLiveSync, 5000);
+        }
+      }
+    };
+
+    connectLiveSync();
+
+    return () => {
+      isDisposed = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+    };
+  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId]);
+
+  // High-Frequency Real-Time Fallback Polling (Every 4s when tab is active)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let isDisposed = false;
+    const pollCheck = async () => {
+      if (isDisposed || document.visibilityState === 'hidden') return;
+      await refreshStoreCatalog();
+    };
+
+    const interval = setInterval(pollCheck, 4000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshStoreCatalog();
+      }
+    };
+    const onFocus = () => {
+      refreshStoreCatalog();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      isDisposed = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId]);
 
   const simulateTrialExpired = () => {
     setIsAdmin(false);
@@ -2778,17 +2942,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Live Refresh for Client Store & Installed App (Guarantees freshest products on demand)
+  // Live Refresh for Client Store & Installed App (Guarantees freshest products on demand with zero screen jumping)
   const refreshStoreCatalog = async (): Promise<boolean> => {
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
       const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa');
-      const targetQuery = urlLoja || currentCompany?.slug || currentCompany?.name || 'latest';
+      const savedSlug = typeof window !== 'undefined' ? (localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug')) : null;
+      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (savedSlug || currentCompany?.slug || currentCompany?.name || 'latest');
       const res = await fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.products)) {
-          setProducts(data.products);
+          setProducts(prev => {
+            const prevStr = JSON.stringify(prev);
+            const newStr = JSON.stringify(data.products);
+            if (prevStr === newStr) return prev;
+            return data.products;
+          });
           localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(data.products));
           if (activeCompanyId === DEFAULT_COMPANY_ID) {
             localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));

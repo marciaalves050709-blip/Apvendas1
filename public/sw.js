@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 59 (Live Network-First & Instant Auto-Update)
-const CACHE_NAME = 'appvendas-pwa-v59';
+// appvendas Service Worker (PWA) - Version 60 (Live Network-First & Instant Auto-Update)
+const CACHE_NAME = 'appvendas-pwa-v60';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -41,11 +41,11 @@ self.addEventListener('activate', (event) => {
     })
     .then(() => self.clients.claim())
     .then(async () => {
-      // Notify all open client windows that the new SW version 59 is active
+      // Notify all open client windows that the new SW version 60 is active
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v59' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v60' });
         }
       } catch (e) {}
     })
@@ -68,6 +68,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith('http')) return;
+
+  // CRITICAL: NEVER intercept /api/ requests in Service Worker!
+  // This ensures Server-Sent Events (/api/live-sync) and live catalog sync connect natively without buffering
+  if (url.pathname.startsWith('/api/')) {
+    return;
+  }
 
   // 1. Stale build chunk auto-recovery: If an installed app requests an old build chunk /assets/*.js
   if (url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js')) {

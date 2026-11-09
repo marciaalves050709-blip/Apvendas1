@@ -11,6 +11,59 @@ app.use(express.json({ limit: '15mb' }));
 
 const DB_PATH = path.join(process.cwd(), 'stores_db.json');
 
+// Strict No-Cache middleware for Service Worker, Web Manifest, HTML entry points, and API calls
+// Prevents Android Chrome and installed PWAs from serving stale service workers or cached stores
+app.use((req, res, next) => {
+  const p = req.path.toLowerCase();
+  if (
+    p === '/sw.js' ||
+    p === '/manifest.webmanifest' ||
+    p === '/manifest.json' ||
+    p === '/' ||
+    p.startsWith('/api/') ||
+    p.endsWith('.html')
+  ) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+  }
+  next();
+});
+
+// Real-Time Live Push Synchronization Clients (Server-Sent Events)
+const liveSyncClients = new Set<express.Response>();
+
+// Heartbeat ping every 15 seconds to keep mobile 4G/WiFi connections active
+setInterval(() => {
+  for (const client of liveSyncClients) {
+    try {
+      client.write(': ping\n\n');
+    } catch {
+      liveSyncClients.delete(client);
+    }
+  }
+}, 15000);
+
+// API: Live Sync SSE Stream (Instant real-time push to all installed apps & browsers)
+app.get('/api/live-sync', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform, no-store');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  liveSyncClients.add(res);
+
+  // Send initial connection packet
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+
+  req.on('close', () => {
+    liveSyncClients.delete(res);
+  });
+});
+
 const readDb = (): Record<string, any> => {
   try {
     if (fs.existsSync(DB_PATH)) {
@@ -51,7 +104,7 @@ const cleanSlugAlphanumeric = (str: string): string => {
     .trim();
 };
 
-// API: Save/Sync Store Catalog and Details (Always persists latest live catalog)
+// API: Save/Sync Store Catalog and Details (Always persists latest live catalog and pushes live to all connected PWAs)
 app.post('/api/stores/:slug', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
@@ -65,12 +118,13 @@ app.post('/api/stores/:slug', (req, res) => {
     const { company, paymentSettings, products, activeSeller } = req.body;
     const db = readDb();
 
+    const productList = Array.isArray(products) ? products : [];
     const storeData = {
       slug,
       cleanSlug,
       company: company || { name: rawSlug },
       paymentSettings: paymentSettings || {},
-      products: Array.isArray(products) ? products : [],
+      products: productList,
       activeSeller: activeSeller || null,
       updatedAt: new Date().toISOString()
     };
@@ -88,12 +142,43 @@ app.post('/api/stores/:slug', (req, res) => {
       db[company.id] = storeData;
     }
 
-    // Always record as the most recent/latest store
-    db['_latest'] = storeData;
+    // Smart latest store pointer: Only set as _latest if it contains products or if _latest has 0 products or matches this slug
+    const currentLatest = db['_latest'];
+    const currentLatestHasProducts = currentLatest && Array.isArray(currentLatest.products) && currentLatest.products.length > 0;
+    if (productList.length > 0 || !currentLatestHasProducts || currentLatest?.slug === slug) {
+      db['_latest'] = storeData;
+    }
 
     writeDb(db);
-    console.log(`[StoreDB] Store "${slug}" synced with ${storeData.products.length} products (saved as latest)`);
-    res.json({ success: true, slug, cleanSlug, productCount: storeData.products.length });
+    console.log(`[StoreDB] Store "${slug}" synced with ${storeData.products.length} products. Broadcasting to ${liveSyncClients.size} live clients.`);
+
+    // Instant Real-Time Push to all connected installed PWAs & buyers
+    const broadcastPayload = JSON.stringify({
+      type: 'STORE_UPDATED',
+      slug,
+      cleanSlug,
+      companyId: company?.id,
+      companyName: company?.name || rawSlug,
+      storeData,
+      timestamp: Date.now()
+    });
+
+    for (const client of liveSyncClients) {
+      try {
+        client.write(`data: ${broadcastPayload}\n\n`);
+      } catch {
+        liveSyncClients.delete(client);
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      slug, 
+      cleanSlug, 
+      productCount: storeData.products.length,
+      clientsNotified: liveSyncClients.size,
+      updatedAt: storeData.updatedAt
+    });
   } catch (err: any) {
     console.error('[StoreDB] Error saving store:', err);
     res.status(500).json({ error: err.message || 'Failed to save store' });
@@ -174,12 +259,26 @@ app.get('/api/store/latest', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   const db = readDb();
-  if (db['_latest']) return res.json(db['_latest']);
+  
+  // 1. If _latest has products, return it
+  if (db['_latest'] && Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0) {
+    return res.json(db['_latest']);
+  }
+
+  // 2. Otherwise search for any store that has products, sorted by latest update
   const all = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
+  const withProducts = all.filter((s: any) => Array.isArray(s.products) && s.products.length > 0);
+  if (withProducts.length > 0) {
+    withProducts.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+    return res.json(withProducts[0]);
+  }
+
+  // 3. Fallback to latest registered store
   if (all.length > 0) {
     all.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
     return res.json(all[0]);
   }
+
   res.status(404).json({ error: 'Nenhuma loja cadastrada ainda' });
 });
 
@@ -309,13 +408,15 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '59',
-    versionName: 'v59.0',
+    version: '60',
+    versionName: 'v60.0',
     buildDate: new Date().toISOString(),
     features: [
+      'Sincronização em tempo real (Live Push SSE): produtos e preços atualizam na hora nos apps instalados',
+      'Resolução inteligente de loja para aplicativos abertos direto do ícone da tela inicial',
       'Cadeado fechado automaticamente ao voltar para a Loja do Cliente',
       'Correção no botão restrito da empresa',
-      'Sincronização individual e precisa de catálogo para cada empresa'
+      'Eliminação total de pulo de tela durante atualizações de catálogo'
     ]
   });
 });

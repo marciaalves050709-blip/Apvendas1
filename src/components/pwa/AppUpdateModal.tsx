@@ -145,16 +145,16 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
             <div className="flex items-center gap-1.5 text-slate-900 font-black text-[11px] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>O que há de novo na versão 58:</span>
+              <span>O que há de novo na versão 60:</span>
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-[11px]">
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-slate-900 block font-bold">Link Encurtado Oficial com Todos os Produtos</strong>
+                  <strong className="text-slate-900 block font-bold">Sincronização em Tempo Real (Live Push SSE)</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    O link de compartilhamento agora sai super curto com o nome da empresa (ex: <code className="bg-slate-100 px-1 rounded font-mono text-[10px]">is.gd/loja_suaempresa</code>) e entrega todos os produtos para os clientes comprarem.
+                    Quando você cadastra, edita ou ajusta preços e estoque, as alterações aparecem na hora nos celulares dos clientes sem eles precisarem recarregar ou desinstalar o app.
                   </span>
                 </div>
               </div>
@@ -162,9 +162,9 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-slate-900 block font-bold">Atualização Imediata de Aplicativos Instalados</strong>
+                  <strong className="text-slate-900 block font-bold">Abertura Direta da Tela Inicial sem Perder a Loja</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    Celulares com o app instalado na tela inicial agora recebem as atualizações automaticamente sem travar no cache antigo.
+                    Aplicativos instalados no Android abrem diretamente a loja certa e o catálogo correto com zero pulo de tela.
                   </span>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
         {/* Footer */}
         <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-slate-500 font-medium">
-            Versão do Sistema: <strong>v59 (Novembro/2026)</strong>
+            Versão do Sistema: <strong>v60 (Novembro/2026)</strong>
           </span>
           <button
             type="button"

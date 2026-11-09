@@ -609,7 +609,7 @@ export const ClientStoreView: React.FC = () => {
   }, []);
 
   const handleQuickAppUpdate = () => {
-    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v59)...');
+    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v60)...');
     if (typeof (window as any).__clearAppCacheAndReload === 'function') {
       (window as any).__clearAppCacheAndReload();
     } else {
