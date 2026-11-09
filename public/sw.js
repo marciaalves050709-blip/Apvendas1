@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 58 (Live Network-First & Instant Auto-Update)
-const CACHE_NAME = 'appvendas-pwa-v58';
+// appvendas Service Worker (PWA) - Version 59 (Live Network-First & Instant Auto-Update)
+const CACHE_NAME = 'appvendas-pwa-v59';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -41,11 +41,11 @@ self.addEventListener('activate', (event) => {
     })
     .then(() => self.clients.claim())
     .then(async () => {
-      // Notify all open client windows that the new SW version 58 is active
+      // Notify all open client windows that the new SW version 59 is active
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v58' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v59' });
         }
       } catch (e) {}
     })

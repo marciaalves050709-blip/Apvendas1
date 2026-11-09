@@ -223,7 +223,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
         {/* Footer */}
         <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-slate-500 font-medium">
-            Versão do Sistema: <strong>v58 (Novembro/2026)</strong>
+            Versão do Sistema: <strong>v59 (Novembro/2026)</strong>
           </span>
           <button
             type="button"

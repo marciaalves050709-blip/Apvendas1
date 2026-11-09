@@ -135,7 +135,8 @@ app.get('/api/stores/:slug', (req, res) => {
       if (cleanSlug && (s.cleanSlug === cleanSlug || cleanSlugAlphanumeric(s.slug) === cleanSlug)) return true;
       if (s.company?.id && (s.company.id === rawSlug || s.company.id === slug)) return true;
       if (s.company?.name) {
-        if (normalizeSlug(s.company.name) === slug) return true;
+        const compNorm = normalizeSlug(s.company.name);
+        if (compNorm === slug || (slug && (compNorm.includes(slug) || slug.includes(compNorm)))) return true;
         if (cleanSlug && cleanSlugAlphanumeric(s.company.name) === cleanSlug) return true;
       }
       return false;
@@ -145,14 +146,22 @@ app.get('/api/stores/:slug', (req, res) => {
       return res.json(found);
     }
 
-    // 4. Safe fallback: If any store exists in db, return the most recent one so client never sees empty
+    // 4. Fallback only if generic keyword was requested or if exactly one store exists
     const allStores = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
-    if (allStores.length > 0) {
+    if (isLatestKeyword && allStores.length > 0) {
       allStores.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
       return res.json(allStores[0]);
     }
 
-    res.status(404).json({ error: 'Loja não encontrada', slug });
+    // Return empty store object for the requested company slug rather than contaminating with another company's products
+    res.json({
+      slug: slug || rawSlug,
+      company: { id: rawSlug, name: rawSlug.replace(/[-_]/g, ' ') },
+      products: [],
+      paymentSettings: {},
+      activeSeller: null,
+      updatedAt: new Date().toISOString()
+    });
   } catch (err: any) {
     console.error('[StoreDB] Error getting store:', err);
     res.status(500).json({ error: err.message || 'Failed to load store' });
@@ -300,13 +309,13 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '58',
-    versionName: 'v58.0',
+    version: '59',
+    versionName: 'v59.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Link super encurtado oficial com todos os produtos',
-      'Atualização automática de apps instalados no celular',
-      'Sincronização em tempo real de produtos e Pix'
+      'Cadeado fechado automaticamente ao voltar para a Loja do Cliente',
+      'Correção no botão restrito da empresa',
+      'Sincronização individual e precisa de catálogo para cada empresa'
     ]
   });
 });

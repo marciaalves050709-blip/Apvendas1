@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = '58';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v58';
+const CURRENT_SW_VERSION = '59';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v59';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)

@@ -315,11 +315,10 @@ export const CompanyManagementView: React.FC = () => {
     window.open(`https://wa.me/${fullPhone}?text=${text}`, '_blank');
   };
 
-  // Delete supplier with confirmation
+  // Delete supplier
   const handleDeleteSupplier = (id: string, name: string) => {
-    if (window.confirm(`Deseja realmente excluir o fornecedor "${name}"?\nOs produtos vinculados a ele continuarão no sistema.`)) {
-      deleteSupplier(id);
-    }
+    deleteSupplier(id);
+    showToast('info', 'Fornecedor Excluído', `O fornecedor "${name}" foi removido.`);
   };
 
   // Change company password (requires valid current password or master password)

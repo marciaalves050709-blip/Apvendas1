@@ -586,18 +586,30 @@ export const ClientStoreView: React.FC = () => {
     }
   };
 
-  // Auto-sync products whenever client opens the store or returns to the app
+  // Auto-sync products and ensure company padlock is securely locked on client store
   useEffect(() => {
+    // SEGURANÇA: Ao entrar na Loja do Cliente, o cadeado deve estar SEMPRE fechado
+    if (isCompanyAreaUnlocked) {
+      lockCompanyArea();
+    }
     refreshStoreCatalog().catch(() => {});
     const onFocus = () => {
       refreshStoreCatalog().catch(() => {});
     };
+    // Sincronização periódica a cada 20s para compradores receberem novos produtos da empresa
+    const interval = setInterval(() => {
+      refreshStoreCatalog().catch(() => {});
+    }, 20000);
+
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleQuickAppUpdate = () => {
-    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v58)...');
+    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v59)...');
     if (typeof (window as any).__clearAppCacheAndReload === 'function') {
       (window as any).__clearAppCacheAndReload();
     } else {
@@ -657,22 +669,31 @@ export const ClientStoreView: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              if (isCompanyAreaUnlocked) {
-                setActiveTab('company-costs');
-              } else {
-                openCompanyAreaUnlock('company-costs');
+              try {
+                if (isCompanyAreaUnlocked) {
+                  setActiveTab('company-costs');
+                } else {
+                  openCompanyAreaUnlock('company-costs');
+                }
+              } catch (err) {
+                console.error('[CompanyArea] Navigation error:', err);
               }
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 touch-manipulation select-none ${
               isCompanyAreaUnlocked
-                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black'
+                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black ring-1 ring-amber-400/50'
                 : 'bg-slate-900 hover:bg-slate-800 text-white'
             }`}
             title="Área da Empresa (Custos & Fornecedores protegidos com senha)"
+            aria-label="Área da Empresa"
           >
-            {isCompanyAreaUnlocked ? <Unlock className="w-3.5 h-3.5 text-slate-950" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+            {isCompanyAreaUnlocked ? (
+              <Unlock className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+            ) : (
+              <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            )}
             <span className="hidden sm:inline">Área da Empresa</span>
-            <span className="sm:hidden">Empresa</span>
+            <span className="sm:hidden font-bold">Empresa</span>
           </button>
 
 

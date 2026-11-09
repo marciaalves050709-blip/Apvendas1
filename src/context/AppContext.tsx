@@ -477,6 +477,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         sessionStorage.setItem('appvendas_company_unlocked', 'true');
       } catch {}
+      if (isMaster) {
+        setIsAdmin(true);
+        try {
+          localStorage.setItem('appvendas_is_admin', 'true');
+          sessionStorage.setItem('appvendas_admin_session', 'active');
+        } catch {}
+      }
       setIsCompanyPasswordModalOpen(false);
       if (targetTabAfterUnlock) {
         setActiveTabState(targetTabAfterUnlock);
@@ -496,6 +503,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setActiveTab = (tab: ActiveTab) => {
+    // REGRA DE SEGURANÇA: Ao voltar para a loja do cliente, SEMPRE fechar o cadeado da empresa!
+    if (tab === 'client-store') {
+      setIsCompanyAreaUnlocked(false);
+      try {
+        sessionStorage.removeItem('appvendas_company_unlocked');
+      } catch {}
+      setActiveTabState('client-store');
+      return;
+    }
+
     if (COMPANY_RESTRICTED_TABS.includes(tab) && !isCompanyAreaUnlocked) {
       openCompanyAreaUnlock(tab);
       return;
@@ -2764,7 +2781,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Live Refresh for Client Store & Installed App (Guarantees freshest products on demand)
   const refreshStoreCatalog = async (): Promise<boolean> => {
     try {
-      const targetQuery = currentCompany?.slug || currentCompany?.name || 'latest';
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa');
+      const targetQuery = urlLoja || currentCompany?.slug || currentCompany?.name || 'latest';
       const res = await fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
@@ -2773,6 +2792,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(data.products));
           if (activeCompanyId === DEFAULT_COMPANY_ID) {
             localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
+          }
+          if (data.company && data.company.name && data.company.name !== currentCompany.name) {
+            updateCurrentCompany({ name: data.company.name });
+          }
+          if (data.paymentSettings) {
+            setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
           }
           return true;
         }
