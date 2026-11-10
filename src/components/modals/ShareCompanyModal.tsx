@@ -205,7 +205,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       // Use clean URL as base so external services generate clean links like is.gd/loja_empresa without length errors
       const baseToShorten = cleanUrl || targetUrl;
       const res = await shortenUrl(baseToShorten, storeName);
-      if (res && res.startsWith('http')) {
+      if (res && res.startsWith('http') && !res.includes('da.gd')) {
         setShortUrl(res);
         return res;
       } else {
@@ -230,7 +230,10 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // Active URL to share: Defaults to the shortened link with company name
   const activeUrl = useMemo(() => {
     if (urlMode === 'short') {
-      return shortUrl || cleanUrl;
+      if (shortUrl && !shortUrl.includes('da.gd') && shortUrl.startsWith('http')) {
+        return shortUrl;
+      }
+      return cleanUrl;
     }
     return cleanUrl;
   }, [urlMode, shortUrl, cleanUrl]);
@@ -260,8 +263,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // 1. Direct WhatsApp Share
   const handleShareToWhatsApp = async () => {
     let finalUrl = activeUrl;
-    if (urlMode === 'short' && !shortUrl) {
-      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
+      finalUrl = await triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+    }
+    if (!finalUrl || finalUrl.includes('da.gd')) {
+      finalUrl = cleanUrl;
     }
     const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
     const encoded = encodeURIComponent(finalMsg);
@@ -280,8 +286,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // 2. Native Mobile Web Share API
   const handleNativeShare = async () => {
     let finalUrl = activeUrl;
-    if (urlMode === 'short' && !shortUrl) {
-      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
+      finalUrl = await triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+    }
+    if (!finalUrl || finalUrl.includes('da.gd')) {
+      finalUrl = cleanUrl;
     }
     const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
 
@@ -308,8 +317,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // 3. Copy Link with robust clipboard fallback
   const handleCopyLink = async () => {
     let finalUrl = activeUrl;
-    if (urlMode === 'short' && !shortUrl) {
-      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
+      finalUrl = await triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+    }
+    if (!finalUrl || finalUrl.includes('da.gd')) {
+      finalUrl = cleanUrl;
     }
     const success = await copyTextToClipboard(finalUrl);
     if (success) {
@@ -328,8 +340,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // 4. Copy Full Promotional Message
   const handleCopyMessage = async () => {
     let finalUrl = activeUrl;
-    if (urlMode === 'short' && !shortUrl) {
-      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
+      finalUrl = await triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
+    }
+    if (!finalUrl || finalUrl.includes('da.gd')) {
+      finalUrl = cleanUrl;
     }
     const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
     const success = await copyTextToClipboard(finalMsg);
@@ -541,8 +556,8 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                   type="button"
                   onClick={() => {
                     setUrlMode('short');
-                    if (!shortUrl) {
-                      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+                    if (!shortUrl || shortUrl.includes('da.gd')) {
+                      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
                     }
                   }}
                   className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
@@ -553,7 +568,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                   title="Link super encurtado com o nome da empresa e todos os produtos cadastrados"
                 >
                   <Scissors className="w-3 h-3" />
-                  <span>Link Encurtado (Com Todos os Produtos)</span>
+                  <span>Link Encurtado (Com Nome da Loja)</span>
                 </button>
                 <button
                   type="button"
@@ -621,7 +636,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
               {urlMode === 'short' && (
                 <button
                   type="button"
-                  onClick={() => triggerShorten(shareUrl, effectiveCompany?.name || 'loja')}
+                  onClick={() => triggerShorten(cleanUrl, effectiveCompany?.name || 'loja')}
                   disabled={isShortening}
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer disabled:opacity-50"
                 >

@@ -201,14 +201,19 @@ export function buildStoreShareMessage(
     ? `💬 *Atendimento Especial:* ${activeSeller.name}\n` 
     : '';
 
+  // Safety: Guarantee link NEVER contains da.gd and always defaults to clean company link
+  const safeShareUrl = shareUrl && !shareUrl.includes('da.gd') && shareUrl.startsWith('http')
+    ? shareUrl
+    : buildStoreCleanUrl(company, paymentSettings);
+
   return (
-`${emoji} *CONHEÇA O NOSSO CATÁLOGO ONLINE - ${compName.toUpperCase()}*
+`${emoji} *CATÁLOGO OFICIAL - ${compName.toUpperCase()}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 Olá! Preparamos nosso catálogo digital para você conferir nossos produtos e fazer seus pedidos com facilidade e rapidez pelo WhatsApp!
 
 🛍️ *Clique no link da nossa loja abaixo:*
 
-${shareUrl}
+${safeShareUrl}
 
 ✨ *Vantagens de comprar conosco:*
 • 🛵 *Entrega Local ou Retirada no Local*

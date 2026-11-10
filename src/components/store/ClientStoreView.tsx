@@ -614,7 +614,7 @@ export const ClientStoreView: React.FC = () => {
   }, []);
 
   const handleQuickAppUpdate = () => {
-    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v60)...');
+    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v61)...');
     if (typeof (window as any).__clearAppCacheAndReload === 'function') {
       (window as any).__clearAppCacheAndReload();
     } else {
@@ -1194,7 +1194,7 @@ export const ClientStoreView: React.FC = () => {
             <div className="pt-1 flex items-center justify-center gap-2">
               <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Versão 60 Oficial
+                Versão 61 Oficial
               </span>
               <button
                 type="button"

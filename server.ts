@@ -402,11 +402,12 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '60',
-    versionName: 'v60.0',
+    version: '61',
+    versionName: 'v61.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Link encurtado oficial com nome da empresa sem telas de aviso',
+      'Link oficial encurtado com nome da empresa (is.gd/loja_empresa e /loja/empresa) sem avisos de phishing',
+      'Compartilhamento WhatsApp e redes sociais com nome da empresa e link direto verificado',
       'Proteção contra perda de produtos e sincronização direta no servidor',
       'Sincronização em tempo real (Live Push SSE): produtos e preços atualizam na hora nos apps instalados',
       'Resolução inteligente de loja para aplicativos abertos direto do ícone da tela inicial',

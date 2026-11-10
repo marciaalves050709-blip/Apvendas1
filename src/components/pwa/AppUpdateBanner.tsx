@@ -79,7 +79,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-xs text-white truncate">
-              Nova Atualização Disponível (v60)
+              Nova Atualização Disponível (v61)
             </span>
             <span className="text-[10px] bg-emerald-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
               Recente
