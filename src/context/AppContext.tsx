@@ -2952,7 +2952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.products)) {
+        if (data && Array.isArray(data.products) && data.products.length > 0) {
           setProducts(prev => {
             const prevStr = JSON.stringify(prev);
             const newStr = JSON.stringify(data.products);
@@ -2969,6 +2969,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (data.paymentSettings) {
             setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
           }
+          return true;
+        } else if (products && products.length > 0 && currentCompany) {
+          // If server has 0 products but client has products, persist to server so buyers get them
+          syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
           return true;
         }
       }

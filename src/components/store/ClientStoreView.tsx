@@ -60,6 +60,7 @@ import {
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
+import { syncStoreToServer } from '../../utils/shareHelper';
 
 const ALL_CATEGORIES: Category[] = [
   'Salão de Beleza',
@@ -573,9 +574,14 @@ export const ClientStoreView: React.FC = () => {
   const handleRefreshCatalog = async () => {
     setIsRefreshingCatalog(true);
     try {
+      // 1. If this device has products in memory, push them to the server so they are permanently saved & broadcasted
+      if (products && products.length > 0 && currentCompany) {
+        await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products);
+      }
+      // 2. Refresh catalog from server
       const ok = await refreshStoreCatalog();
-      if (ok) {
-        showToast('success', 'Catálogo Sincronizado!', 'Produtos e preços atualizados direto da loja.');
+      if (ok || products.length > 0) {
+        showToast('success', 'Catálogo Sincronizado!', `${products.length} produtos sincronizados em tempo real.`);
       } else {
         showToast('info', 'Catálogo Conectado', 'Você já está com as informações mais recentes.');
       }
@@ -592,19 +598,18 @@ export const ClientStoreView: React.FC = () => {
     if (isCompanyAreaUnlocked) {
       lockCompanyArea();
     }
+    // Push products to server on start if available so all buyers have them
+    if (products && products.length > 0 && currentCompany) {
+      syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+    }
     refreshStoreCatalog().catch(() => {});
     const onFocus = () => {
       refreshStoreCatalog().catch(() => {});
     };
-    // Sincronização periódica a cada 20s para compradores receberem novos produtos da empresa
-    const interval = setInterval(() => {
-      refreshStoreCatalog().catch(() => {});
-    }, 20000);
 
     window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
-      clearInterval(interval);
     };
   }, []);
 
@@ -1189,7 +1194,7 @@ export const ClientStoreView: React.FC = () => {
             <div className="pt-1 flex items-center justify-center gap-2">
               <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Versão 58 Oficial
+                Versão 60 Oficial
               </span>
               <button
                 type="button"

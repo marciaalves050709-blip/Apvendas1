@@ -66,7 +66,7 @@ export function buildStoreCleanUrl(
     .replace(/^-|-$/g, '')
     .trim() || 'loja';
 
-  return `${origin}/?loja=${encodeURIComponent(storeSlug)}`;
+  return `${origin}/loja/${encodeURIComponent(storeSlug)}`;
 }
 
 /**
@@ -295,26 +295,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     } catch {}
   }
 
-  // 2. Try da.gd with custom slug
-  if (cleanSlug) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3500);
-      const customParam = `loja_${cleanSlug}`;
-      const res = await fetch(`https://da.gd/s?url=${encodeURIComponent(longUrl)}&shorturl=${encodeURIComponent(customParam)}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (res.ok) {
-        const text = (await res.text()).trim();
-        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-          return text;
-        }
-      }
-    } catch {}
-  }
-
-  // 3. Try is.gd standard short URL (fast, clean, reliable)
+  // 2. Try is.gd standard short URL (fast, clean, reliable, no warning screens)
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
@@ -330,7 +311,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     }
   } catch {}
 
-  // 4. Try TinyURL
+  // 3. Try TinyURL
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
@@ -346,22 +327,16 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     }
   } catch {}
 
-  // 5. Try da.gd standard
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`https://da.gd/s?url=${encodeURIComponent(longUrl)}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const text = (await res.text()).trim();
-      if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-        return text;
-      }
-    }
-  } catch {}
+  // Fallback: return official clean store URL
+  let origin = typeof window !== 'undefined' && window.location.origin 
+    ? window.location.origin 
+    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
 
-  // Fallback: return clean URL
+  if (cleanSlug) {
+    return `${origin}/loja/${cleanSlug}`;
+  }
   return longUrl;
 }

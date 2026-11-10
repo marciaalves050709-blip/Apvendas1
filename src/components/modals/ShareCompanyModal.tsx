@@ -193,16 +193,18 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   // Sync company catalog and settings to backend whenever modal opens or data changes
   useEffect(() => {
-    if (isOpen && effectiveCompany) {
+    if (isOpen && effectiveCompany && effectiveProducts && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
     }
   }, [isOpen, effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts]);
 
-  // Automatic Link Shortening in the background with company name & all products
+  // Automatic Link Shortening in the background with company name
   const triggerShorten = async (targetUrl: string, storeName: string): Promise<string> => {
     setIsShortening(true);
     try {
-      const res = await shortenUrl(targetUrl, storeName);
+      // Use clean URL as base so external services generate clean links like is.gd/loja_empresa without length errors
+      const baseToShorten = cleanUrl || targetUrl;
+      const res = await shortenUrl(baseToShorten, storeName);
       if (res && res.startsWith('http')) {
         setShortUrl(res);
         return res;
@@ -218,14 +220,14 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
   };
 
-  // Pre-generate shortened URL with company name & all products in the background
+  // Pre-generate shortened URL with company name in the background
   useEffect(() => {
-    if (isOpen && shareUrl) {
-      triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
+    if (isOpen) {
+      triggerShorten(cleanUrl, effectiveCompany?.name || 'loja');
     }
-  }, [isOpen, shareUrl, effectiveCompany?.name]);
+  }, [isOpen, cleanUrl, effectiveCompany?.name]);
 
-  // Active URL to share: Defaults to the shortened link containing all products
+  // Active URL to share: Defaults to the shortened link with company name
   const activeUrl = useMemo(() => {
     if (urlMode === 'short') {
       return shortUrl || cleanUrl;

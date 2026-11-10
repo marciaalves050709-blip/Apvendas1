@@ -115,17 +115,24 @@ app.post('/api/stores/:slug', (req, res) => {
     const slug = normalizeSlug(rawSlug) || 'loja';
     const cleanSlug = cleanSlugAlphanumeric(rawSlug) || 'loja';
 
-    const { company, paymentSettings, products, activeSeller } = req.body;
+    const { company, paymentSettings, products, activeSeller, forceClear } = req.body;
     const db = readDb();
 
     const productList = Array.isArray(products) ? products : [];
+    const existingStore = db[slug] || db[cleanSlug] || (company?.id && db[company.id]);
+    
+    // Safety: If incoming products is empty, preserve existing store products unless forceClear is explicitly passed
+    const finalProducts = productList.length > 0 
+      ? productList 
+      : (forceClear ? [] : (existingStore && Array.isArray(existingStore.products) ? existingStore.products : []));
+
     const storeData = {
       slug,
       cleanSlug,
-      company: company || { name: rawSlug },
-      paymentSettings: paymentSettings || {},
-      products: productList,
-      activeSeller: activeSeller || null,
+      company: company || (existingStore?.company || { name: rawSlug }),
+      paymentSettings: paymentSettings || (existingStore?.paymentSettings || {}),
+      products: finalProducts,
+      activeSeller: activeSeller || (existingStore?.activeSeller || null),
       updatedAt: new Date().toISOString()
     };
 
@@ -145,7 +152,7 @@ app.post('/api/stores/:slug', (req, res) => {
     // Smart latest store pointer: Only set as _latest if it contains products or if _latest has 0 products or matches this slug
     const currentLatest = db['_latest'];
     const currentLatestHasProducts = currentLatest && Array.isArray(currentLatest.products) && currentLatest.products.length > 0;
-    if (productList.length > 0 || !currentLatestHasProducts || currentLatest?.slug === slug) {
+    if (finalProducts.length > 0 || !currentLatestHasProducts || currentLatest?.slug === slug) {
       db['_latest'] = storeData;
     }
 
@@ -352,23 +359,7 @@ app.post('/api/shorten', async (req, res) => {
       } catch {}
     }
 
-    // 2. Try da.gd with custom slug
-    if (cleanSlug) {
-      try {
-        const customParam = `loja_${cleanSlug}`;
-        const resp = await fetch(`https://da.gd/s?url=${encodeURIComponent(url)}&shorturl=${encodeURIComponent(customParam)}`, {
-          signal: AbortSignal.timeout(3500)
-        });
-        if (resp.ok) {
-          const text = (await resp.text()).trim();
-          if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-            return res.json({ shortUrl: text });
-          }
-        }
-      } catch {}
-    }
-
-    // 3. Try standard is.gd
+    // 2. Try standard is.gd (reliable, no interstitial phishing warnings)
     try {
       const resp = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`, {
         signal: AbortSignal.timeout(3500)
@@ -381,7 +372,7 @@ app.post('/api/shorten', async (req, res) => {
       }
     } catch {}
 
-    // 4. Try TinyURL
+    // 3. Try TinyURL
     try {
       const resp = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`, {
         signal: AbortSignal.timeout(3500)
@@ -394,8 +385,11 @@ app.post('/api/shorten', async (req, res) => {
       }
     } catch {}
 
-    // Fallback: return the original url
-    res.json({ shortUrl: url });
+    // Fallback: return direct official domain short link with company slug
+    const host = req.get('host') || 'www.apvendas1.com.br';
+    const proto = req.protocol || 'https';
+    const directShort = cleanSlug ? `${proto}://${host}/loja/${cleanSlug}` : url;
+    res.json({ shortUrl: directShort });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
     res.status(500).json({ error: err.message || 'Shorten failed' });
@@ -412,17 +406,24 @@ app.get('/api/version', (_req, res) => {
     versionName: 'v60.0',
     buildDate: new Date().toISOString(),
     features: [
+      'Link encurtado oficial com nome da empresa sem telas de aviso',
+      'Proteção contra perda de produtos e sincronização direta no servidor',
       'Sincronização em tempo real (Live Push SSE): produtos e preços atualizam na hora nos apps instalados',
       'Resolução inteligente de loja para aplicativos abertos direto do ícone da tela inicial',
-      'Cadeado fechado automaticamente ao voltar para a Loja do Cliente',
-      'Correção no botão restrito da empresa',
-      'Eliminação total de pulo de tela durante atualizações de catálogo'
+      'Cadeado fechado automaticamente ao voltar para a Loja do Cliente'
     ]
   });
 });
 
-// Direct Short URL Redirect: e.g. /loja/minha-empresa -> /?loja=minha-empresa
+// Direct Short URL Redirects:
+// e.g. /loja/maquiagemtop -> /?loja=maquiagemtop
+// e.g. /l/maquiagemtop -> /?loja=maquiagemtop
 app.get('/loja/:slug', (req, res) => {
+  const slug = encodeURIComponent(req.params.slug);
+  res.redirect(`/?loja=${slug}`);
+});
+
+app.get('/l/:slug', (req, res) => {
   const slug = encodeURIComponent(req.params.slug);
   res.redirect(`/?loja=${slug}`);
 });
