@@ -833,11 +833,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('products', activeCompanyId));
-      if (tenantSaved) return JSON.parse(tenantSaved);
+      if (tenantSaved) {
+        const parsed = JSON.parse(tenantSaved);
+        if (Array.isArray(parsed) && (parsed.length === 0 || (parsed.length === 1 && parsed[0]?.name === 'Sal'))) {
+          return INITIAL_PRODUCTS;
+        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
       const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && (parsed.length === 0 || (parsed.length === 1 && parsed[0]?.name === 'Sal'))) {
+            return INITIAL_PRODUCTS;
+          }
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         } catch {}
       }
@@ -1723,6 +1732,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .then(data => {
           if (data) {
             if (Array.isArray(data.products) && data.products.length > 0) {
+              if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
+                return;
+              }
               setProducts(prev => {
                 const prevStr = JSON.stringify(prev);
                 const newStr = JSON.stringify(data.products);
@@ -1917,6 +1929,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 (currentCompany?.name && normalizeStoreSlug(currentCompany.name) === updatedSlug);
 
               if (isMatch && Array.isArray(msg.storeData.products)) {
+                // Ignore obsolete single 'Sal' test payload
+                if (msg.storeData.products.length === 1 && msg.storeData.products[0]?.name === 'Sal') {
+                  return;
+                }
                 // Update products in real time without screen jump
                 setProducts(prevProducts => {
                   const prevStr = JSON.stringify(prevProducts);
@@ -2721,6 +2737,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setProducts(updatedProducts);
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(updatedProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updatedProducts));
+      }
+    } catch {}
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, updatedProducts).catch(() => {});
     setMovements(prev => [...newMovements, ...prev]);
     setSales(prev => [newSale, ...prev]);
     setCurrentShift(updatedShift);
@@ -2787,6 +2810,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setProducts(updatedProducts);
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(updatedProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updatedProducts));
+      }
+    } catch {}
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, updatedProducts).catch(() => {});
     setMovements(prev => [...restoredMovements, ...prev]);
     setSales(prev => prev.map(s => s.id === saleId ? { ...s, status: 'CANCELADA', notes: `${s.notes || ''} | Cancelada: ${reason}` } : s));
     setCurrentShift(updatedShift);
@@ -2805,6 +2835,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const nextProducts = [newProduct, ...products];
     setProducts(nextProducts);
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(nextProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
+      }
+    } catch {}
     syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
 
     // Initial stock movement record if stock > 0
@@ -2833,6 +2869,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateProduct = (id: string, productData: Partial<Product>) => {
     const nextProducts = products.map(p => (p.id === id ? { ...p, ...productData, updatedAt: new Date().toISOString() } : p));
     setProducts(nextProducts);
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(nextProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
+      }
+    } catch {}
     syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
     showToast('success', 'Produto Atualizado', 'As informações foram salvas e sincronizadas.');
   };
@@ -2843,6 +2885,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextProducts = products.filter(p => p.id !== id);
     setProducts(nextProducts);
     setCart(prev => prev.filter(item => item.product.id !== id));
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(nextProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
+      }
+    } catch {}
     syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
     showToast('info', 'Produto Removido', `O item "${prod.name}" foi excluído.`);
   };
@@ -2953,6 +3001,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.products) && data.products.length > 0) {
+          if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
+            return false;
+          }
           setProducts(prev => {
             const prevStr = JSON.stringify(prev);
             const newStr = JSON.stringify(data.products);
