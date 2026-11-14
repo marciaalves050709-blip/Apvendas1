@@ -574,8 +574,8 @@ export const ClientStoreView: React.FC = () => {
   const handleRefreshCatalog = async () => {
     setIsRefreshingCatalog(true);
     try {
-      // 1. If this device has products in memory, push them to the server so they are permanently saved & broadcasted
-      if (products && products.length > 0 && currentCompany) {
+      // 1. Only push local catalog if admin/company area is unlocked (prevents stale buyer cache overwriting store)
+      if ((isCompanyAreaUnlocked) && products && products.length > 0 && currentCompany) {
         await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products);
       }
       // 2. Refresh catalog from server
@@ -592,15 +592,11 @@ export const ClientStoreView: React.FC = () => {
     }
   };
 
-  // Auto-sync products and ensure company padlock is securely locked on client store
+  // Fetch latest products and ensure company padlock is securely locked on client store
   useEffect(() => {
     // SEGURANÇA: Ao entrar na Loja do Cliente, o cadeado deve estar SEMPRE fechado
     if (isCompanyAreaUnlocked) {
       lockCompanyArea();
-    }
-    // Push products to server on start if available so all buyers have them
-    if (products && products.length > 0 && currentCompany) {
-      syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
     }
     refreshStoreCatalog().catch(() => {});
     const onFocus = () => {
@@ -614,7 +610,7 @@ export const ClientStoreView: React.FC = () => {
   }, []);
 
   const handleQuickAppUpdate = () => {
-    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v62)...');
+    showToast('info', 'Atualizando Aplicativo...', 'Limpando cache do celular e ativando a versão mais recente (v63)...');
     if (typeof (window as any).__clearAppCacheAndReload === 'function') {
       (window as any).__clearAppCacheAndReload();
     } else {
@@ -1194,7 +1190,7 @@ export const ClientStoreView: React.FC = () => {
             <div className="pt-1 flex items-center justify-center gap-2">
               <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Versão 62 Oficial
+                Versão 63 Oficial
               </span>
               <button
                 type="button"

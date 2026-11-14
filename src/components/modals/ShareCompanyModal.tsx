@@ -150,7 +150,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
 
     return [];
-  }, [products, effectiveCompany?.id, currentCompany?.id, companies.length]);
+  }, [isOpen, products, effectiveCompany?.id, currentCompany?.id, companies.length]);
 
   const effectiveSettings = useMemo(() => {
     try {
@@ -209,12 +209,14 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
         setShortUrl(res);
         return res;
       } else {
-        setShortUrl(cleanUrl);
-        return cleanUrl;
+        const fallbackWithProducts = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
+        setShortUrl(fallbackWithProducts);
+        return fallbackWithProducts;
       }
     } catch {
-      setShortUrl(cleanUrl);
-      return cleanUrl;
+      const fallbackWithProducts = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
+      setShortUrl(fallbackWithProducts);
+      return fallbackWithProducts;
     } finally {
       setIsShortening(false);
     }
@@ -228,16 +230,16 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
   }, [isOpen, shareUrl, effectiveCompany?.name]);
 
-  // Active URL to share: Defaults to the shortened link with company name
+  // Active URL to share: Defaults to the shortened link with company name (never drops products)
   const activeUrl = useMemo(() => {
     if (urlMode === 'short') {
       if (shortUrl && !shortUrl.includes('da.gd') && shortUrl.startsWith('http')) {
         return shortUrl;
       }
-      return cleanUrl;
+      return effectiveProducts.length > 0 ? shareUrl : cleanUrl;
     }
-    return cleanUrl;
-  }, [urlMode, shortUrl, cleanUrl]);
+    return effectiveProducts.length > 0 ? shareUrl : cleanUrl;
+  }, [urlMode, shortUrl, shareUrl, cleanUrl, effectiveProducts.length]);
 
   const shareMessage = useMemo(() => {
     return buildStoreShareMessage(effectiveCompany, activeUrl, effectiveSeller, effectiveSettings);
@@ -268,7 +270,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
     }
     if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = cleanUrl;
+      finalUrl = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
     }
     if (effectiveCompany && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
@@ -294,7 +296,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
     }
     if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = cleanUrl;
+      finalUrl = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
     }
     if (effectiveCompany && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
@@ -328,7 +330,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
     }
     if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = cleanUrl;
+      finalUrl = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
     }
     if (effectiveCompany && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
@@ -354,7 +356,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
     }
     if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = cleanUrl;
+      finalUrl = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
     }
     if (effectiveCompany && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});

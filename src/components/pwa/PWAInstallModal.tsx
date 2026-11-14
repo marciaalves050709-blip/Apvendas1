@@ -21,7 +21,7 @@ import QRCode from 'qrcode';
 import { AlertTriangle, Compass } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { useApp } from '../../context/AppContext';
-import { buildStoreCleanUrl } from '../../utils/shareHelper';
+import { buildStoreShareUrl, shortenUrl } from '../../utils/shareHelper';
 import confetti from 'canvas-confetti';
 
 interface PWAInstallModalProps {
@@ -41,8 +41,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     openDirectInstallInBrowser 
   } = usePWAInstall();
 
-  const { currentCompany, paymentSettings } = useApp();
-  const companyStoreUrl = buildStoreCleanUrl(currentCompany, paymentSettings);
+  const { currentCompany, paymentSettings, activeSeller, products } = useApp();
+  const fullStoreShareUrl = buildStoreShareUrl(currentCompany, paymentSettings, activeSeller, products);
+  const [companyStoreUrl, setCompanyStoreUrl] = useState<string>(fullStoreShareUrl);
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -50,8 +51,20 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
 
   useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
+    setCompanyStoreUrl(fullStoreShareUrl);
+    shortenUrl(fullStoreShareUrl, currentCompany?.name || 'loja').then((short) => {
+      if (!cancelled && short) {
+        setCompanyStoreUrl(short);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, fullStoreShareUrl, currentCompany?.name]);
 
-    // Generate QR code for mobile scanning using company-named store URL
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Generate QR code for mobile scanning using company-named store URL with products
     try {
       QRCode.toDataURL(companyStoreUrl, {
         width: 220,

@@ -28,6 +28,8 @@ app.use((req, res, next) => {
     p === '/manifest.webmanifest' ||
     p === '/manifest.json' ||
     p === '/' ||
+    p.startsWith('/loja/') ||
+    p.startsWith('/l/') ||
     p.startsWith('/api/') ||
     p.endsWith('.html')
   ) {
@@ -65,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '62', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '63', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -380,7 +382,7 @@ app.post('/api/shorten', async (req, res) => {
     }
     const urlHash = Math.abs(h).toString(36).slice(0, 4).padStart(4, '0');
 
-    // 1. Try is.gd with custom slug containing company name + catalog hash: loja_${cleanSlug}_${urlHash}
+    // 1. Try is.gd via POST with custom slug containing company name + catalog hash: loja_${cleanSlug}_${urlHash}
     if (cleanSlug) {
       const candidateParams = [
         `loja_${cleanSlug.slice(0, 18)}_${urlHash}`,
@@ -389,8 +391,15 @@ app.post('/api/shorten', async (req, res) => {
 
       for (const customParam of candidateParams) {
         try {
-          const resp = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(url)}`, {
-            signal: AbortSignal.timeout(4000)
+          const resp = await fetch('https://is.gd/create.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              format: 'simple',
+              shorturl: customParam,
+              url
+            }).toString(),
+            signal: AbortSignal.timeout(4500)
           });
           if (resp.ok) {
             const text = (await resp.text()).trim();
@@ -407,11 +416,19 @@ app.post('/api/shorten', async (req, res) => {
       }
     }
 
-    // Fallback: ALWAYS return direct official short link with company name (NEVER nameless random link)
+    // Fallback: ALWAYS return direct official short link with company name AND preserve ?p= products if present
     const host = req.get('host') || 'www.apvendas1.com.br';
     const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
-    const baseOrigin = url.startsWith('http') ? (() => { try { return new URL(url).origin; } catch { return `${proto}://${host}`; } })() : `${proto}://${host}`;
-    const directShort = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
+    let baseOrigin = `${proto}://${host}`;
+    let extraSearch = '';
+    try {
+      const parsedDest = new URL(url);
+      baseOrigin = parsedDest.origin;
+      if (parsedDest.searchParams.has('p')) {
+        extraSearch = parsedDest.search;
+      }
+    } catch {}
+    const directShort = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${extraSearch}`;
     return res.json({ shortUrl: directShort });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
@@ -425,30 +442,38 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '62',
-    versionName: 'v62.0',
+    version: '63',
+    versionName: 'v63.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Link encurtado garantido SEMPRE com o nome da empresa (nunca gera link aleatório sem nome)',
-      'Links de compartilhamento agora carregam todos os produtos atualizados da empresa para novos usuários',
-      'Sincronização automática por empresa em tempo real (Live Push SSE) e entre ambientes',
-      'Proteção contra perda de produtos e isolamento completo entre múltiplas empresas',
-      'Cadeado fechado automaticamente ao voltar para a Loja do Cliente'
+      'App instalado não sobrescreve catálogo atualizado e sincroniza automaticamente (v63)',
+      'Link encurtado via POST com nome da empresa e todos os produtos atualizados para novos usuários',
+      'Redirecionamento /loja/:slug preserva parâmetros de produtos e configurações',
+      'Isolamento completo entre múltiplas empresas e fechamento automático do cadeado'
     ]
   });
 });
 
-// Direct Short URL Redirects:
+// Direct Short URL Redirects preserving any ?p=, ?v=, ?nome= query params:
 // e.g. /loja/maquiagemtop -> /?loja=maquiagemtop&tab=client-store
-// e.g. /l/maquiagemtop -> /?loja=maquiagemtop&tab=client-store
 app.get('/loja/:slug', (req, res) => {
-  const slug = encodeURIComponent(req.params.slug);
-  res.redirect(`/?loja=${slug}&tab=client-store`);
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(req.query)) {
+    if (typeof v === 'string') qs.set(k, v);
+  }
+  qs.set('loja', req.params.slug);
+  if (!qs.has('tab')) qs.set('tab', 'client-store');
+  res.redirect(`/?${qs.toString()}`);
 });
 
 app.get('/l/:slug', (req, res) => {
-  const slug = encodeURIComponent(req.params.slug);
-  res.redirect(`/?loja=${slug}&tab=client-store`);
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(req.query)) {
+    if (typeof v === 'string') qs.set(k, v);
+  }
+  qs.set('loja', req.params.slug);
+  if (!qs.has('tab')) qs.set('tab', 'client-store');
+  res.redirect(`/?${qs.toString()}`);
 });
 
 // Vite Middleware (Dev) or Static Assets (Prod)
@@ -460,8 +485,15 @@ if (!isProduction) {
   app.use(vite.middlewares);
 } else {
   const distPath = path.join(process.cwd(), 'dist');
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html') || filePath.endsWith('sw.js')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      }
+    }
+  }));
   app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }

@@ -140,8 +140,8 @@ export function buildStoreShareUrl(
           ? `${safeName}_${price}_${stock}_${unit}_${safeCat}_${wp}_${wq}`
           : `${safeName}_${price}_${stock}_${unit}_${safeCat}`;
 
-        // Keep total encoded URL safely under 4400 chars so is.gd never fails on length
-        if (encodeURIComponent([...compactItems, entry].join('*')).length > 3800) {
+        // Keep total encoded URL safely under 3800 chars so is.gd POST never hits size limit
+        if (encodeURIComponent([...compactItems, entry].join('*')).length > 3000) {
           break;
         }
         compactItems.push(entry);
@@ -337,7 +337,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
   }
   const urlHash = Math.abs(h).toString(36).slice(0, 4).padStart(4, '0');
 
-  // 1. Try is.gd directly with custom slug containing company name + catalog hash
+  // 1. Try is.gd directly via POST with custom slug containing company name + catalog hash
   if (cleanSlug) {
     const customCandidates = [
       `loja_${cleanSlug.slice(0, 18)}_${urlHash}`,
@@ -347,7 +347,14 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(longUrl)}`, {
+        const res = await fetch('https://is.gd/create.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            format: 'simple',
+            shorturl: customParam,
+            url: longUrl
+          }).toString(),
           signal: controller.signal
         });
         clearTimeout(timer);
@@ -366,13 +373,20 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     }
   }
 
-  // Fallback: ALWAYS return official direct store URL with company name (never nameless random short link)
+  // Fallback: ALWAYS return official direct store URL with company name AND preserve ?p= products if present
   let origin = typeof window !== 'undefined' && window.location.origin 
     ? window.location.origin 
     : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
   if (origin.includes('ais-dev-')) {
     origin = origin.replace('ais-dev-', 'ais-pre-');
   }
+  let extraSearch = '';
+  try {
+    const parsedLong = new URL(longUrl);
+    if (parsedLong.searchParams.has('p')) {
+      extraSearch = parsedLong.search;
+    }
+  } catch {}
 
-  return `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
+  return `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${extraSearch}`;
 }

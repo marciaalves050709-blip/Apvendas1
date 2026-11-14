@@ -216,7 +216,7 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-14T19:10:07.541Z"
+    "updatedAt": "2026-11-14T19:23:48.643Z"
   },
   "empresa_principal": {
     "slug": "maquiagemtop",
@@ -402,7 +402,7 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-14T19:10:07.541Z"
+    "updatedAt": "2026-11-14T19:23:48.643Z"
   },
   "_latest": {
     "slug": "maquiagemtop",
@@ -588,6 +588,6 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-14T19:10:07.541Z"
+    "updatedAt": "2026-11-14T19:23:48.643Z"
   }
 }

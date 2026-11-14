@@ -402,6 +402,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     urlVersion: initialUrlVersion,
     urlSlug: normalizeStoreSlug(rawUrlStore)
   });
+  const hasMerchantMutationRef = useRef<boolean>(false);
 
   const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
     'pos',
@@ -1992,7 +1993,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '62') {
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '63') {
               window.dispatchEvent(new CustomEvent('app-update-available'));
               const reloadGuardKey = `pwa_version_upgraded_${msg.version}`;
               if (!sessionStorage.getItem(reloadGuardKey)) {
@@ -2259,6 +2260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [paymentSettings, activeCompanyId]);
 
   const updatePaymentSettings = (newSettings: Partial<PaymentSettings>) => {
+    hasMerchantMutationRef.current = true;
     setPaymentSettings(prev => ({ ...prev, ...newSettings }));
     if (newSettings.merchantName && newSettings.merchantName.trim()) {
       const cleanName = newSettings.merchantName.trim();
@@ -2309,12 +2311,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return found || sellers[0];
   }, [sellers, activeSellerId]);
 
-  // Auto-sync company store to backend so clean links (?loja=...) always have up-to-date products
+  // Auto-sync company store to backend ONLY when merchant has unlocked or modified data (never overwrite from stale buyer cache)
   useEffect(() => {
-    if (currentCompany && currentCompany.name && products && products.length > 0) {
+    if (
+      (hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) &&
+      currentCompany &&
+      currentCompany.name &&
+      products &&
+      products.length > 0
+    ) {
       syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
     }
-  }, [currentCompany?.name, currentCompany?.id, products, paymentSettings, activeSeller]);
+  }, [currentCompany?.name, currentCompany?.id, products, paymentSettings, activeSeller, isCompanyAreaUnlocked, isAdmin, isMasterAdmin]);
 
   const setActiveSellerId = (id: string) => {
     const target = sellers.find(s => s.id === id);
@@ -2398,6 +2406,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setCompanyName = (newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    hasMerchantMutationRef.current = true;
     setCompanies(prev => {
       const next = prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: trimmed.toLowerCase().replace(/\s+/g, '-') } : c);
       try {
@@ -2417,6 +2426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCurrentCompany = (data: Partial<CompanyAccount>) => {
+    hasMerchantMutationRef.current = true;
     // If ownerName or phone matches Márcia Alves, auto-apply master admin
     const current = companies.find(c => c.id === activeCompanyId);
     const checkName = data.ownerName !== undefined ? data.ownerName : current?.ownerName;
@@ -2957,6 +2967,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Product Operations (Immediate real-time server & storage sync)
   const addProduct = (productData: Omit<Product, 'id' | 'updatedAt'>) => {
+    hasMerchantMutationRef.current = true;
     const newProduct: Product = {
       ...productData,
       id: 'prod-' + Date.now(),
@@ -2997,6 +3008,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProduct = (id: string, productData: Partial<Product>) => {
+    hasMerchantMutationRef.current = true;
     const nextProducts = products.map(p => (p.id === id ? { ...p, ...productData, updatedAt: new Date().toISOString() } : p));
     setProducts(nextProducts);
     try {
@@ -3012,6 +3024,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteProduct = (id: string) => {
     const prod = products.find(p => p.id === id);
     if (!prod) return;
+    hasMerchantMutationRef.current = true;
     const nextProducts = products.filter(p => p.id !== id);
     setProducts(nextProducts);
     setCart(prev => prev.filter(item => item.product.id !== id));
