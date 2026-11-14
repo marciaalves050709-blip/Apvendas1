@@ -87,7 +87,6 @@
         "minStock": 5,
         "maxStock": 500,
         "location": "Prateleira A-01",
-        "supplierId": "",
         "description": "Gloss labial brilhante de alta fixação",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -107,7 +106,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-01",
-        "supplierId": "",
         "description": "Colher de sopa descartável resistente",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -127,7 +125,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-02",
-        "supplierId": "",
         "description": "Colher de sopa reforçada",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -147,7 +144,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-03",
-        "supplierId": "",
         "description": "Colher de sopa descartável",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -167,7 +163,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira C-01",
-        "supplierId": "",
         "description": "Colher prática e reforçada",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -187,7 +182,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira C-02",
-        "supplierId": "",
         "description": "Colher descartável branca",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -207,7 +201,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira D-01",
-        "supplierId": "",
         "description": "Prato descartável resistente",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       }
@@ -223,7 +216,7 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-10T12:23:04.506Z"
+    "updatedAt": "2026-11-14T19:10:07.541Z"
   },
   "empresa_principal": {
     "slug": "maquiagemtop",
@@ -280,7 +273,6 @@
         "minStock": 5,
         "maxStock": 500,
         "location": "Prateleira A-01",
-        "supplierId": "",
         "description": "Gloss labial brilhante de alta fixação",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -300,7 +292,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-01",
-        "supplierId": "",
         "description": "Colher de sopa descartável resistente",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -320,7 +311,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-02",
-        "supplierId": "",
         "description": "Colher de sopa reforçada",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -340,7 +330,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-03",
-        "supplierId": "",
         "description": "Colher de sopa descartável",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -360,7 +349,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira C-01",
-        "supplierId": "",
         "description": "Colher prática e reforçada",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -380,7 +368,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira C-02",
-        "supplierId": "",
         "description": "Colher descartável branca",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -400,7 +387,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira D-01",
-        "supplierId": "",
         "description": "Prato descartável resistente",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       }
@@ -416,7 +402,7 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-10T12:23:04.507Z"
+    "updatedAt": "2026-11-14T19:10:07.541Z"
   },
   "_latest": {
     "slug": "maquiagemtop",
@@ -473,7 +459,6 @@
         "minStock": 5,
         "maxStock": 500,
         "location": "Prateleira A-01",
-        "supplierId": "",
         "description": "Gloss labial brilhante de alta fixação",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -493,7 +478,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-01",
-        "supplierId": "",
         "description": "Colher de sopa descartável resistente",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -513,7 +497,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-02",
-        "supplierId": "",
         "description": "Colher de sopa reforçada",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -533,7 +516,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira B-03",
-        "supplierId": "",
         "description": "Colher de sopa descartável",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -553,7 +535,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira C-01",
-        "supplierId": "",
         "description": "Colher prática e reforçada",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -573,7 +554,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira C-02",
-        "supplierId": "",
         "description": "Colher descartável branca",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       },
@@ -593,7 +573,6 @@
         "minStock": 10,
         "maxStock": 500,
         "location": "Prateleira D-01",
-        "supplierId": "",
         "description": "Prato descartável resistente",
         "updatedAt": "2026-11-10T12:00:00.000Z"
       }
@@ -609,6 +588,6 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-10T12:23:04.507Z"
+    "updatedAt": "2026-11-14T19:10:07.541Z"
   }
 }

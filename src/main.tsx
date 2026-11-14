@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = '61';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v61';
+const CURRENT_SW_VERSION = '62';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v62';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
@@ -186,6 +186,47 @@ if (typeof window !== 'undefined') {
       });
     } catch {}
   }
+
+  let lastVersionCheckMs = 0;
+  const checkServerVersionAndUpgrade = () => {
+    const now = Date.now();
+    if (now - lastVersionCheckMs < 15000) return;
+    lastVersionCheckMs = now;
+
+    fetch(`/api/version?t=${now}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.version) {
+          const serverVer = String(data.version).replace(/^v/i, '').trim();
+          const clientVer = String(CURRENT_SW_VERSION).replace(/^v/i, '').trim();
+          if (serverVer && clientVer && serverVer !== clientVer) {
+            const reloadGuardKey = `pwa_version_upgraded_${serverVer}`;
+            if (!sessionStorage.getItem(reloadGuardKey)) {
+              sessionStorage.setItem(reloadGuardKey, 'true');
+              console.log(`[PWA] Upgrading installed app from v${clientVer} to v${serverVer}...`);
+              if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+                (window as any).__clearAppCacheAndReload();
+              } else {
+                window.dispatchEvent(new CustomEvent('app-update-available'));
+              }
+            } else {
+              window.dispatchEvent(new CustomEvent('app-update-available'));
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Run immediately on boot (works in standalone PWAs, iOS Safari, Android WebView, and Desktop)
+  checkServerVersionAndUpgrade();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkServerVersionAndUpgrade();
+    }
+  });
+  window.addEventListener('focus', checkServerVersionAndUpgrade);
+  setInterval(checkServerVersionAndUpgrade, 60 * 1000);
 
   if ('serviceWorker' in navigator) {
     // If forced refresh requested, unregister previous workers first
@@ -215,27 +256,6 @@ if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('app-update-available'));
       }
     });
-
-    // Check server version once on startup to upgrade installed apps running older code
-    fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && data.version) {
-          const serverVer = String(data.version).replace(/^v/i, '').trim();
-          const clientVer = String(CURRENT_SW_VERSION).replace(/^v/i, '').trim();
-          if (serverVer && clientVer && serverVer !== clientVer) {
-            const reloadGuardKey = `pwa_version_upgraded_${serverVer}`;
-            if (!sessionStorage.getItem(reloadGuardKey)) {
-              sessionStorage.setItem(reloadGuardKey, 'true');
-              console.log(`[PWA] Upgrading installed app from v${clientVer} to v${serverVer}...`);
-              if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                (window as any).__clearAppCacheAndReload();
-              }
-            }
-          }
-        }
-      })
-      .catch(() => {});
 
     navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/' })
       .then((reg) => {

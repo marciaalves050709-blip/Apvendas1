@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Product, 
   Sale, 
@@ -395,6 +395,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialCompanyFromUrl = rawUrlStore;
   const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
 
+  const initialUrlHasProducts = Boolean(initialUrlParams?.get('p') || initialUrlParams?.get('pdata'));
+  const initialUrlVersion = Number(initialUrlParams?.get('v')) || (initialUrlHasProducts ? Date.now() : 0);
+  const urlCatalogInfoRef = useRef<{ hasUrlProducts: boolean; urlVersion: number; urlSlug: string }>({
+    hasUrlProducts: initialUrlHasProducts,
+    urlVersion: initialUrlVersion,
+    urlSlug: normalizeStoreSlug(rawUrlStore)
+  });
+
   const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
     'pos',
     'sales',
@@ -589,7 +597,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         c.id === rawUrlStore ||
         normalizeStoreSlug(c.slug) === targetNormalized ||
         normalizeStoreSlug(c.name) === targetNormalized ||
-        (list.length === 1 && !urlCompId)
+        (list.length === 1 && !urlCompId && (list[0].name === 'Minha Loja' || list[0].name === 'appvendas'))
       );
 
       if (existingIdx >= 0) {
@@ -627,7 +635,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         c.id === rawUrlStore ||
         normalizeStoreSlug(c.slug) === targetNormalized ||
         normalizeStoreSlug(c.name) === targetNormalized ||
-        (companies.length === 1 && !urlCompId)
+        (companies.length === 1 && !urlCompId && (companies[0].name === 'Minha Loja' || companies[0].name === 'appvendas'))
       );
       if (found) return found.id;
       if (urlCompId) return urlCompId;
@@ -835,24 +843,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const tenantSaved = localStorage.getItem(getTenantKey('products', activeCompanyId));
       if (tenantSaved) {
         const parsed = JSON.parse(tenantSaved);
-        if (Array.isArray(parsed) && (parsed.length === 0 || (parsed.length === 1 && parsed[0]?.name === 'Sal'))) {
-          return INITIAL_PRODUCTS;
-        }
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && (parsed.length === 0 || (parsed.length === 1 && parsed[0]?.name === 'Sal'))) {
-            return INITIAL_PRODUCTS;
+        if (Array.isArray(parsed)) {
+          if (parsed.length === 1 && parsed[0]?.name === 'Sal') {
+            return activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore ? INITIAL_PRODUCTS : [];
           }
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        } catch {}
+          return parsed;
+        }
       }
-      return INITIAL_PRODUCTS;
+      if (activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore) {
+        const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              if (parsed.length === 0 || (parsed.length === 1 && parsed[0]?.name === 'Sal')) {
+                return INITIAL_PRODUCTS;
+              }
+              return parsed;
+            }
+          } catch {}
+        }
+        return INITIAL_PRODUCTS;
+      }
+      return [];
     } catch {
-      return INITIAL_PRODUCTS;
+      return activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore ? INITIAL_PRODUCTS : [];
     }
   });
 
@@ -1704,17 +1719,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (typeof window === 'undefined') return;
       const cleanSearch = (window.location.search || '').replace(/%26/gi, '&');
       const params = new URLSearchParams(cleanSearch);
-      const urlLoja = params.get('loja');
+      const urlLoja = params.get('loja') || pathLojaName;
       const urlNome = params.get('nome');
       const urlCompId = params.get('empresa') || params.get('id');
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
+      const targetUrlSlug = normalizeStoreSlug(urlLoja || incomingName);
 
-      // Persist active store slug so installed apps opened from home screen (which have no query params) load the right store
-      if (urlLoja) {
+      // Persist active store slug so installed apps opened from home screen load the right store
+      if (targetUrlSlug) {
         try {
-          const norm = normalizeStoreSlug(urlLoja);
-          localStorage.setItem('appvendas_last_visited_store_slug', norm);
-          localStorage.setItem('appvendas_last_store_slug', norm);
+          localStorage.setItem('appvendas_last_visited_store_slug', targetUrlSlug);
+          localStorage.setItem('appvendas_last_store_slug', targetUrlSlug);
         } catch {}
       }
       if (incomingName) {
@@ -1723,60 +1738,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch {}
       }
 
-      const savedSlug = localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug');
-      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (savedSlug || urlCompId || 'latest');
-
-      // 0. Fetch store catalog and settings from backend API (live network check with no-store)
-      fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' })
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data) {
-            if (Array.isArray(data.products) && data.products.length > 0) {
-              if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
-                return;
-              }
-              setProducts(prev => {
-                const prevStr = JSON.stringify(prev);
-                const newStr = JSON.stringify(data.products);
-                return prevStr === newStr ? prev : data.products;
-              });
-              const targetCompId = data.company?.id || urlCompId || activeCompanyId;
-              try {
-                localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
-                if (targetCompId === DEFAULT_COMPANY_ID) {
-                  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
-                }
-              } catch {}
-            }
-            if (data.company && data.company.name) {
-              setCompanies(prev => {
-                const targetCompId = data.company.id || urlCompId || activeCompanyId;
-                const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(data.slug));
-                if (idx >= 0) {
-                  const copy = [...prev];
-                  copy[idx] = { ...copy[idx], ...data.company };
-                  return copy;
-                }
-                return [...prev, data.company];
-              });
-              if (data.company.id) {
-                setActiveCompanyId(data.company.id);
-                try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
-              }
-            }
-            if (data.paymentSettings) {
-              setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
-            }
-          }
-        })
-        .catch(() => {});
-
-      // 1. Unpack products if passed in legacy URL (?p=...)
+      // 1. Unpack products FIRST synchronously if passed in URL (?p=...) so we never lose them to stale server caches
+      let urlParsedProducts: Product[] = [];
       const pParam = params.get('p');
       if (pParam) {
         try {
           const rawItems = pParam.split('*').filter(Boolean);
-          const parsedList: Product[] = rawItems.map((itemStr, idx) => {
+          urlParsedProducts = rawItems.map((itemStr, idx) => {
             const parts = itemStr.split('_');
             const rawName = (parts[0] || '').replace(/\+/g, ' ');
             let name = `Produto ${idx + 1}`;
@@ -1817,13 +1785,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
           });
 
-          if (parsedList.length > 0) {
-            setProducts(parsedList);
+          if (urlParsedProducts.length > 0) {
+            const urlVer = Number(params.get('v')) || Date.now();
+            urlCatalogInfoRef.current = {
+              hasUrlProducts: true,
+              urlVersion: urlVer,
+              urlSlug: targetUrlSlug
+            };
+            setProducts(urlParsedProducts);
             const targetId = urlCompId || activeCompanyId;
             try {
-              localStorage.setItem(getTenantKey('products', targetId), JSON.stringify(parsedList));
+              localStorage.setItem(getTenantKey('products', targetId), JSON.stringify(urlParsedProducts));
               if (targetId === DEFAULT_COMPANY_ID) {
-                localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(parsedList));
+                localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(urlParsedProducts));
               }
             } catch {}
           }
@@ -1837,10 +1811,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, urlCompId); } catch {}
       }
 
-      if (incomingName && incomingName !== 'minha loja' && incomingName !== 'loja') {
-        const targetSlug = incomingName.toLowerCase().replace(/\s+/g, '-');
+      if (incomingName && incomingName.toLowerCase() !== 'minha loja' && incomingName.toLowerCase() !== 'loja') {
+        const targetSlug = normalizeStoreSlug(incomingName) || incomingName.toLowerCase().replace(/\s+/g, '-');
         setCompanies(prev => {
-          const targetId = urlCompId || activeCompanyId;
           const idx = prev.findIndex(c => 
             (urlCompId && c.id === urlCompId) || 
             normalizeStoreSlug(c.slug) === normalizeStoreSlug(targetSlug) || 
@@ -1859,7 +1832,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return updated;
           } else {
             const newComp: CompanyAccount = {
-              id: urlCompId || `empresa_${Date.now()}`,
+              id: urlCompId || activeCompanyId || `empresa_${Date.now()}`,
               name: incomingName,
               slug: targetSlug,
               ownerName: 'Lojista',
@@ -1885,6 +1858,119 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           document.title = `${incomingName} - Catálogo & Pedidos`;
         }
       }
+
+      const savedSlug = localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug');
+      const currentActiveSlug = currentCompany?.name && currentCompany.name !== 'Minha Loja'
+        ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
+        : '';
+      const targetQuery = targetUrlSlug || urlCompId || currentActiveSlug || savedSlug || 'latest';
+
+      // 2. Fetch store catalog and settings from backend API (respecting newer ?p= URL products)
+      fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (!data || data.isPlaceholder) {
+            // If server doesn't have this store yet and URL brought products, seed the server right away
+            if (urlParsedProducts.length > 0 && incomingName) {
+              const compObj: CompanyAccount = {
+                id: urlCompId || activeCompanyId || DEFAULT_COMPANY_ID,
+                name: incomingName,
+                slug: targetUrlSlug || 'loja',
+                ownerName: 'Lojista',
+                phone: params.get('zap') || '',
+                email: '',
+                category: 'Comércio & Serviços',
+                logoEmoji: params.get('emoji') || '🏪',
+                createdAt: new Date().toISOString()
+              };
+              syncStoreToServer(compObj, {
+                ...paymentSettings,
+                merchantName: incomingName,
+                merchantWhatsapp: params.get('zap') || paymentSettings.merchantWhatsapp,
+                pixKey: params.get('pix') || paymentSettings.pixKey,
+              }, activeSeller, urlParsedProducts).catch(() => {});
+            }
+            return;
+          }
+
+          const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+          const urlInfo = urlCatalogInfoRef.current;
+
+          if (urlParsedProducts.length > 0) {
+            const isServerStrictlyNewer = serverMs > (urlInfo.urlVersion + 1500);
+            if (isServerStrictlyNewer && Array.isArray(data.products)) {
+              if (data.products.length === 1 && data.products[0]?.name === 'Sal') return;
+              setProducts(data.products);
+              const targetCompId = data.company?.id || urlCompId || activeCompanyId;
+              try {
+                localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
+              } catch {}
+            } else {
+              // URL share link has the freshest catalog — push it to server DB so future visits & /loja/slug stay updated
+              const compObj: CompanyAccount = data.company?.name ? { ...data.company, name: incomingName || data.company.name } : {
+                id: urlCompId || activeCompanyId || DEFAULT_COMPANY_ID,
+                name: incomingName || currentCompany.name,
+                slug: targetUrlSlug || 'loja',
+                ownerName: 'Lojista',
+                phone: params.get('zap') || '',
+                email: '',
+                category: 'Comércio & Serviços',
+                logoEmoji: params.get('emoji') || '🏪',
+                createdAt: new Date().toISOString()
+              };
+              syncStoreToServer(compObj, {
+                ...paymentSettings,
+                ...(data.paymentSettings || {}),
+                merchantName: incomingName || compObj.name,
+                merchantWhatsapp: params.get('zap') || paymentSettings.merchantWhatsapp,
+                pixKey: params.get('pix') || paymentSettings.pixKey,
+              }, activeSeller, urlParsedProducts).catch(() => {});
+            }
+          } else if (Array.isArray(data.products)) {
+            if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
+              return;
+            }
+            if (data.products.length > 0 || targetUrlSlug) {
+              setProducts(prev => {
+                const prevStr = JSON.stringify(prev);
+                const newStr = JSON.stringify(data.products);
+                return prevStr === newStr ? prev : data.products;
+              });
+              const targetCompId = data.company?.id || urlCompId || activeCompanyId;
+              try {
+                localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
+                if (targetCompId === DEFAULT_COMPANY_ID) {
+                  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
+                }
+              } catch {}
+            }
+          }
+
+          if (data.company && data.company.name && !data.isPlaceholder) {
+            setCompanies(prev => {
+              const targetCompId = data.company.id || urlCompId || activeCompanyId;
+              const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(data.slug));
+              if (idx >= 0) {
+                const copy = [...prev];
+                copy[idx] = { ...copy[idx], ...data.company, name: incomingName || data.company.name };
+                return copy;
+              }
+              return [...prev, { ...data.company, name: incomingName || data.company.name }];
+            });
+            if (data.company.id && !urlCompId) {
+              setActiveCompanyId(data.company.id);
+              try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
+            }
+          }
+          if (data.paymentSettings) {
+            setPaymentSettings(ps => ({
+              ...ps,
+              ...data.paymentSettings,
+              ...(incomingName ? { merchantName: incomingName } : {})
+            }));
+          }
+        })
+        .catch(() => {});
     } catch {}
   }, []);
 
@@ -1906,6 +1992,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '62') {
+              window.dispatchEvent(new CustomEvent('app-update-available'));
+              const reloadGuardKey = `pwa_version_upgraded_${msg.version}`;
+              if (!sessionStorage.getItem(reloadGuardKey)) {
+                sessionStorage.setItem(reloadGuardKey, 'true');
+                if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+                  (window as any).__clearAppCacheAndReload();
+                }
+              }
+            }
             if (msg.type === 'STORE_UPDATED' && msg.storeData) {
               const updatedSlug = msg.slug;
               const updatedCleanSlug = msg.cleanSlug;
@@ -2350,6 +2446,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (data.name) {
       const cleanName = data.name.trim();
+      const normSlug = normalizeStoreSlug(cleanName);
+      if (normSlug) {
+        try {
+          localStorage.setItem('appvendas_last_visited_store_slug', normSlug);
+          localStorage.setItem('appvendas_last_store_slug', normSlug);
+        } catch {}
+      }
       setPaymentSettings(ps => ({ 
         ...ps, 
         merchantName: cleanName,
@@ -2399,6 +2502,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCompanies(prev => [...prev, newComp]);
     setActiveCompanyId(newId);
 
+    // Update active store slug so background sync tracks the new company (never old store)
+    urlCatalogInfoRef.current = { hasUrlProducts: false, urlVersion: 0, urlSlug: '' };
+    const newNormSlug = normalizeStoreSlug(newComp.slug || newComp.name);
+    if (newNormSlug) {
+      try {
+        localStorage.setItem('appvendas_last_visited_store_slug', newNormSlug);
+        localStorage.setItem('appvendas_last_store_slug', newNormSlug);
+      } catch {}
+    }
+
     // Switch in-memory state cleanly
     setProducts([]);
     setSales([]);
@@ -2407,6 +2520,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSuppliers([]);
     setPaymentSettings(initialTenantSettings);
     setCart([]);
+
+    // Register new empty company cleanly on the server
+    syncStoreToServer(newComp, initialTenantSettings, activeSeller, [], true).catch(() => {});
 
     if (typeof document !== 'undefined') {
       document.title = `${newComp.name} - Gestão & Vendas`;
@@ -2420,6 +2536,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!target) return;
 
     setActiveCompanyId(companyId);
+
+    // Update active store slug & clear URL catalog lock when user switches company manually
+    urlCatalogInfoRef.current = { hasUrlProducts: false, urlVersion: 0, urlSlug: '' };
+    const targetNormSlug = normalizeStoreSlug(target.slug || target.name);
+    if (targetNormSlug) {
+      try {
+        localStorage.setItem('appvendas_last_visited_store_slug', targetNormSlug);
+        localStorage.setItem('appvendas_last_store_slug', targetNormSlug);
+      } catch {}
+    }
 
     const loadTenant = <T,>(key: string, fallback: T): T => {
       try {
@@ -2447,6 +2573,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSuppliers(loadedSupps);
     setPaymentSettings(loadedSettings);
     setCart([]);
+
+    if (loadedProds.length > 0) {
+      syncStoreToServer(target, loadedSettings, activeSeller, loadedProds).catch(() => {});
+    }
 
     if (typeof document !== 'undefined') {
       document.title = `${target.name} - Gestão & Vendas`;
@@ -2891,7 +3021,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
       }
     } catch {}
-    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, nextProducts.length === 0).catch(() => {});
     showToast('info', 'Produto Removido', `O item "${prod.name}" foi excluído.`);
   };
 
@@ -2993,14 +3123,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Live Refresh for Client Store & Installed App (Guarantees freshest products on demand with zero screen jumping)
   const refreshStoreCatalog = async (): Promise<boolean> => {
     try {
-      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-      const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa');
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) : null;
+      const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa') || pathLojaName;
+      const currentSlug = currentCompany?.name && currentCompany.name !== 'Minha Loja'
+        ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
+        : '';
       const savedSlug = typeof window !== 'undefined' ? (localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug')) : null;
-      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (savedSlug || currentCompany?.slug || currentCompany?.name || 'latest');
+      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (currentSlug || savedSlug || 'latest');
       const res = await fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.products) && data.products.length > 0) {
+        if (!data || data.isPlaceholder) {
+          if (products && products.length > 0 && currentCompany && (!urlLoja || normalizeStoreSlug(currentCompany.name) === normalizeStoreSlug(urlLoja))) {
+            syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+          }
+          return false;
+        }
+
+        const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+        const urlInfo = urlCatalogInfoRef.current;
+
+        // If page opened with ?p= URL products, ignore older server snapshots and only accept strictly newer server updates
+        if (urlInfo.hasUrlProducts && serverMs <= (urlInfo.urlVersion + 1500)) {
+          if (products && products.length > 0 && currentCompany) {
+            syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+          }
+          return true;
+        }
+
+        if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja)) {
           if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
             return false;
           }
@@ -3014,7 +3165,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (activeCompanyId === DEFAULT_COMPANY_ID) {
             localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
           }
-          if (data.company && data.company.name && data.company.name !== currentCompany.name) {
+          if (data.company && data.company.name && data.company.name !== currentCompany.name && (!currentSlug || normalizeStoreSlug(data.slug) === currentSlug)) {
             updateCurrentCompany({ name: data.company.name });
           }
           if (data.paymentSettings) {

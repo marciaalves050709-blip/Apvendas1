@@ -20,6 +20,8 @@ import {
 import QRCode from 'qrcode';
 import { AlertTriangle, Compass } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import { useApp } from '../../context/AppContext';
+import { buildStoreCleanUrl } from '../../utils/shareHelper';
 import confetti from 'canvas-confetti';
 
 interface PWAInstallModalProps {
@@ -39,6 +41,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     openDirectInstallInBrowser 
   } = usePWAInstall();
 
+  const { currentCompany, paymentSettings } = useApp();
+  const companyStoreUrl = buildStoreCleanUrl(currentCompany, paymentSettings);
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isTriggering, setIsTriggering] = useState(false);
@@ -46,10 +51,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   useEffect(() => {
     if (!isOpen) return;
 
-    // Generate QR code for mobile scanning
+    // Generate QR code for mobile scanning using company-named store URL
     try {
-      const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://appvendas.app';
-      QRCode.toDataURL(currentUrl, {
+      QRCode.toDataURL(companyStoreUrl, {
         width: 220,
         margin: 1.5,
         color: {
@@ -60,14 +64,13 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     } catch {
       // ignore
     }
-  }, [isOpen]);
+  }, [isOpen, companyStoreUrl]);
 
   if (!isOpen) return null;
 
   const handleCopyLink = () => {
     try {
-      const url = window.location.href;
-      navigator.clipboard.writeText(url);
+      navigator.clipboard.writeText(companyStoreUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2500);
     } catch {
@@ -111,9 +114,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share({
-          title: 'appvendas - PDV e Estoque',
-          text: 'Instale o appvendas na sua Tela de Início',
-          url: window.location.href,
+          title: `${currentCompany?.name || 'Loja'} - Catálogo & Pedidos`,
+          text: `Instale o catálogo da ${currentCompany?.name || 'nossa loja'} na sua Tela de Início`,
+          url: companyStoreUrl,
         });
       } catch {
         // user closed share sheet

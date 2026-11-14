@@ -114,11 +114,20 @@ export function buildStoreShareUrl(
     url.searchParams.set('banco', bank);
   }
 
-  // Ultra-compact product serializer (up to 50 products)
+  // Ultra-compact product serializer (up to 60 products, capped safely for shortener limits)
   // Format: Name_Price_Stock_Unit_Category_WholesalePrice_WholesaleQty joined by '*'
   if (products && products.length > 0) {
     try {
-      const compactItems = products.slice(0, 50).map(p => {
+      const catalogVersion = products.reduce((max, p) => {
+        const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+        return t > max ? t : max;
+      }, 0);
+      if (catalogVersion > 0) {
+        url.searchParams.set('v', String(catalogVersion));
+      }
+
+      const compactItems: string[] = [];
+      for (const p of products.slice(0, 60)) {
         const safeName = (p.name || 'Produto').replace(/[_*~|]/g, ' ').trim().slice(0, 32);
         const safeCat = (p.category || 'Outros').replace(/[_*~|]/g, ' ').trim().slice(0, 20);
         const price = Number(p.salePrice) || 0;
@@ -127,21 +136,23 @@ export function buildStoreShareUrl(
         const wp = p.wholesalePrice ? Number(p.wholesalePrice) : '';
         const wq = p.wholesaleMinQty ? Number(p.wholesaleMinQty) : '';
         
-        if (wp && wq) {
-          return `${safeName}_${price}_${stock}_${unit}_${safeCat}_${wp}_${wq}`;
-        }
-        return `${safeName}_${price}_${stock}_${unit}_${safeCat}`;
-      });
+        const entry = (wp && wq)
+          ? `${safeName}_${price}_${stock}_${unit}_${safeCat}_${wp}_${wq}`
+          : `${safeName}_${price}_${stock}_${unit}_${safeCat}`;
 
-      url.searchParams.set('p', compactItems.join('*'));
+        // Keep total encoded URL safely under 4400 chars so is.gd never fails on length
+        if (encodeURIComponent([...compactItems, entry].join('*')).length > 3800) {
+          break;
+        }
+        compactItems.push(entry);
+      }
+
+      if (compactItems.length > 0) {
+        url.searchParams.set('p', compactItems.join('*'));
+      }
     } catch {
       // ignore serialization errors
     }
-  }
-
-  // Automatically sync to backend in background if products are available
-  if (typeof window !== 'undefined' && (products || company)) {
-    syncStoreToServer(company, paymentSettings, activeSeller, products).catch(() => {});
   }
 
   return url.toString();
@@ -149,13 +160,14 @@ export function buildStoreShareUrl(
 
 /**
  * Syncs the store catalog and payment data to the backend /api/stores/:slug.
- * Allows any device or customer to open the clean ?loja=nome link and see all products.
+ * Allows any device or customer to open the clean ?loja=nome or /loja/nome link and see all products.
  */
 export async function syncStoreToServer(
   company: CompanyAccount,
   paymentSettings?: PaymentSettings,
   activeSeller?: SellerProfile,
-  products?: Product[]
+  products?: Product[],
+  forceClear?: boolean
 ): Promise<boolean> {
   try {
     const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
@@ -168,16 +180,30 @@ export async function syncStoreToServer(
       .replace(/^-|-$/g, '')
       .trim() || 'loja';
 
+    const payload = JSON.stringify({
+      company,
+      paymentSettings,
+      activeSeller,
+      products: products || [],
+      forceClear: Boolean(forceClear)
+    });
+
     const res = await fetch(`/api/stores/${encodeURIComponent(storeSlug)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        company,
-        paymentSettings,
-        activeSeller,
-        products: products || []
-      })
+      body: payload
     });
+
+    // If running inside AI Studio dev container, mirror catalog to shared preview container in background
+    if (typeof window !== 'undefined' && window.location.origin.includes('ais-dev-')) {
+      const preOrigin = window.location.origin.replace('ais-dev-', 'ais-pre-');
+      fetch(`${preOrigin}/api/stores/${encodeURIComponent(storeSlug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload
+      }).catch(() => {});
+    }
+
     return res.ok;
   } catch (err) {
     console.warn('[SyncStore] Offline or sync skipped:', err);
@@ -187,7 +213,7 @@ export async function syncStoreToServer(
 
 /**
  * Builds a ready-to-share promotional message for WhatsApp & social media.
- * Uses the short, clean link containing only the company name.
+ * Uses the short, clean link containing the company name.
  */
 export function buildStoreShareMessage(
   company: CompanyAccount,
@@ -225,114 +251,122 @@ Acesse o catálogo da ${compName} e aproveite!`
 }
 
 /**
- * Shortens a URL using fast, reliable public shortener services with CORS support.
- * Attempts to embed the company name directly in the shortened slug (e.g. is.gd/loja_empresa).
- * Returns the shortened URL, or the original URL if network fails.
+ * Shortens a URL while STRICTLY guaranteeing that the company name appears in the resulting link.
+ * Never returns nameless random links from external shorteners.
  */
 export async function shortenUrl(longUrl: string, storeName?: string): Promise<string> {
   if (!longUrl) return '';
 
+  // Resolve store name from argument, query params, or /loja/:slug pathname inside longUrl
+  let resolvedName = (storeName || '').trim();
+  if (!resolvedName || resolvedName.toLowerCase() === 'loja') {
+    try {
+      const parsed = new URL(longUrl);
+      resolvedName = (parsed.searchParams.get('nome') || parsed.searchParams.get('loja') || resolvedName).trim();
+      if (!resolvedName || resolvedName.toLowerCase() === 'loja') {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
+          resolvedName = decodeURIComponent(parts[1]);
+        }
+      }
+    } catch {}
+  }
+
+  const cleanSlug = resolvedName
+    ? resolvedName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 18)
+    : 'loja';
+
+  const urlSlug = resolvedName
+    ? resolvedName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 32)
+    : 'loja';
+
+  const hasCompanyInLink = (candidate: string) => {
+    const lower = candidate.toLowerCase();
+    return (
+      lower.includes(cleanSlug.slice(0, 6)) ||
+      lower.includes(urlSlug.slice(0, 6)) ||
+      lower.includes('/loja/')
+    );
+  };
+
   // 0. Primary: Fast server-side proxy (CORS-free, bypasses adblockers and mobile restrictions)
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 5000);
     const apiRes = await fetch('/api/shorten', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: longUrl, storeName }),
+      body: JSON.stringify({ url: longUrl, storeName: resolvedName || storeName }),
       signal: controller.signal
     });
     clearTimeout(timer);
     if (apiRes.ok) {
       const data = await apiRes.json();
-      if (data && typeof data.shortUrl === 'string' && data.shortUrl.startsWith('http')) {
+      if (
+        data &&
+        typeof data.shortUrl === 'string' &&
+        data.shortUrl.startsWith('http') &&
+        !data.shortUrl.includes('da.gd') &&
+        hasCompanyInLink(data.shortUrl)
+      ) {
         return data.shortUrl;
       }
     }
   } catch {
-    // fallback to direct client requests below
+    // fallback below
   }
 
-  const cleanSlug = storeName
-    ? storeName
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .slice(0, 16)
-    : '';
+  // Deterministic 4-char hash of full URL so updated products always get a fresh custom link
+  let h = 0;
+  for (let i = 0; i < longUrl.length; i++) {
+    h = ((h << 5) - h + longUrl.charCodeAt(i)) | 0;
+  }
+  const urlHash = Math.abs(h).toString(36).slice(0, 4).padStart(4, '0');
 
-  // 1. Try is.gd with custom slug (e.g. is.gd/loja_empresa) - preserves all parameters!
+  // 1. Try is.gd directly with custom slug containing company name + catalog hash
   if (cleanSlug) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3500);
-      const customParam = `loja_${cleanSlug}`;
-      const res = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(longUrl)}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (res.ok) {
-        const text = (await res.text()).trim();
-        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-          return text;
+    const customCandidates = [
+      `loja_${cleanSlug.slice(0, 18)}_${urlHash}`,
+      `loja_${cleanSlug.slice(0, 14)}_${urlHash}${Math.floor(Math.random() * 90 + 10)}`
+    ];
+    for (const customParam of customCandidates) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(longUrl)}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const text = (await res.text()).trim();
+          if (
+            (text.startsWith('http://') || text.startsWith('https://')) &&
+            !text.includes('Error') &&
+            !text.includes('da.gd') &&
+            hasCompanyInLink(text)
+          ) {
+            return text;
+          }
         }
-      }
-    } catch {}
-
-    // Try with random suffix if slug is already taken
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3500);
-      const randomSuffix = Math.floor(Math.random() * 900 + 100);
-      const customParam = `loja_${cleanSlug.slice(0, 12)}_${randomSuffix}`;
-      const res = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(longUrl)}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timer);
-      if (res.ok) {
-        const text = (await res.text()).trim();
-        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-          return text;
-        }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
-  // 2. Try is.gd standard short URL (fast, clean, reliable, no warning screens)
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const text = (await res.text()).trim();
-      if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-        return text;
-      }
-    }
-  } catch {}
-
-  // 3. Try TinyURL
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`, {
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    if (res.ok) {
-      const text = (await res.text()).trim();
-      if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-        return text;
-      }
-    }
-  } catch {}
-
-  // Fallback: return official clean store URL
+  // Fallback: ALWAYS return official direct store URL with company name (never nameless random short link)
   let origin = typeof window !== 'undefined' && window.location.origin 
     ? window.location.origin 
     : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
@@ -340,8 +374,5 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     origin = origin.replace('ais-dev-', 'ais-pre-');
   }
 
-  if (cleanSlug) {
-    return `${origin}/loja/${cleanSlug}`;
-  }
-  return longUrl;
+  return `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
 }

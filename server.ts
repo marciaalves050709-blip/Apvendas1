@@ -11,10 +11,18 @@ app.use(express.json({ limit: '15mb' }));
 
 const DB_PATH = path.join(process.cwd(), 'stores_db.json');
 
-// Strict No-Cache middleware for Service Worker, Web Manifest, HTML entry points, and API calls
+// Strict No-Cache & CORS middleware for Service Worker, Web Manifest, HTML entry points, and API calls
 // Prevents Android Chrome and installed PWAs from serving stale service workers or cached stores
 app.use((req, res, next) => {
   const p = req.path.toLowerCase();
+  if (p.startsWith('/api/')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
+  }
   if (
     p === '/sw.js' ||
     p === '/manifest.webmanifest' ||
@@ -56,8 +64,8 @@ app.get('/api/live-sync', (req, res) => {
 
   liveSyncClients.add(res);
 
-  // Send initial connection packet
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  // Send initial connection packet with current server version for installed PWA auto-update detection
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '62', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -228,7 +236,7 @@ app.get('/api/stores/:slug', (req, res) => {
       if (s.company?.id && (s.company.id === rawSlug || s.company.id === slug)) return true;
       if (s.company?.name) {
         const compNorm = normalizeSlug(s.company.name);
-        if (compNorm === slug || (slug && (compNorm.includes(slug) || slug.includes(compNorm)))) return true;
+        if (compNorm === slug) return true;
         if (cleanSlug && cleanSlugAlphanumeric(s.company.name) === cleanSlug) return true;
       }
       return false;
@@ -245,14 +253,15 @@ app.get('/api/stores/:slug', (req, res) => {
       return res.json(allStores[0]);
     }
 
-    // Return empty store object for the requested company slug rather than contaminating with another company's products
+    // Return empty store placeholder for the requested company slug rather than contaminating with another company's products
     res.json({
       slug: slug || rawSlug,
       company: { id: rawSlug, name: rawSlug.replace(/[-_]/g, ' ') },
       products: [],
       paymentSettings: {},
       activeSeller: null,
-      updatedAt: new Date().toISOString()
+      isPlaceholder: true,
+      updatedAt: null
     });
   } catch (err: any) {
     console.error('[StoreDB] Error getting store:', err);
@@ -310,86 +319,100 @@ app.get('/api/stores', (_req, res) => {
   }
 });
 
-// API: Fast, reliable server-side URL shortener (bypasses browser CORS & adblockers)
+// In-memory cache of generated short URLs keyed by exact destination URL
+const shortUrlCache = new Map<string, string>();
+
+// API: Fast, reliable server-side URL shortener (ALWAYS includes company name in slug, never returns nameless links)
 app.post('/api/shorten', async (req, res) => {
   try {
     const { url, storeName } = req.body;
-    if (!url) {
+    if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    const cleanSlug = storeName
-      ? String(storeName)
+    // Check cache first (exact URL match guarantees same products & company)
+    const cached = shortUrlCache.get(url);
+    if (cached) {
+      return res.json({ shortUrl: cached });
+    }
+
+    // Extract store name from body or fallback to ?loja= / ?nome= query param or /loja/:slug pathname
+    let resolvedStoreName = (storeName || '').trim();
+    if (!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') {
+      try {
+        const parsedUrl = new URL(url);
+        resolvedStoreName = (parsedUrl.searchParams.get('nome') || parsedUrl.searchParams.get('loja') || resolvedStoreName).trim();
+        if (!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') {
+          const parts = parsedUrl.pathname.split('/').filter(Boolean);
+          if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
+            resolvedStoreName = decodeURIComponent(parts[1]);
+          }
+        }
+      } catch {}
+    }
+
+    const cleanSlug = resolvedStoreName
+      ? String(resolvedStoreName)
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
           .replace(/^_+|_+$/g, '')
-          .slice(0, 16)
-      : '';
+          .slice(0, 18)
+      : 'loja';
 
-    // 1. Try is.gd with custom slug: loja_${cleanSlug}
+    const urlSlug = resolvedStoreName
+      ? String(resolvedStoreName)
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+          .slice(0, 32)
+      : 'loja';
+
+    // Deterministic 4-char hash of full URL (changes whenever products/company/settings change)
+    let h = 0;
+    for (let i = 0; i < url.length; i++) {
+      h = ((h << 5) - h + url.charCodeAt(i)) | 0;
+    }
+    const urlHash = Math.abs(h).toString(36).slice(0, 4).padStart(4, '0');
+
+    // 1. Try is.gd with custom slug containing company name + catalog hash: loja_${cleanSlug}_${urlHash}
     if (cleanSlug) {
-      try {
-        const customParam = `loja_${cleanSlug}`;
-        const resp = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(url)}`, {
-          signal: AbortSignal.timeout(3500)
-        });
-        if (resp.ok) {
-          const text = (await resp.text()).trim();
-          if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-            return res.json({ shortUrl: text });
-          }
-        }
-      } catch {}
+      const candidateParams = [
+        `loja_${cleanSlug.slice(0, 18)}_${urlHash}`,
+        `loja_${cleanSlug.slice(0, 14)}_${urlHash}${Math.floor(Math.random() * 90 + 10)}`
+      ];
 
-      // 1b. Try is.gd with custom slug + random suffix
-      try {
-        const rand = Math.floor(Math.random() * 900 + 100);
-        const customParam = `loja_${cleanSlug.slice(0, 12)}_${rand}`;
-        const resp = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(url)}`, {
-          signal: AbortSignal.timeout(3500)
-        });
-        if (resp.ok) {
-          const text = (await resp.text()).trim();
-          if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-            return res.json({ shortUrl: text });
+      for (const customParam of candidateParams) {
+        try {
+          const resp = await fetch(`https://is.gd/create.php?format=simple&shorturl=${encodeURIComponent(customParam)}&url=${encodeURIComponent(url)}`, {
+            signal: AbortSignal.timeout(4000)
+          });
+          if (resp.ok) {
+            const text = (await resp.text()).trim();
+            if (
+              (text.startsWith('http://') || text.startsWith('https://')) &&
+              !text.includes('Error') &&
+              (text.includes(cleanSlug.slice(0, 6)) || text.includes('loja_'))
+            ) {
+              shortUrlCache.set(url, text);
+              return res.json({ shortUrl: text });
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
 
-    // 2. Try standard is.gd (reliable, no interstitial phishing warnings)
-    try {
-      const resp = await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`, {
-        signal: AbortSignal.timeout(3500)
-      });
-      if (resp.ok) {
-        const text = (await resp.text()).trim();
-        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-          return res.json({ shortUrl: text });
-        }
-      }
-    } catch {}
-
-    // 3. Try TinyURL
-    try {
-      const resp = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`, {
-        signal: AbortSignal.timeout(3500)
-      });
-      if (resp.ok) {
-        const text = (await resp.text()).trim();
-        if ((text.startsWith('http://') || text.startsWith('https://')) && !text.includes('Error')) {
-          return res.json({ shortUrl: text });
-        }
-      }
-    } catch {}
-
-    // Fallback: return direct official domain short link with company slug
+    // Fallback: ALWAYS return direct official short link with company name (NEVER nameless random link)
     const host = req.get('host') || 'www.apvendas1.com.br';
-    const proto = req.protocol || 'https';
-    const directShort = cleanSlug ? `${proto}://${host}/loja/${cleanSlug}` : url;
-    res.json({ shortUrl: directShort });
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const baseOrigin = url.startsWith('http') ? (() => { try { return new URL(url).origin; } catch { return `${proto}://${host}`; } })() : `${proto}://${host}`;
+    const directShort = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
+    return res.json({ shortUrl: directShort });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
     res.status(500).json({ error: err.message || 'Shorten failed' });
@@ -402,31 +425,30 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '61',
-    versionName: 'v61.0',
+    version: '62',
+    versionName: 'v62.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Link oficial encurtado com nome da empresa (is.gd/loja_empresa e /loja/empresa) sem avisos de phishing',
-      'Compartilhamento WhatsApp e redes sociais com nome da empresa e link direto verificado',
-      'Proteção contra perda de produtos e sincronização direta no servidor',
-      'Sincronização em tempo real (Live Push SSE): produtos e preços atualizam na hora nos apps instalados',
-      'Resolução inteligente de loja para aplicativos abertos direto do ícone da tela inicial',
+      'Link encurtado garantido SEMPRE com o nome da empresa (nunca gera link aleatório sem nome)',
+      'Links de compartilhamento agora carregam todos os produtos atualizados da empresa para novos usuários',
+      'Sincronização automática por empresa em tempo real (Live Push SSE) e entre ambientes',
+      'Proteção contra perda de produtos e isolamento completo entre múltiplas empresas',
       'Cadeado fechado automaticamente ao voltar para a Loja do Cliente'
     ]
   });
 });
 
 // Direct Short URL Redirects:
-// e.g. /loja/maquiagemtop -> /?loja=maquiagemtop
-// e.g. /l/maquiagemtop -> /?loja=maquiagemtop
+// e.g. /loja/maquiagemtop -> /?loja=maquiagemtop&tab=client-store
+// e.g. /l/maquiagemtop -> /?loja=maquiagemtop&tab=client-store
 app.get('/loja/:slug', (req, res) => {
   const slug = encodeURIComponent(req.params.slug);
-  res.redirect(`/?loja=${slug}`);
+  res.redirect(`/?loja=${slug}&tab=client-store`);
 });
 
 app.get('/l/:slug', (req, res) => {
   const slug = encodeURIComponent(req.params.slug);
-  res.redirect(`/?loja=${slug}`);
+  res.redirect(`/?loja=${slug}&tab=client-store`);
 });
 
 // Vite Middleware (Dev) or Static Assets (Prod)

@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '59';
+        var APP_BUILD_VER = '62';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer && storedVer !== APP_BUILD_VER) {
@@ -77,7 +77,7 @@
           overlay.innerHTML = 
             '<div style="width:68px;height:68px;border-radius:22px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:34px;box-shadow:0 12px 30px rgba(16,185,129,0.4);margin-bottom:16px;">⚡</div>' +
             '<h2 style="font-size:20px;font-weight:900;margin:0 0 8px 0;letter-spacing:-0.5px;color:#ffffff;">Atualizando Aplicativo Instalado...</h2>' +
-            '<p style="font-size:13px;color:#94a3b8;margin:0 0 20px 0;max-width:340px;line-height:1.5;">Limpando memória temporária do celular e ativando a Versão 60 com sincronização em tempo real.</p>' +
+            '<p style="font-size:13px;color:#94a3b8;margin:0 0 20px 0;max-width:340px;line-height:1.5;">Limpando memória temporária do celular e ativando a Versão 62 com links da empresa e produtos em tempo real.</p>' +
             '<div style="width:38px;height:38px;border:3px solid #334155;border-top-color:#10b981;border-radius:50%;animation:appSpin 0.7s linear infinite;"></div>' +
             '<style>@keyframes appSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>';
           document.body.appendChild(overlay);
@@ -85,11 +85,12 @@
 
         var performReload = function() {
           try { 
-            localStorage.setItem('appvendas_client_build_ver', '60');
+            localStorage.setItem('appvendas_client_build_ver', '62');
           } catch(e) {}
           try {
             var curUrl = new URL(window.location.href);
-            curUrl.searchParams.set('v', '60');
+            curUrl.searchParams.set('app_ver', '62');
+            curUrl.searchParams.set('atualizado', Date.now().toString());
             window.location.replace(curUrl.toString());
           } catch(e) {
             window.location.reload();

@@ -64,7 +64,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
                   Atualizar Aplicativo
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950 uppercase">
-                  Versão 58
+                  Versão 62
                 </span>
               </div>
               <p className="text-xs text-indigo-200 truncate mt-0.5">
@@ -145,16 +145,26 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
             <div className="flex items-center gap-1.5 text-slate-900 font-black text-[11px] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>O que há de novo na versão 60:</span>
+              <span>O que há de novo na versão 62:</span>
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-[11px]">
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
+                  <strong className="text-slate-900 block font-bold">Links Encurtados Sempre com o Nome da Empresa</strong>
+                  <span className="text-slate-600 leading-relaxed">
+                    Todos os links compartilhados no WhatsApp, redes sociais ou QR Code levam o nome da sua empresa e carregam os produtos atualizados para novos usuários.
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
                   <strong className="text-slate-900 block font-bold">Sincronização em Tempo Real (Live Push SSE)</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    Quando você cadastra, edita ou ajusta preços e estoque, as alterações aparecem na hora nos celulares dos clientes sem eles precisarem recarregar ou desinstalar o app.
+                    Quando você cadastra, edita ou ajusta preços e estoque, as alterações aparecem na hora nos aplicativos instalados dos clientes sem precisar desinstalar.
                   </span>
                 </div>
               </div>
@@ -162,19 +172,9 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
               <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-slate-900 block font-bold">Abertura Direta da Tela Inicial sem Perder a Loja</strong>
+                  <strong className="text-slate-900 block font-bold">Isolamento por Empresa e Cadeado Automático</strong>
                   <span className="text-slate-600 leading-relaxed">
-                    Aplicativos instalados no Android abrem diretamente a loja certa e o catálogo correto com zero pulo de tela.
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-start gap-2 shadow-2xs">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="text-slate-900 block font-bold">Instalação Facilitada para Novos Usuários</strong>
-                  <span className="text-slate-600 leading-relaxed">
-                    Novos clientes e visitantes recebem botão e banner para instalar o aplicativo direto no celular em 1 toque no Android ou iPhone.
+                    Cada empresa mantém seu próprio catálogo separado e o cadeado da Área da Empresa fecha automaticamente ao voltar para a loja do cliente.
                   </span>
                 </div>
               </div>
@@ -223,7 +223,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
         {/* Footer */}
         <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-slate-500 font-medium">
-            Versão do Sistema: <strong>v61 (Novembro/2026)</strong>
+            Versão do Sistema: <strong>v62 (Novembro/2026)</strong>
           </span>
           <button
             type="button"

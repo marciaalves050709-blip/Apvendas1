@@ -13,7 +13,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
   useEffect(() => {
     // 1. Check if user already dismissed banner this session for this specific version
     try {
-      if (sessionStorage.getItem('appvendas_update_banner_dismissed_ver') === '58') {
+      if (sessionStorage.getItem('appvendas_update_banner_dismissed_ver') === '62') {
         setDismissed(true);
       }
     } catch {}
@@ -29,7 +29,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
     // 3. Fallback check: Compare current build ver with stored ver
     try {
       const stored = localStorage.getItem('appvendas_client_build_ver');
-      if (stored && stored !== '58') {
+      if (stored && stored !== '62') {
         setUpdateAvailable(true);
         setDismissed(false);
       }
@@ -51,7 +51,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
     } else {
       try {
         const curUrl = new URL(window.location.href);
-        curUrl.searchParams.set('v', '58');
+        curUrl.searchParams.set('v', '62');
         curUrl.searchParams.set('atualizado', Date.now().toString());
         window.location.replace(curUrl.toString());
       } catch {
@@ -63,7 +63,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
   const handleDismiss = () => {
     setDismissed(true);
     try {
-      sessionStorage.setItem('appvendas_update_banner_dismissed_ver', '58');
+      sessionStorage.setItem('appvendas_update_banner_dismissed_ver', '62');
     } catch {}
   };
 
@@ -79,7 +79,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-xs text-white truncate">
-              Nova Atualização Disponível (v61)
+              Nova Atualização Disponível (v62)
             </span>
             <span className="text-[10px] bg-emerald-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
               Recente
