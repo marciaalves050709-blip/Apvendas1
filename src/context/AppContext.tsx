@@ -376,11 +376,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) 
     : null;
   
-  // Also check pathname (e.g. /loja/minha-empresa)
+  // Also check pathname (e.g. /loja/minha-empresa or /l/minha-empresa)
   let pathLojaName = '';
   if (typeof window !== 'undefined' && window.location.pathname) {
     const parts = window.location.pathname.split('/').filter(Boolean);
-    if (parts[0] === 'loja' && parts[1]) {
+    if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
       pathLojaName = decodeURIComponent(parts[1]);
     }
   }
@@ -396,9 +396,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
 
   const initialUrlHasProducts = Boolean(initialUrlParams?.get('p') || initialUrlParams?.get('pdata'));
-  const initialUrlVersion = Number(initialUrlParams?.get('v')) || (initialUrlHasProducts ? Date.now() : 0);
-  const urlCatalogInfoRef = useRef<{ hasUrlProducts: boolean; urlVersion: number; urlSlug: string }>({
+  const initialUrlHasExplicitVersion = Boolean(initialUrlParams?.get('v'));
+  const initialUrlVersion = Number(initialUrlParams?.get('v')) || 0;
+  const urlCatalogInfoRef = useRef<{ hasUrlProducts: boolean; hasExplicitVersion: boolean; urlVersion: number; urlSlug: string }>({
     hasUrlProducts: initialUrlHasProducts,
+    hasExplicitVersion: initialUrlHasExplicitVersion,
     urlVersion: initialUrlVersion,
     urlSlug: normalizeStoreSlug(rawUrlStore)
   });
@@ -1794,10 +1796,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
 
           if (urlParsedProducts.length > 0) {
-            const urlVer = Number(params.get('v')) || Date.now();
+            const explicitVer = Number(params.get('v')) || 0;
             urlCatalogInfoRef.current = {
               hasUrlProducts: true,
-              urlVersion: urlVer,
+              hasExplicitVersion: Boolean(params.get('v')),
+              urlVersion: explicitVer,
               urlSlug: targetUrlSlug
             };
             setProducts(urlParsedProducts);
@@ -1923,16 +1926,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const urlInfo = urlCatalogInfoRef.current;
 
           if (urlParsedProducts.length > 0) {
-            const isServerStrictlyNewer = serverMs > (urlInfo.urlVersion + 1500);
-            if (isServerStrictlyNewer && Array.isArray(data.products)) {
+            const serverHasProducts = Array.isArray(data.products) && data.products.length > 0;
+            const shouldPreferServer = serverHasProducts && (
+              !urlInfo.hasExplicitVersion ||
+              serverMs >= urlInfo.urlVersion ||
+              data.products.length > urlParsedProducts.length
+            );
+            if (shouldPreferServer) {
               if (data.products.length === 1 && data.products[0]?.name === 'Sal') return;
+              urlCatalogInfoRef.current.hasUrlProducts = false;
               setProducts(data.products);
               const targetCompId = data.company?.id || urlCompId || activeCompanyId;
               try {
                 localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
               } catch {}
-            } else {
-              // URL share link has the freshest catalog — push it to server DB so future visits & /loja/slug stay updated
+            } else if (!serverHasProducts) {
+              // Server store has 0 products — seed it with URL snapshot once
               const compObj: CompanyAccount = data.company?.name ? { ...data.company, name: incomingName || data.company.name } : {
                 id: urlCompId || activeCompanyId || DEFAULT_COMPANY_ID,
                 name: incomingName || currentCompany.name,
@@ -2018,7 +2027,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '64') {
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '65') {
               window.dispatchEvent(new CustomEvent('app-update-available'));
               const reloadGuardKey = `pwa_version_upgraded_${msg.version}`;
               if (!sessionStorage.getItem(reloadGuardKey)) {
@@ -2542,7 +2551,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveCompanyId(newId);
 
     // Update active store slug so background sync tracks the new company (never old store)
-    urlCatalogInfoRef.current = { hasUrlProducts: false, urlVersion: 0, urlSlug: '' };
+    urlCatalogInfoRef.current = { hasUrlProducts: false, hasExplicitVersion: false, urlVersion: 0, urlSlug: '' };
     const newNormSlug = normalizeStoreSlug(newComp.slug || newComp.name);
     if (newNormSlug) {
       try {
@@ -2577,7 +2586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveCompanyId(companyId);
 
     // Update active store slug & clear URL catalog lock when user switches company manually
-    urlCatalogInfoRef.current = { hasUrlProducts: false, urlVersion: 0, urlSlug: '' };
+    urlCatalogInfoRef.current = { hasUrlProducts: false, hasExplicitVersion: false, urlVersion: 0, urlSlug: '' };
     const targetNormSlug = normalizeStoreSlug(target.slug || target.name);
     if (targetNormSlug) {
       try {
@@ -3185,12 +3194,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
         const urlInfo = urlCatalogInfoRef.current;
 
-        // If page opened with ?p= URL products, ignore older server snapshots and only accept strictly newer server updates
-        if (urlInfo.hasUrlProducts && serverMs <= (urlInfo.urlVersion + 1500)) {
-          if (products && products.length > 0 && currentCompany) {
-            syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
-          }
+        const serverHasProducts = Array.isArray(data.products) && data.products.length > 0;
+        // Only hold URL snapshot if URL carried explicit newer ?v= and server has fewer/older items (NEVER overwrite live server from read-only polling)
+        if (urlInfo.hasUrlProducts && urlInfo.hasExplicitVersion && urlInfo.urlVersion > serverMs && (!serverHasProducts || products.length >= data.products.length)) {
           return true;
+        }
+        if (urlInfo.hasUrlProducts) {
+          urlCatalogInfoRef.current.hasUrlProducts = false;
         }
 
         if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja)) {

@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '64', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '65', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -442,14 +442,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '64',
-    versionName: 'v64.0',
+    version: '65',
+    versionName: 'v65.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Links compartilhados no WhatsApp e redes sociais com nome de cada empresa e produtos (v64)',
-      'Pré-visualização social (OpenGraph) dinâmica exibindo nome e produtos da loja',
-      'App instalado atualiza automaticamente e nunca sobrescreve o catálogo do servidor',
-      'Redirecionamento /loja/:slug preserva parâmetros de produtos e configurações'
+      'Rotas /loja/:empresa agora respondem direto com 200 OK sem erro de redirecionamento no app instalado (v65)',
+      'Service Worker atualizado com proteção total contra erros de navegação em links encurtados',
+      'Links compartilhados no WhatsApp e redes sociais com nome de cada empresa, prévia e produtos',
+      'App instalado atualiza automaticamente e nunca sobrescreve o catálogo do servidor'
     ]
   });
 });
@@ -511,35 +511,14 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
   }
 };
 
-// Direct Short URL Redirects preserving any ?p=, ?v=, ?nome= query params:
-// e.g. /loja/maquiagemtop -> /?loja=maquiagemtop&tab=client-store
-app.get('/loja/:slug', (req, res) => {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(req.query)) {
-    if (typeof v === 'string') qs.set(k, v);
-  }
-  qs.set('loja', req.params.slug);
-  if (!qs.has('tab')) qs.set('tab', 'client-store');
-  res.redirect(`/?${qs.toString()}`);
-});
-
-app.get('/l/:slug', (req, res) => {
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(req.query)) {
-    if (typeof v === 'string') qs.set(k, v);
-  }
-  qs.set('loja', req.params.slug);
-  if (!qs.has('tab')) qs.set('tab', 'client-store');
-  res.redirect(`/?${qs.toString()}`);
-});
-
 // Vite Middleware (Dev) or Static Assets (Prod)
+// Both serve 200 OK HTML directly on /, /loja/:slug, and /l/:slug (eliminates SW redirect errors & enables instant social previews)
 if (!isProduction) {
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: 'spa',
   });
-  app.get('/', async (req, res, next) => {
+  app.get(['/', '/loja/:slug', '/l/:slug'], async (req, res, next) => {
     try {
       const indexPath = path.join(process.cwd(), 'index.html');
       const template = fs.readFileSync(indexPath, 'utf-8');
@@ -564,7 +543,7 @@ if (!isProduction) {
       }
     }
   }));
-  app.get('*', (req, res) => {
+  app.get(['/', '/loja/:slug', '/l/:slug', '*'], (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     try {
       const rawHtml = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');

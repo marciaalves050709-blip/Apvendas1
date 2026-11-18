@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 64 (Live Network-First & Instant Auto-Update)
-const CACHE_NAME = 'appvendas-pwa-v64';
+// appvendas Service Worker (PWA) - Version 65 (Live Network-First & Redirect-Safe)
+const CACHE_NAME = 'appvendas-pwa-v65';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -41,11 +41,11 @@ self.addEventListener('activate', (event) => {
     })
     .then(() => self.clients.claim())
     .then(async () => {
-      // Notify all open client windows that the new SW version 64 is active
+      // Notify all open client windows that the new SW version 65 is active
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v64' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v65' });
         }
       } catch (e) {}
     })
@@ -69,9 +69,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // CRITICAL: NEVER intercept /api/ requests in Service Worker!
-  // This ensures Server-Sent Events (/api/live-sync) and live catalog sync connect natively without buffering
-  if (url.pathname.startsWith('/api/')) {
+  // CRITICAL: NEVER intercept /api/, /loja/, or /l/ requests in Service Worker!
+  // Prevents redirect-mode FetchEvent errors (net::ERR_FAILED) and ensures live SSE/store routes hit network directly
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/loja/') || url.pathname.startsWith('/l/')) {
     return;
   }
 
@@ -95,14 +95,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Direct Network-First for ALL requests (HTML, JS, CSS, Data)
-  // For navigate requests, bypass HTTP disk cache by fetching URL with cache: 'no-store' first, falling back safely
-  const networkFetch = event.request.mode === 'navigate'
-    ? fetch(event.request.url, { cache: 'no-store', credentials: 'same-origin' }).catch(() => fetch(event.request))
-    : fetch(event.request);
-
+  // 2. Direct Network-First for ALL requests passing event.request directly (preserves redirect='manual' for navigate)
+  // Server enforces Cache-Control: no-store on HTML, manifest, and sw.js
   event.respondWith(
-    networkFetch.catch(async () => {
+    fetch(event.request).catch(async () => {
       // Offline fallback only when network is unavailable
       if (event.request.mode === 'navigate') {
         return new Response(
