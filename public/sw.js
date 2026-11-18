@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 63 (Live Network-First & Instant Auto-Update)
-const CACHE_NAME = 'appvendas-pwa-v63';
+// appvendas Service Worker (PWA) - Version 64 (Live Network-First & Instant Auto-Update)
+const CACHE_NAME = 'appvendas-pwa-v64';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -41,11 +41,11 @@ self.addEventListener('activate', (event) => {
     })
     .then(() => self.clients.claim())
     .then(async () => {
-      // Notify all open client windows that the new SW version 63 is active
+      // Notify all open client windows that the new SW version 64 is active
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v63' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v64' });
         }
       } catch (e) {}
     })
@@ -96,10 +96,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 2. Direct Network-First for ALL requests (HTML, JS, CSS, Data)
-  // CRITICAL: We pass event.request directly to fetch WITHOUT custom RequestInit options
-  // to avoid TypeError with navigate requests in Chrome/Safari
+  // For navigate requests, bypass HTTP disk cache by fetching URL with cache: 'no-store' first, falling back safely
+  const networkFetch = event.request.mode === 'navigate'
+    ? fetch(event.request.url, { cache: 'no-store', credentials: 'same-origin' }).catch(() => fetch(event.request))
+    : fetch(event.request);
+
   event.respondWith(
-    fetch(event.request).catch(async () => {
+    networkFetch.catch(async () => {
       // Offline fallback only when network is unavailable
       if (event.request.mode === 'navigate') {
         return new Response(

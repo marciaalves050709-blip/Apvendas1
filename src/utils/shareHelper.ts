@@ -88,11 +88,19 @@ export function buildStoreShareUrl(
   }
 
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
+  const pathSlug = rawStoreName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .trim() || 'loja';
   const storeSlug = rawStoreName
     .replace(/\s+/g, '-')
     .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '') || 'loja';
 
-  const url = new URL('/', origin);
+  const url = new URL(`/loja/${encodeURIComponent(pathSlug)}`, origin);
   url.searchParams.set('loja', storeSlug);
   url.searchParams.set('nome', rawStoreName);
   url.searchParams.set('tab', 'client-store');
@@ -219,12 +227,17 @@ export function buildStoreShareMessage(
   company: CompanyAccount,
   shareUrl: string,
   activeSeller?: SellerProfile,
-  paymentSettings?: PaymentSettings
+  paymentSettings?: PaymentSettings,
+  products?: Product[]
 ): string {
   const compName = (company?.name || paymentSettings?.merchantName || 'Nossa Loja').trim();
   const emoji = company?.logoEmoji || '🏪';
   const sellerInfo = activeSeller?.name && activeSeller.name !== 'Atendente' 
     ? `💬 *Atendimento Especial:* ${activeSeller.name}\n` 
+    : '';
+
+  const productPreview = Array.isArray(products) && products.length > 0
+    ? `\n🛍️ *Destaques (${products.length} ${products.length === 1 ? 'item' : 'itens'}):* ${products.slice(0, 4).map(p => p.name).join(', ')}${products.length > 4 ? '...' : ''}\n`
     : '';
 
   // Safety: Guarantee link NEVER contains da.gd and always defaults to clean company link
@@ -235,9 +248,9 @@ export function buildStoreShareMessage(
   return (
 `${emoji} *CATÁLOGO OFICIAL - ${compName.toUpperCase()}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-Olá! Preparamos nosso catálogo digital para você conferir nossos produtos e fazer seus pedidos com facilidade e rapidez pelo WhatsApp!
-
-🛍️ *Clique no link da nossa loja abaixo:*
+Olá! Preparamos nosso catálogo digital para você conferir os produtos da *${compName}* e fazer seus pedidos com facilidade pelo WhatsApp!
+${productPreview}
+🔗 *Acesse nossa loja pelo link:*
 
 ${safeShareUrl}
 

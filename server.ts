@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '63', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '64', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -442,17 +442,74 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '63',
-    versionName: 'v63.0',
+    version: '64',
+    versionName: 'v64.0',
     buildDate: new Date().toISOString(),
     features: [
-      'App instalado não sobrescreve catálogo atualizado e sincroniza automaticamente (v63)',
-      'Link encurtado via POST com nome da empresa e todos os produtos atualizados para novos usuários',
-      'Redirecionamento /loja/:slug preserva parâmetros de produtos e configurações',
-      'Isolamento completo entre múltiplas empresas e fechamento automático do cadeado'
+      'Links compartilhados no WhatsApp e redes sociais com nome de cada empresa e produtos (v64)',
+      'Pré-visualização social (OpenGraph) dinâmica exibindo nome e produtos da loja',
+      'App instalado atualiza automaticamente e nunca sobrescreve o catálogo do servidor',
+      'Redirecionamento /loja/:slug preserva parâmetros de produtos e configurações'
     ]
   });
 });
+
+// Helper to inject company name and products into HTML meta tags for WhatsApp / social previews
+const escapeHtml = (str: string): string =>
+  String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+const injectStoreMeta = (html: string, req: express.Request): string => {
+  try {
+    const rawLoja = typeof req.query.loja === 'string' ? req.query.loja : (typeof req.params?.slug === 'string' ? req.params.slug : '');
+    const rawNome = typeof req.query.nome === 'string' ? req.query.nome : '';
+    const rawP = typeof req.query.p === 'string' ? req.query.p : '';
+    if (!rawLoja && !rawNome) return html;
+
+    const db = readDb();
+    const slug = normalizeSlug(rawLoja || rawNome);
+    const clean = cleanSlugAlphanumeric(rawLoja || rawNome);
+    const dbStore = db[slug] || db[clean] || db[rawLoja];
+
+    const displayName = (rawNome || dbStore?.company?.name || rawLoja.replace(/[-_]/g, ' ')).trim();
+    if (!displayName) return html;
+
+    let itemNames: string[] = [];
+    if (rawP) {
+      itemNames = rawP
+        .split('*')
+        .filter(Boolean)
+        .slice(0, 5)
+        .map(item => {
+          const first = (item.split('_')[0] || '').replace(/\+/g, ' ');
+          try { return decodeURIComponent(first); } catch { return first; }
+        })
+        .filter(Boolean);
+    } else if (Array.isArray(dbStore?.products) && dbStore.products.length > 0) {
+      itemNames = dbStore.products.slice(0, 5).map((p: any) => p.name).filter(Boolean);
+    }
+
+    const totalCount = rawP
+      ? rawP.split('*').filter(Boolean).length
+      : (Array.isArray(dbStore?.products) ? dbStore.products.length : 0);
+
+    const titleText = `${displayName} - Catálogo Oficial & Pedidos`;
+    const descText = itemNames.length > 0
+      ? `Confira ${totalCount} ${totalCount === 1 ? 'produto' : 'produtos'} em ${displayName} (${itemNames.join(', ')}) e faça seu pedido direto pelo WhatsApp!`
+      : `Confira o catálogo digital atualizado da ${displayName} e faça seus pedidos direto pelo WhatsApp!`;
+
+    return html
+      .replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(titleText)}</title>`)
+      .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, `<meta name="description" content="${escapeHtml(descText)}" />`)
+      .replace(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${escapeHtml(titleText)}" />`)
+      .replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:description" content="${escapeHtml(descText)}" />`);
+  } catch {
+    return html;
+  }
+};
 
 // Direct Short URL Redirects preserving any ?p=, ?v=, ?nome= query params:
 // e.g. /loja/maquiagemtop -> /?loja=maquiagemtop&tab=client-store
@@ -482,19 +539,39 @@ if (!isProduction) {
     server: { middlewareMode: true },
     appType: 'spa',
   });
+  app.get('/', async (req, res, next) => {
+    try {
+      const indexPath = path.join(process.cwd(), 'index.html');
+      const template = fs.readFileSync(indexPath, 'utf-8');
+      const transformed = await vite.transformIndexHtml(req.originalUrl, template);
+      const html = injectStoreMeta(transformed, req);
+      res.status(200).set({
+        'Content-Type': 'text/html',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+      }).end(html);
+    } catch (e) {
+      next(e);
+    }
+  });
   app.use(vite.middlewares);
 } else {
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath, {
+    index: false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html') || filePath.endsWith('sw.js')) {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       }
     }
   }));
-  app.get('*', (_req, res) => {
+  app.get('*', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.sendFile(path.join(distPath, 'index.html'));
+    try {
+      const rawHtml = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
+      res.status(200).type('text/html').send(injectStoreMeta(rawHtml, req));
+    } catch {
+      res.sendFile(path.join(distPath, 'index.html'));
+    }
   });
 }
 

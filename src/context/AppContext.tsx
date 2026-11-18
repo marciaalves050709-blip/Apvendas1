@@ -590,15 +590,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }];
     })();
 
-    // If a shared company was accessed via URL (by name, slug, or id), match or register it
+    // If a shared company was accessed via URL (by name, slug, or id), match or register without overwriting another store
     if (rawUrlStore) {
       const targetNormalized = normalizeStoreSlug(rawUrlStore);
+      const urlDisplayNorm = normalizeStoreSlug(urlCompName || rawUrlStore);
+      const isDefaultPlaceholder = (c: CompanyAccount) => c.name === 'Minha Loja' || c.name === 'appvendas';
       const existingIdx = list.findIndex(c => 
-        (urlCompId && c.id === urlCompId) ||
-        c.id === rawUrlStore ||
         normalizeStoreSlug(c.slug) === targetNormalized ||
         normalizeStoreSlug(c.name) === targetNormalized ||
-        (list.length === 1 && !urlCompId && (list[0].name === 'Minha Loja' || list[0].name === 'appvendas'))
+        normalizeStoreSlug(c.name) === urlDisplayNorm ||
+        (urlCompId && c.id === urlCompId && (isDefaultPlaceholder(c) || normalizeStoreSlug(c.name) === urlDisplayNorm)) ||
+        (list.length === 1 && !urlCompId && isDefaultPlaceholder(list[0]))
       );
 
       if (existingIdx >= 0) {
@@ -609,7 +611,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           phone: urlCompZap || list[existingIdx].phone,
         };
       } else {
-        const newId = urlCompId || `empresa_${Date.now()}`;
+        const collidesWithOther = urlCompId && list.some(c => c.id === urlCompId);
+        const newId = (!urlCompId || collidesWithOther)
+          ? `empresa_${targetNormalized || Date.now()}`
+          : urlCompId;
         list.push({
           id: newId,
           name: urlCompName || rawUrlStore.replace(/[-_]/g, ' '),
@@ -630,16 +635,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeCompanyId, setActiveCompanyId] = useState<string>(() => {
     if (rawUrlStore) {
       const targetNormalized = normalizeStoreSlug(rawUrlStore);
+      const urlDisplayNorm = normalizeStoreSlug(initialUrlParams?.get('nome') || rawUrlStore);
       const urlCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa');
+      const isDefaultPlaceholder = (c: CompanyAccount) => c.name === 'Minha Loja' || c.name === 'appvendas';
       const found = companies.find(c => 
-        (urlCompId && c.id === urlCompId) ||
-        c.id === rawUrlStore ||
         normalizeStoreSlug(c.slug) === targetNormalized ||
         normalizeStoreSlug(c.name) === targetNormalized ||
-        (companies.length === 1 && !urlCompId && (companies[0].name === 'Minha Loja' || companies[0].name === 'appvendas'))
+        normalizeStoreSlug(c.name) === urlDisplayNorm ||
+        (urlCompId && c.id === urlCompId && (isDefaultPlaceholder(c) || normalizeStoreSlug(c.name) === urlDisplayNorm)) ||
+        (companies.length === 1 && !urlCompId && isDefaultPlaceholder(companies[0]))
       );
       if (found) return found.id;
-      if (urlCompId) return urlCompId;
+      return `empresa_${targetNormalized || Date.now()}`;
     }
     const directCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa');
     if (directCompId) return directCompId;
@@ -1807,18 +1814,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      if (urlCompId && urlCompId !== activeCompanyId) {
-        setActiveCompanyId(urlCompId);
-        try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, urlCompId); } catch {}
+      const matchingCompany = companies.find(c => {
+        const cNorm = normalizeStoreSlug(c.name);
+        const sNorm = normalizeStoreSlug(c.slug);
+        return (targetUrlSlug && (cNorm === targetUrlSlug || sNorm === targetUrlSlug)) ||
+          (urlCompId && c.id === urlCompId && (c.name === 'Minha Loja' || c.name === 'appvendas' || cNorm === targetUrlSlug));
+      });
+      const resolvedUrlCompId = matchingCompany?.id || (targetUrlSlug ? `empresa_${targetUrlSlug}` : (urlCompId || activeCompanyId));
+
+      if (resolvedUrlCompId && resolvedUrlCompId !== activeCompanyId) {
+        setActiveCompanyId(resolvedUrlCompId);
+        try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, resolvedUrlCompId); } catch {}
+      }
+
+      if (urlParsedProducts.length > 0) {
+        try {
+          localStorage.setItem(getTenantKey('products', resolvedUrlCompId), JSON.stringify(urlParsedProducts));
+          if (resolvedUrlCompId === DEFAULT_COMPANY_ID) {
+            localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(urlParsedProducts));
+          }
+        } catch {}
       }
 
       if (incomingName && incomingName.toLowerCase() !== 'minha loja' && incomingName.toLowerCase() !== 'loja') {
         const targetSlug = normalizeStoreSlug(incomingName) || incomingName.toLowerCase().replace(/\s+/g, '-');
         setCompanies(prev => {
+          const isPlaceholder = (c: CompanyAccount) => c.name === 'Minha Loja' || c.name === 'appvendas';
           const idx = prev.findIndex(c => 
-            (urlCompId && c.id === urlCompId) || 
             normalizeStoreSlug(c.slug) === normalizeStoreSlug(targetSlug) || 
-            normalizeStoreSlug(c.name) === normalizeStoreSlug(incomingName)
+            normalizeStoreSlug(c.name) === normalizeStoreSlug(incomingName) ||
+            (resolvedUrlCompId && c.id === resolvedUrlCompId && (isPlaceholder(c) || normalizeStoreSlug(c.name) === normalizeStoreSlug(incomingName)))
           );
           if (idx >= 0) {
             const updated = [...prev];
@@ -1833,7 +1858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return updated;
           } else {
             const newComp: CompanyAccount = {
-              id: urlCompId || activeCompanyId || `empresa_${Date.now()}`,
+              id: resolvedUrlCompId || `empresa_${Date.now()}`,
               name: incomingName,
               slug: targetSlug,
               ownerName: 'Lojista',
@@ -1993,7 +2018,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '63') {
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '64') {
               window.dispatchEvent(new CustomEvent('app-update-available'));
               const reloadGuardKey = `pwa_version_upgraded_${msg.version}`;
               if (!sessionStorage.getItem(reloadGuardKey)) {
@@ -2327,6 +2352,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setActiveSellerId = (id: string) => {
     const target = sellers.find(s => s.id === id);
     if (target) {
+      hasMerchantMutationRef.current = true;
       setPaymentSettings(prev => ({
         ...prev,
         activeSellerId: id,
@@ -2341,6 +2367,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addSeller = (newSellerData: Omit<SellerProfile, 'id'>): SellerProfile => {
+    hasMerchantMutationRef.current = true;
     const newId = 'vend_' + Date.now().toString(36);
     const newSeller: SellerProfile = {
       ...newSellerData,
@@ -2356,6 +2383,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSeller = (id: string, data: Partial<SellerProfile>) => {
+    hasMerchantMutationRef.current = true;
     const updatedSellers = sellers.map(s => {
       if (s.id === id) {
         return { ...s, ...data };
@@ -2384,6 +2412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('error', 'Não Permitido', 'Deve haver pelo menos um vendedor cadastrado.');
       return false;
     }
+    hasMerchantMutationRef.current = true;
     const filtered = sellers.filter(s => s.id !== id);
     const newActiveId = activeSellerId === id ? filtered[0].id : activeSellerId;
     const newActiveSeller = filtered.find(s => s.id === newActiveId) || filtered[0];

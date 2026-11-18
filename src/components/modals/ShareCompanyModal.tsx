@@ -52,6 +52,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   const {
     companies,
     currentCompany,
+    switchCompany,
     updateCurrentCompany,
     paymentSettings: globalSettings,
     updatePaymentSettings
@@ -63,6 +64,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   const [urlMode, setUrlMode] = useState<'short' | 'store_name'>('short');
   const [shortUrl, setShortUrl] = useState<string>('');
   const [isShortening, setIsShortening] = useState<boolean>(false);
+  const [serverStoreCache, setServerStoreCache] = useState<Record<string, { products: Product[]; paymentSettings?: Partial<PaymentSettings> }>>({});
 
   // Selected company state inside modal so user can switch between companies
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => {
@@ -98,11 +100,44 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       onShowToast('error', 'Nome Inválido', 'Digite o nome da sua empresa.');
       return;
     }
+    if (effectiveCompany?.id && effectiveCompany.id !== currentCompany?.id) {
+      switchCompany(effectiveCompany.id);
+    }
     updateCurrentCompany({ name: clean });
     updatePaymentSettings({ merchantName: clean });
     setIsEditingName(false);
     onShowToast('success', 'Nome da Loja Atualizado!', `O link agora está configurado com "${clean}"`);
   };
+
+  // Fetch server catalog for secondary companies when local storage has no products for that tenant
+  useEffect(() => {
+    if (!isOpen || !effectiveCompany?.id) return;
+    if (effectiveCompany.id === currentCompany?.id) return;
+    const rawSlug = (effectiveCompany.slug || effectiveCompany.name || effectiveCompany.id || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .trim();
+    if (!rawSlug) return;
+
+    fetch(`/api/stores/${encodeURIComponent(rawSlug)}?t=${Date.now()}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data && !data.isPlaceholder && Array.isArray(data.products) && data.products.length > 0) {
+          setServerStoreCache(prev => ({
+            ...prev,
+            [effectiveCompany.id]: {
+              products: data.products,
+              paymentSettings: data.paymentSettings
+            }
+          }));
+        }
+      })
+      .catch(() => {});
+  }, [isOpen, effectiveCompany?.id, effectiveCompany?.slug, effectiveCompany?.name, currentCompany?.id]);
 
   // Dynamically resolve products and payment settings for the target company
   const effectiveProducts = useMemo(() => {
@@ -145,14 +180,19 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       return products || [];
     }
 
+    if (effectiveCompany?.id && serverStoreCache[effectiveCompany.id]?.products?.length) {
+      return serverStoreCache[effectiveCompany.id].products;
+    }
+
     if (companies.length <= 1 && products && products.length > 0) {
       return products;
     }
 
     return [];
-  }, [isOpen, products, effectiveCompany?.id, currentCompany?.id, companies.length]);
+  }, [isOpen, products, effectiveCompany?.id, currentCompany?.id, companies.length, serverStoreCache]);
 
   const effectiveSettings = useMemo(() => {
+    const serverPatch = effectiveCompany?.id ? serverStoreCache[effectiveCompany.id]?.paymentSettings : undefined;
     try {
       if (effectiveCompany?.id) {
         if (effectiveCompany.id === currentCompany?.id && (paymentSettings || globalSettings)) {
@@ -161,17 +201,17 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
         const tenantKey = `tenant_${effectiveCompany.id}_payment_settings`;
         const saved = localStorage.getItem(tenantKey);
         if (saved) {
-          return { ...globalSettings, ...paymentSettings, ...JSON.parse(saved) };
+          return { ...globalSettings, ...paymentSettings, ...serverPatch, ...JSON.parse(saved) };
         }
         const legacyKey = `appvendas_tenant_${effectiveCompany.id}_payment_settings`;
         const legacySaved = localStorage.getItem(legacyKey);
         if (legacySaved) {
-          return { ...globalSettings, ...paymentSettings, ...JSON.parse(legacySaved) };
+          return { ...globalSettings, ...paymentSettings, ...serverPatch, ...JSON.parse(legacySaved) };
         }
       }
     } catch {}
-    return paymentSettings || globalSettings;
-  }, [paymentSettings, globalSettings, effectiveCompany?.id, currentCompany?.id]);
+    return { ...(paymentSettings || globalSettings), ...(serverPatch || {}) };
+  }, [paymentSettings, globalSettings, effectiveCompany?.id, currentCompany?.id, serverStoreCache]);
 
   const effectiveSeller = useMemo(() => {
     if (effectiveSettings?.sellers && effectiveSettings.sellers.length > 0) {
@@ -242,8 +282,8 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   }, [urlMode, shortUrl, shareUrl, cleanUrl, effectiveProducts.length]);
 
   const shareMessage = useMemo(() => {
-    return buildStoreShareMessage(effectiveCompany, activeUrl, effectiveSeller, effectiveSettings);
-  }, [effectiveCompany, activeUrl, effectiveSeller, effectiveSettings]);
+    return buildStoreShareMessage(effectiveCompany, activeUrl, effectiveSeller, effectiveSettings, effectiveProducts);
+  }, [effectiveCompany, activeUrl, effectiveSeller, effectiveSettings, effectiveProducts]);
 
   // Generate QR Code based on active URL
   useEffect(() => {
@@ -275,7 +315,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     if (effectiveCompany && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
     }
-    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings, effectiveProducts);
     const encoded = encodeURIComponent(finalMsg);
     const waUrl = `https://api.whatsapp.com/send?text=${encoded}`;
     try {
@@ -289,8 +329,8 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     onShowToast('success', 'WhatsApp Aberto!', `Catálogo encurtado da loja ${effectiveCompany.name} com ${effectiveProducts.length} produtos pronto para envio.`);
   };
 
-  // 2. Native Mobile Web Share API
-  const handleNativeShare = async () => {
+  // Helper to resolve freshest share URL before launching any social network
+  const resolveFreshShareUrl = async (): Promise<string> => {
     let finalUrl = activeUrl;
     if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
       finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
@@ -301,18 +341,28 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     if (effectiveCompany && effectiveProducts.length > 0) {
       syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
     }
-    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
+    return finalUrl;
+  };
+
+  // 2. Native Mobile Web Share API (Instagram, Facebook, Telegram, Messenger, WhatsApp)
+  const handleNativeShare = async () => {
+    const finalUrl = await resolveFreshShareUrl();
+    const emoji = effectiveCompany?.logoEmoji || '🏪';
+    const compName = effectiveCompany?.name || 'Loja Virtual';
+    const prodHighlight = effectiveProducts.length > 0
+      ? `Confira ${effectiveProducts.length} produtos (${effectiveProducts.slice(0, 3).map(p => p.name).join(', ')}${effectiveProducts.length > 3 ? '...' : ''}) e faça seu pedido pelo WhatsApp:`
+      : `Confira nosso catálogo atualizado e faça seu pedido pelo WhatsApp:`;
 
     const shareData = {
-      title: `${effectiveCompany.name || 'Loja Virtual'} - Catálogo & Pedidos`,
-      text: finalMsg,
+      title: `${compName} - Catálogo Oficial`,
+      text: `${emoji} *${compName.toUpperCase()}*\n${prodHighlight}`,
       url: finalUrl,
     };
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share(shareData);
-        onShowToast('success', 'Compartilhado!', 'Catálogo enviado com sucesso.');
+        onShowToast('success', 'Compartilhado!', `Catálogo de ${compName} enviado com sucesso.`);
         return;
       } catch (err: any) {
         if (err?.name === 'AbortError') return;
@@ -323,18 +373,33 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     handleCopyLink();
   };
 
+  const handleShareTelegram = async () => {
+    const finalUrl = await resolveFreshShareUrl();
+    const compName = effectiveCompany?.name || 'Loja Virtual';
+    const summary = `${effectiveCompany?.logoEmoji || '🏪'} Catálogo Oficial - ${compName} (${effectiveProducts.length} produtos)`;
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(finalUrl)}&text=${encodeURIComponent(summary)}`;
+    try {
+      const win = window.open(tgUrl, '_blank');
+      if (!win) window.location.href = tgUrl;
+    } catch {
+      window.location.href = tgUrl;
+    }
+  };
+
+  const handleShareFacebook = async () => {
+    const finalUrl = await resolveFreshShareUrl();
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(finalUrl)}`;
+    try {
+      const win = window.open(fbUrl, '_blank');
+      if (!win) window.location.href = fbUrl;
+    } catch {
+      window.location.href = fbUrl;
+    }
+  };
+
   // 3. Copy Link with robust clipboard fallback
   const handleCopyLink = async () => {
-    let finalUrl = activeUrl;
-    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
-      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
-    }
-    if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
-    }
-    if (effectiveCompany && effectiveProducts.length > 0) {
-      syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
-    }
+    const finalUrl = await resolveFreshShareUrl();
     const success = await copyTextToClipboard(finalUrl);
     if (success) {
       setCopiedLink(true);
@@ -351,21 +416,12 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   // 4. Copy Full Promotional Message
   const handleCopyMessage = async () => {
-    let finalUrl = activeUrl;
-    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
-      finalUrl = await triggerShorten(shareUrl, effectiveCompany?.name || 'loja');
-    }
-    if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = effectiveProducts.length > 0 ? shareUrl : cleanUrl;
-    }
-    if (effectiveCompany && effectiveProducts.length > 0) {
-      syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => {});
-    }
-    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings);
+    const finalUrl = await resolveFreshShareUrl();
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings, effectiveProducts);
     const success = await copyTextToClipboard(finalMsg);
     if (success) {
       setCopiedMessage(true);
-      onShowToast('success', 'Mensagem Copiada!', 'Texto pronto com link encurtado e todos os produtos para colar no WhatsApp!');
+      onShowToast('success', 'Mensagem Copiada!', 'Texto pronto com link encurtado e todos os produtos para colar no WhatsApp ou redes sociais!');
       setTimeout(() => setCopiedMessage(false), 2500);
     } else {
       onShowToast('info', 'Mensagem Pronta', 'Copie o texto acima.');
@@ -410,27 +466,57 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-slate-800">
 
-          {/* Quick Primary Actions: WhatsApp & Mobile Share */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* 1. Botão Enviar no WhatsApp */}
-            <button
-              type="button"
-              onClick={handleShareToWhatsApp}
-              className="py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <MessageCircle className="w-4 h-4 fill-white" />
-              <span>Divulgar no WhatsApp</span>
-            </button>
+          {/* Quick Primary Actions: WhatsApp & Social Networks */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* 1. Botão Enviar no WhatsApp */}
+              <button
+                type="button"
+                onClick={handleShareToWhatsApp}
+                className="py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4 fill-white" />
+                <span>Divulgar no WhatsApp</span>
+              </button>
 
-            {/* 2. Botão Compartilhar Geral (Celular / Redes) */}
-            <button
-              type="button"
-              onClick={handleNativeShare}
-              className="py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Share2 className="w-4 h-4" />
-              <span>Compartilhar no Celular</span>
-            </button>
+              {/* 2. Botão Compartilhar Geral (Celular / Redes Sociais) */}
+              <button
+                type="button"
+                onClick={handleNativeShare}
+                className="py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Redes Sociais / Celular</span>
+              </button>
+            </div>
+
+            {/* Secondary quick social buttons */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={handleShareTelegram}
+                className="py-2 px-2.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Send className="w-3 h-3 text-sky-600" />
+                <span>Telegram</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleShareFacebook}
+                className="py-2 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Share2 className="w-3 h-3 text-blue-600" />
+                <span>Facebook</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="py-2 px-2.5 bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Copy className="w-3 h-3 text-pink-600" />
+                <span>Instagram / Bio</span>
+              </button>
+            </div>
           </div>
 
           {/* Seletor de Empresa para Compartilhar (Multi-empresa) */}
