@@ -1,39 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, X, Sparkles } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+
+const CLIENT_BUILD_VER = '66';
 
 interface AppUpdateBannerProps {
   onOpenUpdateModal?: () => void;
 }
 
 export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateModal }) => {
+  const { triggerOneClickUpdate } = useApp();
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [availableVersion, setAvailableVersion] = useState<string>(CLIENT_BUILD_VER);
   const [isUpdating, setIsUpdating] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     // 1. Check if user already dismissed banner this session for this specific version
     try {
-      if (sessionStorage.getItem('appvendas_update_banner_dismissed_ver') === '65') {
+      const dismissedVer = sessionStorage.getItem('appvendas_update_banner_dismissed_ver');
+      if (dismissedVer && dismissedVer !== CLIENT_BUILD_VER) {
         setDismissed(true);
       }
     } catch {}
 
-    // 2. Listen to custom event when a new service worker is installed/waiting
-    const handleUpdateAvailable = () => {
-      setUpdateAvailable(true);
-      setDismissed(false);
+    // 2. Listen to custom event ONLY when a genuinely newer version is detected on the server or SW
+    const handleUpdateAvailable = (ev: Event) => {
+      const customEv = ev as CustomEvent<{ version?: string }>;
+      const incomingVer = String(customEv?.detail?.version || '').replace(/^v/i, '').trim();
+      if (!incomingVer || incomingVer !== CLIENT_BUILD_VER) {
+        if (incomingVer) setAvailableVersion(incomingVer);
+        setUpdateAvailable(true);
+        setDismissed(false);
+      }
     };
 
     window.addEventListener('app-update-available', handleUpdateAvailable);
 
-    // 3. Fallback check: Compare current build ver with stored ver
-    try {
-      const stored = localStorage.getItem('appvendas_client_build_ver');
-      if (stored && stored !== '65') {
-        setUpdateAvailable(true);
-        setDismissed(false);
-      }
-    } catch {}
+    // 3. Real-time check against /api/version so installed PWAs detect updates reliably without false positives
+    fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.version) {
+          const serverVer = String(data.version).replace(/^v/i, '').trim();
+          if (serverVer && serverVer !== CLIENT_BUILD_VER) {
+            setAvailableVersion(serverVer);
+            setUpdateAvailable(true);
+            setDismissed(false);
+          }
+        }
+      })
+      .catch(() => {});
 
     return () => {
       window.removeEventListener('app-update-available', handleUpdateAvailable);
@@ -44,26 +61,23 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
     return null;
   }
 
-  const handleUpdateNow = () => {
+  const handleUpdateNow = async () => {
     setIsUpdating(true);
-    if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-      (window as any).__clearAppCacheAndReload();
-    } else {
-      try {
-        const curUrl = new URL(window.location.href);
-        curUrl.searchParams.set('app_ver', '65');
-        curUrl.searchParams.set('atualizado', Date.now().toString());
-        window.location.replace(curUrl.toString());
-      } catch {
-        window.location.reload();
+    try {
+      await triggerOneClickUpdate();
+    } catch {
+      if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+        (window as any).__clearAppCacheAndReload(availableVersion);
       }
+    } finally {
+      setTimeout(() => setIsUpdating(false), 5000);
     }
   };
 
   const handleDismiss = () => {
     setDismissed(true);
     try {
-      sessionStorage.setItem('appvendas_update_banner_dismissed_ver', '65');
+      sessionStorage.setItem('appvendas_update_banner_dismissed_ver', availableVersion);
     } catch {}
   };
 
@@ -79,14 +93,14 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-xs text-white truncate">
-              Nova Atualização Disponível (v65)
+              Nova Atualização Disponível (v{availableVersion})
             </span>
             <span className="text-[10px] bg-emerald-400 text-slate-950 font-black px-1.5 py-0.2 rounded uppercase">
-              Recente
+              Em Tempo Real
             </span>
           </div>
           <p className="text-[10px] text-emerald-100 truncate">
-            Toque para aplicar as melhorias no seu aplicativo instalado
+            Toque para sincronizar e aplicar a versão mais recente no app instalado
           </p>
         </div>
       </div>

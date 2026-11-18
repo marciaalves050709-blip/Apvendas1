@@ -165,13 +165,24 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = '65';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v65';
+const CURRENT_SW_VERSION = '66';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v66';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
   const params = new URLSearchParams(window.location.search);
   const isForcedRefresh = params.has('atualizar') || params.has('limpar_cache') || params.has('novo_app');
+  const justUpdatedParam = params.get('atualizado');
+
+  if (justUpdatedParam || params.has('app_ver')) {
+    try {
+      sessionStorage.setItem('appvendas_just_updated_ver', CURRENT_SW_VERSION);
+      const cleanedUrl = new URL(window.location.href);
+      cleanedUrl.searchParams.delete('atualizado');
+      cleanedUrl.searchParams.delete('app_ver');
+      window.history.replaceState({}, '', cleanedUrl.pathname + (cleanedUrl.search || '') + (cleanedUrl.hash || ''));
+    } catch {}
+  }
 
   // Purge any old cache versions directly on the client
   if ('caches' in window) {
@@ -188,9 +199,9 @@ if (typeof window !== 'undefined') {
   }
 
   let lastVersionCheckMs = 0;
-  const checkServerVersionAndUpgrade = () => {
+  const checkServerVersionAndUpgrade = (force = false) => {
     const now = Date.now();
-    if (now - lastVersionCheckMs < 15000) return;
+    if (!force && now - lastVersionCheckMs < 10000) return;
     lastVersionCheckMs = now;
 
     fetch(`/api/version?t=${now}`, { cache: 'no-store' })
@@ -200,17 +211,14 @@ if (typeof window !== 'undefined') {
           const serverVer = String(data.version).replace(/^v/i, '').trim();
           const clientVer = String(CURRENT_SW_VERSION).replace(/^v/i, '').trim();
           if (serverVer && clientVer && serverVer !== clientVer) {
+            window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: serverVer } }));
             const reloadGuardKey = `pwa_version_upgraded_${serverVer}`;
             if (!sessionStorage.getItem(reloadGuardKey)) {
               sessionStorage.setItem(reloadGuardKey, 'true');
               console.log(`[PWA] Upgrading installed app from v${clientVer} to v${serverVer}...`);
               if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                (window as any).__clearAppCacheAndReload();
-              } else {
-                window.dispatchEvent(new CustomEvent('app-update-available'));
+                (window as any).__clearAppCacheAndReload(serverVer);
               }
-            } else {
-              window.dispatchEvent(new CustomEvent('app-update-available'));
             }
           }
         }
@@ -218,15 +226,18 @@ if (typeof window !== 'undefined') {
       .catch(() => {});
   };
 
-  // Run immediately on boot (works in standalone PWAs, iOS Safari, Android WebView, and Desktop)
-  checkServerVersionAndUpgrade();
+  (window as any).__checkAppUpdateNow = () => checkServerVersionAndUpgrade(true);
+
+  // Run immediately on boot and listen to focus/visibility/online + 15s real-time interval
+  checkServerVersionAndUpgrade(true);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       checkServerVersionAndUpgrade();
     }
   });
-  window.addEventListener('focus', checkServerVersionAndUpgrade);
-  setInterval(checkServerVersionAndUpgrade, 60 * 1000);
+  window.addEventListener('focus', () => checkServerVersionAndUpgrade());
+  window.addEventListener('online', () => checkServerVersionAndUpgrade(true));
+  setInterval(() => checkServerVersionAndUpgrade(), 15 * 1000);
 
   if ('serviceWorker' in navigator) {
     // If forced refresh requested, unregister previous workers first
@@ -249,11 +260,14 @@ if (typeof window !== 'undefined') {
       }
     });
 
-    // Listen for activation messages from the new Service Worker
+    // Listen for activation messages from a newer Service Worker (ignore same version re-registration)
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'SW_ACTIVATED') {
-        console.log('[PWA] New service worker version active:', event.data.version);
-        window.dispatchEvent(new CustomEvent('app-update-available'));
+        const swVer = String(event.data.version || '').replace(/^v/i, '').trim();
+        console.log('[PWA] Service worker active:', event.data.version);
+        if (swVer && swVer !== CURRENT_SW_VERSION) {
+          window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: swVer } }));
+        }
       }
     });
 

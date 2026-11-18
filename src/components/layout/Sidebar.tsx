@@ -54,7 +54,8 @@ export const Sidebar: React.FC = () => {
     activeSeller,
     isCompanyAreaUnlocked,
     lockCompanyArea,
-    openCompanyAreaUnlock
+    openCompanyAreaUnlock,
+    triggerOneClickUpdate
   } = useApp();
 
   const lowStockCount = products.filter(p => p.currentStock <= p.minStock).length;
@@ -448,14 +449,12 @@ export const Sidebar: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                (window as any).__clearAppCacheAndReload();
-              }
+              triggerOneClickUpdate().catch(() => {});
             }}
             className="text-[10px] bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors"
-            title="Versão 65 Oficial - Toque para atualizar o app instalado"
+            title="Versão 66 Oficial - Toque para atualizar o app instalado em 1 clique"
           >
-            v65
+            v66
           </button>
         </div>
       </div>

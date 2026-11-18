@@ -201,11 +201,12 @@ interface AppContextType {
   openShareModal: (company?: CompanyAccount) => void;
   closeShareModal: () => void;
 
-  // App Installed Update Modal
+  // App Installed Update Modal & Real-Time 1-Click Update
   isUpdateModalOpen: boolean;
   setIsUpdateModalOpen: (open: boolean) => void;
   openUpdateModal: () => void;
   closeUpdateModal: () => void;
+  triggerOneClickUpdate: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -405,6 +406,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     urlSlug: normalizeStoreSlug(rawUrlStore)
   });
   const hasMerchantMutationRef = useRef<boolean>(false);
+  const lastSyncedSignatureRef = useRef<string>('');
 
   const COMPANY_RESTRICTED_TABS: ActiveTab[] = [
     'pos',
@@ -1986,23 +1988,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const targetCompId = data.company.id || urlCompId || activeCompanyId;
               const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(data.slug));
               if (idx >= 0) {
+                const merged = { ...prev[idx], ...data.company, name: incomingName || data.company.name };
+                if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
                 const copy = [...prev];
-                copy[idx] = { ...copy[idx], ...data.company, name: incomingName || data.company.name };
+                copy[idx] = merged;
                 return copy;
               }
               return [...prev, { ...data.company, name: incomingName || data.company.name }];
             });
-            if (data.company.id && !urlCompId) {
+            if (data.company.id && !urlCompId && data.company.id !== activeCompanyId) {
               setActiveCompanyId(data.company.id);
               try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
             }
           }
           if (data.paymentSettings) {
-            setPaymentSettings(ps => ({
-              ...ps,
-              ...data.paymentSettings,
-              ...(incomingName ? { merchantName: incomingName } : {})
-            }));
+            setPaymentSettings(ps => {
+              const next = {
+                ...ps,
+                ...data.paymentSettings,
+                ...(incomingName ? { merchantName: incomingName } : {})
+              };
+              return JSON.stringify(ps) === JSON.stringify(next) ? ps : next;
+            });
           }
         })
         .catch(() => {});
@@ -2027,13 +2034,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version) !== '65') {
-              window.dispatchEvent(new CustomEvent('app-update-available'));
-              const reloadGuardKey = `pwa_version_upgraded_${msg.version}`;
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version).replace(/^v/i, '').trim() !== '66') {
+              const nextVer = String(msg.version).replace(/^v/i, '').trim();
+              window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
+              const reloadGuardKey = `pwa_version_upgraded_${nextVer}`;
               if (!sessionStorage.getItem(reloadGuardKey)) {
                 sessionStorage.setItem(reloadGuardKey, 'true');
                 if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                  (window as any).__clearAppCacheAndReload();
+                  (window as any).__clearAppCacheAndReload(nextVer);
                 }
               }
             }
@@ -2072,14 +2080,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   return msg.storeData.products;
                 });
 
-                // Update company details if name changed
+                // Update company details safely without triggering merchant mutation echo
                 if (msg.storeData.company && msg.storeData.company.name) {
-                  updateCurrentCompany(msg.storeData.company);
+                  setCompanies(prev => {
+                    const idx = prev.findIndex(c => c.id === activeCompanyId);
+                    if (idx < 0) return prev;
+                    const merged = { ...prev[idx], ...msg.storeData.company };
+                    if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
+                    const next = [...prev];
+                    next[idx] = merged;
+                    try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
+                    return next;
+                  });
                 }
 
-                // Update payment settings if provided
+                // Update payment settings safely without returning a new object when unchanged
                 if (msg.storeData.paymentSettings) {
-                  setPaymentSettings(prev => ({ ...prev, ...msg.storeData.paymentSettings }));
+                  setPaymentSettings(prev => {
+                    const next = { ...prev, ...msg.storeData.paymentSettings };
+                    return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+                  });
                 }
 
                 // Persist to tenant storage
@@ -2116,6 +2136,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     connectLiveSync();
 
+    (window as any).__closeLiveSync = () => {
+      isDisposed = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (eventSource) {
+        try { eventSource.close(); } catch {}
+        eventSource = null;
+      }
+    };
+
     return () => {
       isDisposed = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
@@ -2145,15 +2174,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const onFocus = () => {
       refreshStoreCatalog();
     };
+    const onOnline = () => {
+      refreshStoreCatalog();
+    };
+
+    // If app just completed a 1-click update, refresh catalog immediately and confirm to user
+    try {
+      const updatedVer = sessionStorage.getItem('appvendas_just_updated_ver');
+      if (updatedVer) {
+        sessionStorage.removeItem('appvendas_just_updated_ver');
+        refreshStoreCatalog().catch(() => {});
+        showToast('success', `✅ Aplicativo Atualizado (v${updatedVer} Oficial)!`, 'Produtos, links e recursos sincronizados em tempo real.');
+      }
+    } catch {}
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
 
     return () => {
       isDisposed = true;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
     };
   }, [currentCompany?.slug, currentCompany?.name, activeCompanyId]);
 
@@ -2345,7 +2389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return found || sellers[0];
   }, [sellers, activeSellerId]);
 
-  // Auto-sync company store to backend ONLY when merchant has unlocked or modified data (never overwrite from stale buyer cache)
+  // Auto-sync company store to backend ONLY when merchant has unlocked/modified data AND payload actually changed
   useEffect(() => {
     if (
       (hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) &&
@@ -2354,6 +2398,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       products &&
       products.length > 0
     ) {
+      const signature = JSON.stringify({
+        companyId: currentCompany.id,
+        companyName: currentCompany.name,
+        paymentSettings,
+        activeSellerId: activeSeller?.id,
+        products
+      });
+      if (signature === lastSyncedSignatureRef.current) return;
+      lastSyncedSignatureRef.current = signature;
       syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
     }
   }, [currentCompany?.name, currentCompany?.id, products, paymentSettings, activeSeller, isCompanyAreaUnlocked, isAdmin, isMasterAdmin]);
@@ -3218,20 +3271,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
           }
           if (data.company && data.company.name && data.company.name !== currentCompany.name && (!currentSlug || normalizeStoreSlug(data.slug) === currentSlug)) {
-            updateCurrentCompany({ name: data.company.name });
+            setCompanies(prev => {
+              const idx = prev.findIndex(c => c.id === activeCompanyId);
+              if (idx < 0) return prev;
+              const merged = { ...prev[idx], name: data.company.name };
+              if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
+              const next = [...prev];
+              next[idx] = merged;
+              return next;
+            });
           }
           if (data.paymentSettings) {
-            setPaymentSettings(ps => ({ ...ps, ...data.paymentSettings }));
+            setPaymentSettings(ps => {
+              const next = { ...ps, ...data.paymentSettings };
+              return JSON.stringify(ps) === JSON.stringify(next) ? ps : next;
+            });
           }
           return true;
-        } else if (products && products.length > 0 && currentCompany) {
-          // If server has 0 products but client has products, persist to server so buyers get them
+        } else if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany) {
+          // If server has 0 products and current device is merchant/admin, persist to server so buyers get them
           syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
           return true;
         }
       }
     } catch {}
     return false;
+  };
+
+  // Real-Time 1-Click Update for Installed PWAs & Browsers:
+  // 1) Syncs merchant changes (if any) and pulls freshest catalog immediately
+  // 2) Resolves newest /api/version, purges SW + CacheStorage + HTTP disk cache, and reloads seamlessly
+  const triggerOneClickUpdate = async (): Promise<void> => {
+    showToast('info', 'Atualizando em Tempo Real...', 'Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v66)...');
+    try {
+      if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany?.name) {
+        await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+      }
+      await refreshStoreCatalog().catch(() => {});
+    } catch {}
+
+    let latestVer = '66';
+    try {
+      const verRes = await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' });
+      if (verRes.ok) {
+        const verJson = await verRes.json();
+        if (verJson?.version) {
+          latestVer = String(verJson.version).replace(/^v/i, '').trim() || '66';
+        }
+      }
+    } catch {}
+
+    if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+      (window as any).__clearAppCacheAndReload(latestVer);
+    } else {
+      try {
+        const curUrl = new URL(window.location.href);
+        curUrl.searchParams.set('app_ver', latestVer);
+        curUrl.searchParams.set('atualizado', Date.now().toString());
+        window.location.replace(curUrl.toString());
+      } catch {
+        window.location.reload();
+      }
+    }
   };
 
   // Customers
@@ -3523,11 +3624,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         shareModalCompany,
         openShareModal,
         closeShareModal,
-        // App Installed Update Modal
+        // App Installed Update Modal & Real-Time 1-Click Update
         isUpdateModalOpen,
         setIsUpdateModalOpen,
         openUpdateModal,
         closeUpdateModal,
+        triggerOneClickUpdate,
       }}
     >
       {children}

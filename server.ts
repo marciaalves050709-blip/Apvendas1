@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '65', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '66', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -145,6 +145,32 @@ app.post('/api/stores/:slug', (req, res) => {
       activeSeller: activeSeller || (existingStore?.activeSeller || null),
       updatedAt: new Date().toISOString()
     };
+
+    const prevPayloadHash = existingStore ? JSON.stringify({
+      company: existingStore.company,
+      paymentSettings: existingStore.paymentSettings,
+      products: existingStore.products,
+      activeSeller: existingStore.activeSeller
+    }) : '';
+
+    const nextPayloadHash = JSON.stringify({
+      company: storeData.company,
+      paymentSettings: storeData.paymentSettings,
+      products: storeData.products,
+      activeSeller: storeData.activeSeller
+    });
+
+    if (prevPayloadHash && prevPayloadHash === nextPayloadHash) {
+      return res.json({
+        success: true,
+        unchanged: true,
+        slug,
+        cleanSlug,
+        productCount: storeData.products.length,
+        clientsNotified: 0,
+        updatedAt: existingStore.updatedAt || storeData.updatedAt
+      });
+    }
 
     // Store under primary slug (e.g. "minha-empresa")
     db[slug] = storeData;
@@ -442,14 +468,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '65',
-    versionName: 'v65.0',
+    version: '66',
+    versionName: 'v66.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Rotas /loja/:empresa agora respondem direto com 200 OK sem erro de redirecionamento no app instalado (v65)',
-      'Service Worker atualizado com proteção total contra erros de navegação em links encurtados',
+      'Atualização em 1 clique corrigida com limpeza real de cache HTTP/SW e sincronização em tempo real (v66)',
+      'Rotas /loja/:empresa respondem direto com 200 OK sem erro de redirecionamento no app instalado',
       'Links compartilhados no WhatsApp e redes sociais com nome de cada empresa, prévia e produtos',
-      'App instalado atualiza automaticamente e nunca sobrescreve o catálogo do servidor'
+      'Sincronização em tempo real automática entre painel da empresa, celular instalado e clientes'
     ]
   });
 });

@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '65';
+        var APP_BUILD_VER = '66';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer && storedVer !== APP_BUILD_VER) {
@@ -64,67 +64,115 @@
         console.log('[PWA] Aplicativo instalado com sucesso');
       });
 
-      // Global cache-busting helper for existing installed apps
-      window.__clearAppCacheAndReload = function() {
+      // Global cache-busting helper for existing installed apps (Real-time 1-Click Update)
+      window.__clearAppCacheAndReload = function(targetVer) {
         if (window.__is_reloading_app) return;
         window.__is_reloading_app = true;
+        var nextVer = (targetVer ? String(targetVer).replace(/^v/i, '').trim() : '') || '66';
+
+        try {
+          if (typeof window.__closeLiveSync === 'function') {
+            window.__closeLiveSync();
+          }
+        } catch(e) {}
+
+        try {
+          // Clear session reload guards so user can always force a real-time update cleanly
+          Object.keys(sessionStorage).forEach(function(k) {
+            if (k.indexOf('pwa_') === 0 || k.indexOf('appvendas_update_banner') === 0) {
+              sessionStorage.removeItem(k);
+            }
+          });
+        } catch(e) {}
 
         try {
           // Render immediate full-screen update overlay for instant visual feedback
+          var existingOverlay = document.getElementById('app-updating-fullscreen-overlay');
+          if (existingOverlay && existingOverlay.parentNode) {
+            existingOverlay.parentNode.removeChild(existingOverlay);
+          }
           var overlay = document.createElement('div');
           overlay.id = 'app-updating-fullscreen-overlay';
-          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);backdrop-filter:blur(8px);z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;text-align:center;padding:24px;box-sizing:border-box;';
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.96);backdrop-filter:blur(8px);z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;text-align:center;padding:24px;box-sizing:border-box;';
           overlay.innerHTML = 
             '<div style="width:68px;height:68px;border-radius:22px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:34px;box-shadow:0 12px 30px rgba(16,185,129,0.4);margin-bottom:16px;">⚡</div>' +
             '<h2 style="font-size:20px;font-weight:900;margin:0 0 8px 0;letter-spacing:-0.5px;color:#ffffff;">Atualizando Aplicativo Instalado...</h2>' +
-            '<p style="font-size:13px;color:#94a3b8;margin:0 0 20px 0;max-width:340px;line-height:1.5;">Limpando memória temporária do celular e ativando a Versão 65 com links das empresas, WhatsApp, redes sociais e produtos em tempo real.</p>' +
+            '<p id="app-update-progress-msg" style="font-size:13px;color:#cbd5e1;margin:0 0 20px 0;max-width:340px;line-height:1.5;">Sincronizando produtos em tempo real, limpando cache e ativando a Versão ' + nextVer + '.</p>' +
             '<div style="width:38px;height:38px;border:3px solid #334155;border-top-color:#10b981;border-radius:50%;animation:appSpin 0.7s linear infinite;"></div>' +
+            '<div id="app-update-manual-fallback" style="display:none;margin-top:18px;">' +
+              '<button type="button" onclick="window.location.href=window.location.pathname+\'?atualizado=\'+Date.now()" style="padding:10px 18px;background:#10b981;color:#022c22;font-weight:900;font-size:12px;border:none;border-radius:10px;cursor:pointer;">Recarregar Agora</button>' +
+            '</div>' +
             '<style>@keyframes appSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>';
           document.body.appendChild(overlay);
+          setTimeout(function() {
+            var fb = document.getElementById('app-update-manual-fallback');
+            if (fb) fb.style.display = 'block';
+          }, 3500);
         } catch(e) {}
 
-        var performReload = function() {
-          try { 
-            localStorage.setItem('appvendas_client_build_ver', '65');
-            sessionStorage.removeItem('pwa_controller_reloaded');
+        var didNavigate = false;
+        var performReload = function(resolvedVer) {
+          if (didNavigate) return;
+          didNavigate = true;
+          var finalVer = resolvedVer || nextVer;
+          try {
+            localStorage.setItem('appvendas_client_build_ver', finalVer);
+            localStorage.setItem('appvendas_last_updated_at', String(Date.now()));
           } catch(e) {}
           try {
             var curUrl = new URL(window.location.href);
-            curUrl.searchParams.set('app_ver', '65');
+            curUrl.searchParams.set('app_ver', finalVer);
             curUrl.searchParams.set('atualizado', Date.now().toString());
-            window.location.replace(curUrl.toString());
+            var finalUrl = curUrl.toString();
+            window.location.replace(finalUrl);
+            setTimeout(function() {
+              try { window.location.href = finalUrl; } catch(err) { window.location.reload(); }
+            }, 1200);
           } catch(e) {
             window.location.reload();
           }
+          setTimeout(function() { window.__is_reloading_app = false; }, 5000);
         };
 
-        var tasks = [];
-        if ('caches' in window) {
-          tasks.push(
-            caches.keys().then(function(keys) {
+        var versionCheckPromise = fetch('/api/version?t=' + Date.now(), { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (data && data.version) {
+              nextVer = String(data.version).replace(/^v/i, '').trim() || nextVer;
+            }
+          })
+          .catch(function() {});
+
+        var cacheClearPromise = ('caches' in window)
+          ? caches.keys().then(function(keys) {
               return Promise.all(keys.map(function(k) { return caches.delete(k); }));
             }).catch(function() {})
-          );
-        }
-        if ('serviceWorker' in navigator) {
-          tasks.push(
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
-              return Promise.all(regs.map(function(r) { 
+          : Promise.resolve();
+
+        var swClearPromise = ('serviceWorker' in navigator)
+          ? navigator.serviceWorker.getRegistrations().then(function(regs) {
+              return Promise.all(regs.map(function(r) {
                 try { r.active && r.active.postMessage({ type: 'SKIP_WAITING' }); } catch(e){}
                 try { r.active && r.active.postMessage({ type: 'PURGE_ALL_CACHES' }); } catch(e){}
-                return r.unregister(); 
+                return r.update().catch(function(){}).then(function() { return r.unregister(); });
               }));
             }).catch(function() {})
-          );
-        }
+          : Promise.resolve();
 
-        var safetyTimer = setTimeout(performReload, 600);
-        Promise.all(tasks).then(function() {
+        var safetyTimer = setTimeout(function() { performReload(nextVer); }, 1800);
+
+        Promise.all([versionCheckPromise, cacheClearPromise, swClearPromise]).then(function() {
+          // Force HTTP disk cache bypass for current route before navigating
+          var reloadUrl = new URL(window.location.href);
+          reloadUrl.searchParams.set('app_ver', nextVer);
+          reloadUrl.searchParams.set('atualizado', Date.now().toString());
+          return fetch(reloadUrl.toString(), { cache: 'reload', credentials: 'same-origin' }).catch(function() {});
+        }).then(function() {
           clearTimeout(safetyTimer);
-          setTimeout(performReload, 200);
+          performReload(nextVer);
         }).catch(function() {
           clearTimeout(safetyTimer);
-          performReload();
+          performReload(nextVer);
         });
       };
 
