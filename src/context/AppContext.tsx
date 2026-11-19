@@ -560,7 +560,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed.map(c => ({
               ...c,
-              name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || !c.name) ? 'Minha Loja' : c.name,
+              name: (c.name === 'MARCIA ALVES' || c.name === 'appvendas' || c.name === 'App vendas' || c.name === 'App Vendas' || !c.name) ? 'Minha Loja' : c.name,
               ownerName: (c.ownerName === 'Marcia Alves' || c.ownerName === 'MARCIA ALVES' || c.ownerName === 'Administrador' || c.ownerName === 'Meu Usuário' || !c.ownerName) ? 'Lojista' : c.ownerName,
               email: c.email === 'marciaalves050709@gmail.com' ? '' : (c.email || '')
             }));
@@ -577,7 +577,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       })();
 
-      const initialName = (legacySettings?.merchantName === 'MARCIA ALVES' || legacySettings?.merchantName === 'appvendas' || !legacySettings?.merchantName)
+      const initialName = (legacySettings?.merchantName === 'MARCIA ALVES' || legacySettings?.merchantName === 'appvendas' || legacySettings?.merchantName === 'App vendas' || legacySettings?.merchantName === 'App Vendas' || !legacySettings?.merchantName)
         ? 'Minha Loja'
         : legacySettings.merchantName;
 
@@ -698,7 +698,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
         const normKey = urlPix || parsed.pixKey || '';
         const normWhatsapp = urlZap || parsed.merchantWhatsapp || '';
-        const normMerchant = urlNome || (parsed.merchantName === 'MARCIA ALVES' || parsed.merchantName === 'appvendas' || !parsed.merchantName
+        const normMerchant = urlNome || (parsed.merchantName === 'MARCIA ALVES' || parsed.merchantName === 'appvendas' || parsed.merchantName === 'App vendas' || parsed.merchantName === 'App Vendas' || !parsed.merchantName
           ? currentCompany.name
           : parsed.merchantName);
 
@@ -706,7 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? parsed.sellers.map((s: SellerProfile) => ({ 
               ...s, 
               name: (s.name === 'Márcia Alves' || s.name === 'Marcia Alves') ? 'Atendente' : s.name,
-              merchantName: (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'Márcia Alves') ? normMerchant : (s.merchantName || normMerchant),
+              merchantName: (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'Márcia Alves' || s.merchantName === 'appvendas' || s.merchantName === 'App vendas' || s.merchantName === 'App Vendas') ? normMerchant : (s.merchantName || normMerchant),
               pixKey: urlPix || s.pixKey || normKey,
               whatsapp: urlZap || s.whatsapp || normWhatsapp,
               merchantCity: sanitizeMerchantCity(s.merchantCity),
@@ -1983,12 +1983,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
 
-          if (data.company && data.company.name && !data.isPlaceholder) {
+          const isDefaultName = (n?: string) => !n || n === 'Minha Loja' || n === 'Minha Empresa' || n === 'appvendas' || n === 'App vendas' || n === 'App Vendas';
+          const incomingMatchesCurrent = Boolean(targetUrlSlug || urlCompId) || !currentActiveSlug || normalizeStoreSlug(data.slug || data.company?.name) === currentActiveSlug;
+
+          if (data.company && data.company.name && !data.isPlaceholder && incomingMatchesCurrent) {
             setCompanies(prev => {
               const targetCompId = data.company.id || urlCompId || activeCompanyId;
               const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(data.slug));
               if (idx >= 0) {
-                const merged = { ...prev[idx], ...data.company, name: incomingName || data.company.name };
+                const keepExistingName = !incomingName && !targetUrlSlug && !isDefaultName(prev[idx].name) && normalizeStoreSlug(prev[idx].name) !== normalizeStoreSlug(data.company.name);
+                const merged = {
+                  ...prev[idx],
+                  ...data.company,
+                  name: incomingName || (keepExistingName ? prev[idx].name : data.company.name),
+                  slug: keepExistingName ? prev[idx].slug : (data.company.slug || prev[idx].slug)
+                };
                 if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
                 const copy = [...prev];
                 copy[idx] = merged;
@@ -1996,17 +2005,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
               return [...prev, { ...data.company, name: incomingName || data.company.name }];
             });
-            if (data.company.id && !urlCompId && data.company.id !== activeCompanyId) {
+            if (data.company.id && !urlCompId && data.company.id !== activeCompanyId && !currentActiveSlug) {
               setActiveCompanyId(data.company.id);
               try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
             }
           }
-          if (data.paymentSettings) {
+          if (data.paymentSettings && incomingMatchesCurrent) {
             setPaymentSettings(ps => {
+              const rawSellerList = Array.isArray(data.paymentSettings.sellers)
+                ? data.paymentSettings.sellers.map((s: SellerProfile) => ({
+                    ...s,
+                    merchantName: isDefaultName(s.merchantName) ? (incomingName || data.company?.name || ps.merchantName) : s.merchantName
+                  }))
+                : ps.sellers;
+              const resolvedMerchant = incomingName || (isDefaultName(data.paymentSettings.merchantName) ? ps.merchantName : data.paymentSettings.merchantName);
               const next = {
                 ...ps,
                 ...data.paymentSettings,
-                ...(incomingName ? { merchantName: incomingName } : {})
+                merchantName: resolvedMerchant,
+                sellers: rawSellerList
               };
               return JSON.stringify(ps) === JSON.stringify(next) ? ps : next;
             });
@@ -2051,6 +2068,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const updatedCompId = msg.companyId;
 
               // Check if this update matches our current store / company
+              const activeNameIsPlaceholder = !currentCompany?.name || ['minha loja', 'minha empresa', 'appvendas', 'app vendas'].includes(currentCompany.name.trim().toLowerCase());
               const activeTargetSlug = normalizeStoreSlug(
                 currentCompany?.slug || 
                 currentCompany?.name || 
@@ -2064,7 +2082,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 activeTargetSlug === 'latest' ||
                 activeTargetSlug === updatedSlug ||
                 activeTargetClean === updatedCleanSlug ||
-                (updatedCompId && updatedCompId === activeCompanyId) ||
+                (activeNameIsPlaceholder && updatedCompId && updatedCompId === activeCompanyId) ||
                 (currentCompany?.name && normalizeStoreSlug(currentCompany.name) === updatedSlug);
 
               if (isMatch && Array.isArray(msg.storeData.products)) {
@@ -2080,12 +2098,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   return msg.storeData.products;
                 });
 
-                // Update company details safely without triggering merchant mutation echo
+                // Update company details safely without overwriting a non-placeholder custom company name
                 if (msg.storeData.company && msg.storeData.company.name) {
                   setCompanies(prev => {
                     const idx = prev.findIndex(c => c.id === activeCompanyId);
                     if (idx < 0) return prev;
-                    const merged = { ...prev[idx], ...msg.storeData.company };
+                    const existingIsPlaceholder = !prev[idx].name || ['minha loja', 'minha empresa', 'appvendas', 'app vendas'].includes(prev[idx].name.trim().toLowerCase());
+                    const sameSlug = normalizeStoreSlug(prev[idx].name) === updatedSlug || cleanSlugAlphanumeric(prev[idx].name) === updatedCleanSlug;
+                    const merged = {
+                      ...prev[idx],
+                      ...msg.storeData.company,
+                      name: (existingIsPlaceholder || sameSlug) ? msg.storeData.company.name : prev[idx].name,
+                      slug: (existingIsPlaceholder || sameSlug) ? (msg.storeData.company.slug || prev[idx].slug) : prev[idx].slug
+                    };
                     if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
                     const next = [...prev];
                     next[idx] = merged;
@@ -2097,7 +2122,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 // Update payment settings safely without returning a new object when unchanged
                 if (msg.storeData.paymentSettings) {
                   setPaymentSettings(prev => {
-                    const next = { ...prev, ...msg.storeData.paymentSettings };
+                    const nextMerchant = ['appvendas', 'app vendas'].includes((msg.storeData.paymentSettings.merchantName || '').trim().toLowerCase())
+                      ? prev.merchantName
+                      : (activeNameIsPlaceholder || normalizeStoreSlug(currentCompany?.name) === updatedSlug ? (msg.storeData.paymentSettings.merchantName || prev.merchantName) : prev.merchantName);
+                    const nextSellers = Array.isArray(msg.storeData.paymentSettings.sellers)
+                      ? msg.storeData.paymentSettings.sellers.map((s: SellerProfile) => ({
+                          ...s,
+                          merchantName: ['appvendas', 'app vendas'].includes((s.merchantName || '').trim().toLowerCase()) ? nextMerchant : s.merchantName
+                        }))
+                      : prev.sellers;
+                    const next = { ...prev, ...msg.storeData.paymentSettings, merchantName: nextMerchant, sellers: nextSellers };
                     return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
                   });
                 }
@@ -2346,7 +2380,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const next = prev.map(c => c.id === activeCompanyId ? {
           ...c,
           name: cleanName,
-          slug: cleanName.toLowerCase().replace(/\s+/g, '-')
+          slug: normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-')
         } : c);
         try {
           localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
@@ -2499,7 +2533,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!trimmed) return;
     hasMerchantMutationRef.current = true;
     setCompanies(prev => {
-      const next = prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: trimmed.toLowerCase().replace(/\s+/g, '-') } : c);
+      const next = prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: normalizeStoreSlug(trimmed) || trimmed.toLowerCase().replace(/\s+/g, '-') } : c);
       try {
         localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
       } catch {}
@@ -2533,7 +2567,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (data.name) {
             const cleanName = data.name.trim();
             updated.name = cleanName;
-            updated.slug = cleanName.toLowerCase().replace(/\s+/g, '-');
+            updated.slug = normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-');
           }
           return updated;
         }
@@ -2575,7 +2609,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newComp: CompanyAccount = {
       id: newId,
       name: companyData.name.trim(),
-      slug: companyData.name.trim().toLowerCase().replace(/\s+/g, '-'),
+      slug: normalizeStoreSlug(companyData.name.trim()) || companyData.name.trim().toLowerCase().replace(/\s+/g, '-'),
       ownerName: companyData.ownerName?.trim() || 'Usuário',
       phone: companyData.phone?.trim() || '',
       category: companyData.category || 'Comércio & Varejo',
@@ -3281,9 +3315,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               return next;
             });
           }
-          if (data.paymentSettings) {
+          if (data.paymentSettings && (!currentSlug || normalizeStoreSlug(data.slug) === currentSlug)) {
             setPaymentSettings(ps => {
-              const next = { ...ps, ...data.paymentSettings };
+              const incomingMerchant = ['appvendas', 'app vendas'].includes((data.paymentSettings.merchantName || '').trim().toLowerCase())
+                ? (currentCompany?.name || ps.merchantName)
+                : (data.paymentSettings.merchantName || ps.merchantName);
+              const nextSellers = Array.isArray(data.paymentSettings.sellers)
+                ? data.paymentSettings.sellers.map((s: SellerProfile) => ({
+                    ...s,
+                    merchantName: ['appvendas', 'app vendas'].includes((s.merchantName || '').trim().toLowerCase()) ? incomingMerchant : s.merchantName
+                  }))
+                : ps.sellers;
+              const next = { ...ps, ...data.paymentSettings, merchantName: incomingMerchant, sellers: nextSellers };
               return JSON.stringify(ps) === JSON.stringify(next) ? ps : next;
             });
           }

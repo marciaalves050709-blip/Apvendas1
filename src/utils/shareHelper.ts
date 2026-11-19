@@ -293,7 +293,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
         .replace(/[^a-z0-9]/g, '_')
         .replace(/_+/g, '_')
         .replace(/^_+|_+$/g, '')
-        .slice(0, 18)
+        .slice(0, 30)
     : 'loja';
 
   const urlSlug = resolvedName
@@ -304,15 +304,23 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
         .replace(/[^a-z0-9]/g, '-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
-        .slice(0, 32)
+        .slice(0, 48)
     : 'loja';
+
+  let origin = typeof window !== 'undefined' && window.location.origin 
+    ? window.location.origin 
+    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
+  const cleanDestination = `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
 
   const hasCompanyInLink = (candidate: string) => {
     const lower = candidate.toLowerCase();
     return (
-      lower.includes(cleanSlug.slice(0, 6)) ||
-      lower.includes(urlSlug.slice(0, 6)) ||
-      lower.includes('/loja/')
+      lower.includes(cleanSlug) ||
+      lower.includes(urlSlug) ||
+      lower.includes(`/loja/${urlSlug}`)
     );
   };
 
@@ -323,7 +331,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     const apiRes = await fetch('/api/shorten', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: longUrl, storeName: resolvedName || storeName }),
+      body: JSON.stringify({ url: cleanDestination, storeName: resolvedName || storeName }),
       signal: controller.signal
     });
     clearTimeout(timer);
@@ -343,63 +351,6 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     // fallback below
   }
 
-  // Deterministic 4-char hash of full URL so updated products always get a fresh custom link
-  let h = 0;
-  for (let i = 0; i < longUrl.length; i++) {
-    h = ((h << 5) - h + longUrl.charCodeAt(i)) | 0;
-  }
-  const urlHash = Math.abs(h).toString(36).slice(0, 4).padStart(4, '0');
-
-  // 1. Try is.gd directly via POST with custom slug containing company name + catalog hash
-  if (cleanSlug) {
-    const customCandidates = [
-      `loja_${cleanSlug.slice(0, 18)}_${urlHash}`,
-      `loja_${cleanSlug.slice(0, 14)}_${urlHash}${Math.floor(Math.random() * 90 + 10)}`
-    ];
-    for (const customParam of customCandidates) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch('https://is.gd/create.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            format: 'simple',
-            shorturl: customParam,
-            url: longUrl
-          }).toString(),
-          signal: controller.signal
-        });
-        clearTimeout(timer);
-        if (res.ok) {
-          const text = (await res.text()).trim();
-          if (
-            (text.startsWith('http://') || text.startsWith('https://')) &&
-            !text.includes('Error') &&
-            !text.includes('da.gd') &&
-            hasCompanyInLink(text)
-          ) {
-            return text;
-          }
-        }
-      } catch {}
-    }
-  }
-
-  // Fallback: ALWAYS return official direct store URL with company name AND preserve ?p= products if present
-  let origin = typeof window !== 'undefined' && window.location.origin 
-    ? window.location.origin 
-    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
-  if (origin.includes('ais-dev-')) {
-    origin = origin.replace('ais-dev-', 'ais-pre-');
-  }
-  let extraSearch = '';
-  try {
-    const parsedLong = new URL(longUrl);
-    if (parsedLong.searchParams.has('p')) {
-      extraSearch = parsedLong.search;
-    }
-  } catch {}
-
-  return `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${extraSearch}`;
+  // Fallback: ALWAYS return official direct store URL with exact company name
+  return cleanDestination;
 }

@@ -350,7 +350,7 @@ app.get('/api/stores', (_req, res) => {
 // In-memory cache of generated short URLs keyed by exact destination URL
 const shortUrlCache = new Map<string, string>();
 
-// API: Fast, reliable server-side URL shortener (ALWAYS includes company name in slug, never returns nameless links)
+// API: Fast, reliable server-side URL shortener (ALWAYS preserves exact company name in slug, never changes name)
 app.post('/api/shorten', async (req, res) => {
   try {
     const { url, storeName } = req.body;
@@ -358,13 +358,13 @@ app.post('/api/shorten', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Check cache first (exact URL match guarantees same products & company)
+    // Check cache first (exact URL match guarantees same target)
     const cached = shortUrlCache.get(url);
     if (cached) {
       return res.json({ shortUrl: cached });
     }
 
-    // Extract store name from body or fallback to ?loja= / ?nome= query param or /loja/:slug pathname
+    // Extract store name from body or fallback to ?nome= / ?loja= query param or /loja/:slug pathname
     let resolvedStoreName = (storeName || '').trim();
     if (!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') {
       try {
@@ -387,7 +387,7 @@ app.post('/api/shorten', async (req, res) => {
           .replace(/[^a-z0-9]/g, '_')
           .replace(/_+/g, '_')
           .replace(/^_+|_+$/g, '')
-          .slice(0, 18)
+          .slice(0, 30)
       : 'loja';
 
     const urlSlug = resolvedStoreName
@@ -398,22 +398,30 @@ app.post('/api/shorten', async (req, res) => {
           .replace(/[^a-z0-9]/g, '-')
           .replace(/-+/g, '-')
           .replace(/^-|-$/g, '')
-          .slice(0, 32)
+          .slice(0, 48)
       : 'loja';
 
-    // Deterministic 4-char hash of full URL (changes whenever products/company/settings change)
-    let h = 0;
-    for (let i = 0; i < url.length; i++) {
-      h = ((h << 5) - h + url.charCodeAt(i)) | 0;
-    }
-    const urlHash = Math.abs(h).toString(36).slice(0, 4).padStart(4, '0');
+    // Build canonical clean store destination so short link stays permanently synced with live store catalog
+    const host = req.get('host') || 'www.apvendas1.com.br';
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+    let baseOrigin = `${proto}://${host}`;
+    let destinationUrl = url;
+    try {
+      const parsedDest = new URL(url);
+      baseOrigin = parsedDest.origin;
+      destinationUrl = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || 'loja')}`;
+    } catch {}
 
-    // 1. Try is.gd via POST with custom slug containing company name + catalog hash: loja_${cleanSlug}_${urlHash}
-    if (cleanSlug) {
+    const isLocalOrigin = destinationUrl.includes('localhost') || destinationUrl.includes('127.0.0.1');
+
+    // 1. Try is.gd ONLY with clean company-named slugs (never append random codes/hashes that alter the name)
+    if (!isLocalOrigin && cleanSlug && cleanSlug !== 'loja') {
       const candidateParams = [
-        `loja_${cleanSlug.slice(0, 18)}_${urlHash}`,
-        `loja_${cleanSlug.slice(0, 14)}_${urlHash}${Math.floor(Math.random() * 90 + 10)}`
-      ];
+        cleanSlug,
+        `loja_${cleanSlug}`,
+        `${cleanSlug}_loja`,
+        `catalogo_${cleanSlug}`
+      ].filter((slug, idx, arr) => slug.length >= 3 && slug.length <= 30 && arr.indexOf(slug) === idx);
 
       for (const customParam of candidateParams) {
         try {
@@ -423,38 +431,42 @@ app.post('/api/shorten', async (req, res) => {
             body: new URLSearchParams({
               format: 'simple',
               shorturl: customParam,
-              url
+              url: destinationUrl
             }).toString(),
-            signal: AbortSignal.timeout(4500)
+            signal: AbortSignal.timeout(4000)
           });
           if (resp.ok) {
             const text = (await resp.text()).trim();
             if (
               (text.startsWith('http://') || text.startsWith('https://')) &&
               !text.includes('Error') &&
-              (text.includes(cleanSlug.slice(0, 6)) || text.includes('loja_'))
+              text.toLowerCase().includes(cleanSlug)
             ) {
               shortUrlCache.set(url, text);
               return res.json({ shortUrl: text });
             }
+          } else if (resp.status === 406 || resp.status === 400) {
+            // If slug already exists on is.gd, check if it ALREADY points to our exact clean destinationUrl
+            try {
+              const checkRes = await fetch(`https://is.gd/${customParam}`, {
+                method: 'HEAD',
+                redirect: 'manual',
+                signal: AbortSignal.timeout(2500)
+              });
+              const loc = checkRes.headers.get('location') || '';
+              if (loc === destinationUrl) {
+                const reusable = `https://is.gd/${customParam}`;
+                shortUrlCache.set(url, reusable);
+                return res.json({ shortUrl: reusable });
+              }
+            } catch {}
           }
         } catch {}
       }
     }
 
-    // Fallback: ALWAYS return direct official short link with company name AND preserve ?p= products if present
-    const host = req.get('host') || 'www.apvendas1.com.br';
-    const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
-    let baseOrigin = `${proto}://${host}`;
-    let extraSearch = '';
-    try {
-      const parsedDest = new URL(url);
-      baseOrigin = parsedDest.origin;
-      if (parsedDest.searchParams.has('p')) {
-        extraSearch = parsedDest.search;
-      }
-    } catch {}
-    const directShort = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${extraSearch}`;
+    // Fallback: ALWAYS return direct official store link with exact company name
+    const directShort = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
     return res.json({ shortUrl: directShort });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
