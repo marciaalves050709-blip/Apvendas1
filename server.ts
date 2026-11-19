@@ -347,21 +347,24 @@ app.get('/api/stores', (_req, res) => {
   }
 });
 
-// In-memory cache of generated short URLs keyed by exact destination URL
+// In-memory cache of generated short URLs keyed by exact destination URL (including ?p= and ?v=)
 const shortUrlCache = new Map<string, string>();
 
-// API: Fast, reliable server-side URL shortener (ALWAYS preserves exact company name in slug, never changes name)
+const computeShortHash = (input: string): string => {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0).toString(36) + '0000').slice(0, 4);
+};
+
+// API: Fast, reliable server-side URL shortener (preserves exact company name in slug AND full product payload in destination)
 app.post('/api/shorten', async (req, res) => {
   try {
     const { url, storeName } = req.body;
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'URL is required' });
-    }
-
-    // Check cache first (exact URL match guarantees same target)
-    const cached = shortUrlCache.get(url);
-    if (cached) {
-      return res.json({ shortUrl: cached });
     }
 
     // Extract store name from body or fallback to ?nome= / ?loja= query param or /loja/:slug pathname
@@ -401,7 +404,7 @@ app.post('/api/shorten', async (req, res) => {
           .slice(0, 48)
       : 'loja';
 
-    // Build canonical clean store destination so short link stays permanently synced with live store catalog
+    // Preserve full destination URL (including ?loja=...&nome=...&v=...&p=...) so products always travel in the link
     const host = req.get('host') || 'www.apvendas1.com.br';
     const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
     let baseOrigin = `${proto}://${host}`;
@@ -409,20 +412,33 @@ app.post('/api/shorten', async (req, res) => {
     try {
       const parsedDest = new URL(url);
       baseOrigin = parsedDest.origin;
-      destinationUrl = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || 'loja')}`;
+      if (baseOrigin.includes('ais-dev-')) {
+        baseOrigin = baseOrigin.replace('ais-dev-', 'ais-pre-');
+      }
+      const normalizedDest = new URL(`/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${parsedDest.search}`, baseOrigin);
+      destinationUrl = normalizedDest.toString();
     } catch {}
+
+    // Check cache keyed by exact full destinationUrl (cache hits only when products & settings match identically)
+    const cached = shortUrlCache.get(destinationUrl);
+    if (cached) {
+      return res.json({ shortUrl: cached });
+    }
 
     const isLocalOrigin = destinationUrl.includes('localhost') || destinationUrl.includes('127.0.0.1');
 
-    // 1. Try is.gd ONLY with clean company-named slugs (never append random codes/hashes that alter the name)
+    // 1. Create/reuse company-named is.gd link tied deterministically to this catalog payload hash
     if (!isLocalOrigin && cleanSlug && cleanSlug !== 'loja') {
+      const urlHash = computeShortHash(destinationUrl);
+      const rand2 = Math.floor(10 + Math.random() * 89).toString();
+      const basePrefix = cleanSlug.slice(0, 24) || 'loja';
       const candidateParams = [
-        cleanSlug,
-        `loja_${cleanSlug}`,
-        `${cleanSlug}_loja`,
-        `catalogo_${cleanSlug}`
-      ].filter((slug, idx, arr) => slug.length >= 3 && slug.length <= 30 && arr.indexOf(slug) === idx);
+        `${basePrefix}_${urlHash}`,
+        `loja_${cleanSlug.slice(0, 19)}_${urlHash}`,
+        `${cleanSlug.slice(0, 21)}_${urlHash}${rand2}`
+      ].filter((slug, idx, arr) => slug.length >= 5 && slug.length <= 30 && arr.indexOf(slug) === idx);
 
+      const expectedCheck = cleanSlug.slice(0, 20);
       for (const customParam of candidateParams) {
         try {
           const resp = await fetch('https://is.gd/create.php', {
@@ -433,20 +449,20 @@ app.post('/api/shorten', async (req, res) => {
               shorturl: customParam,
               url: destinationUrl
             }).toString(),
-            signal: AbortSignal.timeout(4000)
+            signal: AbortSignal.timeout(4500)
           });
           if (resp.ok) {
             const text = (await resp.text()).trim();
             if (
               (text.startsWith('http://') || text.startsWith('https://')) &&
               !text.includes('Error') &&
-              text.toLowerCase().includes(cleanSlug)
+              text.toLowerCase().includes(expectedCheck)
             ) {
-              shortUrlCache.set(url, text);
+              shortUrlCache.set(destinationUrl, text);
               return res.json({ shortUrl: text });
             }
           } else if (resp.status === 406 || resp.status === 400) {
-            // If slug already exists on is.gd, check if it ALREADY points to our exact clean destinationUrl
+            // If slug already exists on is.gd, verify it redirects to this EXACT destinationUrl before reusing
             try {
               const checkRes = await fetch(`https://is.gd/${customParam}`, {
                 method: 'HEAD',
@@ -456,7 +472,7 @@ app.post('/api/shorten', async (req, res) => {
               const loc = checkRes.headers.get('location') || '';
               if (loc === destinationUrl) {
                 const reusable = `https://is.gd/${customParam}`;
-                shortUrlCache.set(url, reusable);
+                shortUrlCache.set(destinationUrl, reusable);
                 return res.json({ shortUrl: reusable });
               }
             } catch {}
@@ -465,9 +481,8 @@ app.post('/api/shorten', async (req, res) => {
       }
     }
 
-    // Fallback: ALWAYS return direct official store link with exact company name
-    const directShort = `${baseOrigin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
-    return res.json({ shortUrl: directShort });
+    // Fallback: ALWAYS return direct official store link with exact company name AND updated products
+    return res.json({ shortUrl: destinationUrl });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
     res.status(500).json({ error: err.message || 'Shorten failed' });

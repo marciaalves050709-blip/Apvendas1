@@ -1931,8 +1931,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const serverHasProducts = Array.isArray(data.products) && data.products.length > 0;
             const shouldPreferServer = serverHasProducts && (
               !urlInfo.hasExplicitVersion ||
-              serverMs >= urlInfo.urlVersion ||
-              data.products.length > urlParsedProducts.length
+              serverMs >= urlInfo.urlVersion
             );
             if (shouldPreferServer) {
               if (data.products.length === 1 && data.products[0]?.name === 'Sal') return;
@@ -3150,7 +3149,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prod = products.find(p => p.id === id);
     if (!prod) return;
     hasMerchantMutationRef.current = true;
-    const nextProducts = products.filter(p => p.id !== id);
+    const nowIso = new Date().toISOString();
+    const nextProducts = products
+      .filter(p => p.id !== id)
+      .map((p, idx) => (idx === 0 ? { ...p, updatedAt: nowIso } : p));
     setProducts(nextProducts);
     setCart(prev => prev.filter(item => item.product.id !== id));
     try {
@@ -3281,9 +3283,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
         const urlInfo = urlCatalogInfoRef.current;
 
-        const serverHasProducts = Array.isArray(data.products) && data.products.length > 0;
-        // Only hold URL snapshot if URL carried explicit newer ?v= and server has fewer/older items (NEVER overwrite live server from read-only polling)
-        if (urlInfo.hasUrlProducts && urlInfo.hasExplicitVersion && urlInfo.urlVersion > serverMs && (!serverHasProducts || products.length >= data.products.length)) {
+        // Only hold URL snapshot if URL carried explicit newer ?v= (NEVER overwrite live server from read-only polling)
+        if (urlInfo.hasUrlProducts && urlInfo.hasExplicitVersion && urlInfo.urlVersion > serverMs) {
           return true;
         }
         if (urlInfo.hasUrlProducts) {

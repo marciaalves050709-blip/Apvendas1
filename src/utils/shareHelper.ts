@@ -126,13 +126,21 @@ export function buildStoreShareUrl(
   // Format: Name_Price_Stock_Unit_Category_WholesalePrice_WholesaleQty joined by '*'
   if (products && products.length > 0) {
     try {
-      const catalogVersion = products.reduce((max, p) => {
+      const rawMaxUpdated = products.reduce((max, p) => {
         const t = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
         return t > max ? t : max;
       }, 0);
-      if (catalogVersion > 0) {
-        url.searchParams.set('v', String(catalogVersion));
-      }
+      const catalogVersion = rawMaxUpdated > 0
+        ? rawMaxUpdated
+        : products.reduce((acc, p) => {
+            const key = `${p.id}|${p.name}|${p.salePrice}|${p.currentStock}`;
+            let h = acc;
+            for (let i = 0; i < key.length; i++) {
+              h = (h * 31 + key.charCodeAt(i)) % 2147483647;
+            }
+            return h;
+          }, products.length + 1);
+      url.searchParams.set('v', String(catalogVersion));
 
       const compactItems: string[] = [];
       for (const p of products.slice(0, 60)) {
@@ -313,13 +321,27 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
   if (origin.includes('ais-dev-')) {
     origin = origin.replace('ais-dev-', 'ais-pre-');
   }
-  const cleanDestination = `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
 
+  let destinationUrl = `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
+  try {
+    const parsedLong = new URL(longUrl);
+    let destOrigin = parsedLong.origin;
+    if (destOrigin.includes('ais-dev-')) {
+      destOrigin = destOrigin.replace('ais-dev-', 'ais-pre-');
+    }
+    const destObj = new URL(`/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${parsedLong.search}`, destOrigin);
+    destinationUrl = destObj.toString();
+  } catch {}
+
+  const cleanPrefix = cleanSlug.slice(0, 20);
+  const urlPrefix = urlSlug.slice(0, 20);
   const hasCompanyInLink = (candidate: string) => {
     const lower = candidate.toLowerCase();
     return (
       lower.includes(cleanSlug) ||
       lower.includes(urlSlug) ||
+      (cleanPrefix.length >= 3 && lower.includes(cleanPrefix)) ||
+      (urlPrefix.length >= 3 && lower.includes(urlPrefix)) ||
       lower.includes(`/loja/${urlSlug}`)
     );
   };
@@ -331,7 +353,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     const apiRes = await fetch('/api/shorten', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: cleanDestination, storeName: resolvedName || storeName }),
+      body: JSON.stringify({ url: destinationUrl, storeName: resolvedName || storeName }),
       signal: controller.signal
     });
     clearTimeout(timer);
@@ -351,6 +373,6 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     // fallback below
   }
 
-  // Fallback: ALWAYS return official direct store URL with exact company name
-  return cleanDestination;
+  // Fallback: ALWAYS return official direct store URL with exact company name AND latest products
+  return destinationUrl;
 }
