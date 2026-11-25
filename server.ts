@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '67', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '68', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -376,7 +376,58 @@ app.get('/api/stores/:slug', (req, res) => {
       return res.json(found);
     }
 
-    // 3b. Phone-number lookup fallback if rawSlug is a phone number
+    // 3b. Short-link lookup fallback (/l/:code -> maquiagemtop_1t22 -> maquiagemtop)
+    const shortLinks = db['_shortLinks'] || {};
+    const shortRec = shortLinks[rawSlug] || shortLinks[slug];
+    if (shortRec) {
+      const targetSlug = normalizeSlug(shortRec.slug || shortRec.storeName || '');
+      const liveStore = (targetSlug && db[targetSlug]) || (shortRec.companyId && db[shortRec.companyId]) || (shortRec.zap && findStoreByPhone(db, shortRec.zap));
+      const baseStore = liveStore || {
+        slug: targetSlug || rawSlug,
+        cleanSlug: cleanSlugAlphanumeric(targetSlug || rawSlug),
+        company: shortRec.company || { id: shortRec.companyId || `empresa_${targetSlug}`, name: shortRec.storeName || targetSlug },
+        paymentSettings: shortRec.paymentSettings || {},
+        products: Array.isArray(shortRec.products) ? shortRec.products : [],
+        activeSeller: shortRec.activeSeller || null,
+        registeredPhones: collectStorePhones(shortRec),
+        updatedAt: shortRec.updatedAt || new Date().toISOString()
+      };
+      const mergedProducts = Array.isArray(liveStore?.products) && liveStore.products.length > 0
+        ? liveStore.products
+        : (Array.isArray(shortRec.products) ? shortRec.products : baseStore.products || []);
+      const boundZap = String(shortRec.zap || '').replace(/\D/g, '');
+      const patchedSettings = {
+        ...(baseStore.paymentSettings || {}),
+        ...(boundZap ? { merchantWhatsapp: boundZap } : {}),
+        ...(shortRec.pix ? { pixKey: shortRec.pix } : {}),
+        ...(shortRec.banco ? { receivingBank: shortRec.banco } : {})
+      };
+      if (Array.isArray(patchedSettings.sellers) && boundZap) {
+        patchedSettings.sellers = patchedSettings.sellers.map((s: any, idx: number) =>
+          idx === 0 || s.id === patchedSettings.activeSellerId ? { ...s, whatsapp: boundZap } : s
+        );
+      }
+      return res.json({
+        ...baseStore,
+        products: mergedProducts,
+        paymentSettings: patchedSettings,
+        company: {
+          ...(baseStore.company || {}),
+          ...(boundZap ? { phone: boundZap } : {})
+        }
+      });
+    }
+
+    // Strip hash suffix (_xxxx or -xxxx) if code was generated on another mirror
+    const baseWithoutHash = rawSlug.replace(/[_-][a-z0-9]{3,8}$/i, '');
+    if (baseWithoutHash && baseWithoutHash !== rawSlug) {
+      const strippedSlug = normalizeSlug(baseWithoutHash);
+      const strippedClean = cleanSlugAlphanumeric(baseWithoutHash);
+      if (db[strippedSlug]) return res.json(db[strippedSlug]);
+      if (db[strippedClean]) return res.json(db[strippedClean]);
+    }
+
+    // 3c. Phone-number lookup fallback if rawSlug is a phone number
     const byPhone = findStoreByPhone(db, rawSlug);
     if (byPhone) {
       return res.json(byPhone);
@@ -517,7 +568,7 @@ app.get('/api/stores', (_req, res) => {
   }
 });
 
-// In-memory cache of generated short URLs keyed by exact destination URL (including ?p= and ?v=)
+// In-memory cache of generated short URLs keyed by company slug + phone + catalog signature
 const shortUrlCache = new Map<string, string>();
 
 const computeShortHash = (input: string): string => {
@@ -529,27 +580,150 @@ const computeShortHash = (input: string): string => {
   return ((hash >>> 0).toString(36) + '0000').slice(0, 4);
 };
 
-// API: Fast, reliable server-side URL shortener (preserves exact company name in slug AND full product payload in destination)
+const parseCompactProductsParam = (pParam: string): any[] => {
+  if (!pParam) return [];
+  try {
+    return pParam
+      .split('*')
+      .filter(Boolean)
+      .map((itemStr, idx) => {
+        const parts = itemStr.split('_');
+        const rawName = (parts[0] || '').replace(/\+/g, ' ');
+        let name = `Produto ${idx + 1}`;
+        try { name = decodeURIComponent(rawName) || name; } catch { name = rawName || name; }
+        const salePrice = parseFloat(parts[1]) || 0;
+        const currentStock = parseInt(parts[2], 10) || 50;
+        const unit = parts[3] || 'UN';
+        const rawCat = (parts[4] || 'Outros').replace(/\+/g, ' ');
+        let category = 'Outros';
+        try { category = decodeURIComponent(rawCat) || 'Outros'; } catch { category = rawCat || 'Outros'; }
+        const wholesalePrice = parts[5] ? parseFloat(parts[5]) : undefined;
+        const wholesaleMinQty = parts[6] ? parseInt(parts[6], 10) : undefined;
+        return {
+          id: `p_share_${idx + 1}`,
+          name,
+          sku: `PROD-${idx + 1}`,
+          barcode: '',
+          salePrice,
+          costPrice: 0,
+          currentStock,
+          minStock: 2,
+          maxStock: 1000,
+          unit,
+          category,
+          itemsPerUnit: 1,
+          description: '',
+          ...(wholesalePrice ? { wholesalePrice } : {}),
+          ...(wholesaleMinQty ? { wholesaleMinQty } : {}),
+          updatedAt: new Date().toISOString()
+        };
+      });
+  } catch {
+    return [];
+  }
+};
+
+// API: Resolve clean short-link code (/l/:code) directly into live store, phone, and updated products
+app.get('/api/short/:code', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  try {
+    const rawCode = decodeURIComponent(String(req.params.code || '')).trim();
+    const db = readDb();
+    const shortLinks = db['_shortLinks'] || {};
+    const shortRec = shortLinks[rawCode] || shortLinks[normalizeSlug(rawCode)];
+
+    const fallbackBase = rawCode.replace(/[_-][a-z0-9]{3,8}$/i, '');
+    const targetSlug = normalizeSlug(shortRec?.slug || shortRec?.storeName || fallbackBase || rawCode);
+    const cleanTarget = cleanSlugAlphanumeric(targetSlug);
+
+    const liveStore =
+      (targetSlug && db[targetSlug]) ||
+      (cleanTarget && db[cleanTarget]) ||
+      (shortRec?.companyId && db[shortRec.companyId]) ||
+      (shortRec?.zap && findStoreByPhone(db, shortRec.zap)) ||
+      null;
+
+    if (!shortRec && !liveStore) {
+      return res.json({
+        found: false,
+        isPlaceholder: true,
+        slug: targetSlug,
+        company: { id: `empresa_${targetSlug}`, name: (fallbackBase || rawCode).replace(/[-_]/g, ' ') },
+        products: [],
+        paymentSettings: {}
+      });
+    }
+
+    const baseStore = liveStore || {
+      slug: targetSlug,
+      cleanSlug: cleanTarget,
+      company: shortRec?.company || { id: shortRec?.companyId || `empresa_${targetSlug}`, name: shortRec?.storeName || targetSlug },
+      paymentSettings: shortRec?.paymentSettings || {},
+      products: Array.isArray(shortRec?.products) ? shortRec.products : [],
+      activeSeller: shortRec?.activeSeller || null,
+      registeredPhones: collectStorePhones(shortRec),
+      updatedAt: shortRec?.updatedAt || new Date().toISOString()
+    };
+
+    const mergedProducts =
+      Array.isArray(liveStore?.products) && liveStore.products.length > 0
+        ? liveStore.products
+        : (Array.isArray(shortRec?.products) ? shortRec.products : baseStore.products || []);
+
+    const boundZap = String(shortRec?.zap || '').replace(/\D/g, '');
+    const patchedSettings = {
+      ...(baseStore.paymentSettings || {}),
+      ...(boundZap ? { merchantWhatsapp: boundZap } : {}),
+      ...(shortRec?.pix ? { pixKey: shortRec.pix } : {}),
+      ...(shortRec?.banco ? { receivingBank: shortRec.banco } : {})
+    };
+    if (Array.isArray(patchedSettings.sellers) && boundZap) {
+      patchedSettings.sellers = patchedSettings.sellers.map((s: any, idx: number) =>
+        idx === 0 || s.id === patchedSettings.activeSellerId ? { ...s, whatsapp: boundZap } : s
+      );
+    }
+
+    return res.json({
+      ...baseStore,
+      found: true,
+      shortCode: rawCode,
+      products: mergedProducts,
+      paymentSettings: patchedSettings,
+      company: {
+        ...(baseStore.company || {}),
+        ...(boundZap ? { phone: boundZap } : {})
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to resolve short code' });
+  }
+});
+
+// API: Clean URL shortener — ALWAYS returns a clean URL with ONLY the company name (NEVER exposes ?loja=&nome=&pix=&p= query codes)
 app.post('/api/shorten', async (req, res) => {
   try {
-    const { url, storeName } = req.body;
+    const { url, storeName, company, paymentSettings, activeSeller, products, zap } = req.body;
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Extract store name from body or fallback to ?nome= / ?loja= query param or /loja/:slug pathname
-    let resolvedStoreName = (storeName || '').trim();
-    if (!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') {
-      try {
-        const parsedUrl = new URL(url);
-        resolvedStoreName = (parsedUrl.searchParams.get('nome') || parsedUrl.searchParams.get('loja') || resolvedStoreName).trim();
-        if (!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') {
-          const parts = parsedUrl.pathname.split('/').filter(Boolean);
-          if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
-            resolvedStoreName = decodeURIComponent(parts[1]);
-          }
+    let parsedUrlObj: URL | null = null;
+    try {
+      parsedUrlObj = new URL(url);
+    } catch {}
+
+    let resolvedStoreName = (storeName || company?.name || '').trim();
+    if ((!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') && parsedUrlObj) {
+      resolvedStoreName = (parsedUrlObj.searchParams.get('nome') || parsedUrlObj.searchParams.get('loja') || resolvedStoreName).trim();
+      if (!resolvedStoreName || resolvedStoreName.toLowerCase() === 'loja') {
+        const parts = parsedUrlObj.pathname.split('/').filter(Boolean);
+        if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
+          resolvedStoreName = decodeURIComponent(parts[1]).replace(/[_-][a-z0-9]{3,8}$/i, '');
         }
-      } catch {}
+      }
     }
 
     const cleanSlug = resolvedStoreName
@@ -560,7 +734,7 @@ app.post('/api/shorten', async (req, res) => {
           .replace(/[^a-z0-9]/g, '_')
           .replace(/_+/g, '_')
           .replace(/^_+|_+$/g, '')
-          .slice(0, 30)
+          .slice(0, 24)
       : 'loja';
 
     const urlSlug = resolvedStoreName
@@ -574,38 +748,90 @@ app.post('/api/shorten', async (req, res) => {
           .slice(0, 48)
       : 'loja';
 
-    // Preserve full destination URL (including ?loja=...&nome=...&v=...&p=...) so products always travel in the link
     const host = req.get('host') || 'www.apvendas1.com.br';
     const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
     let baseOrigin = `${proto}://${host}`;
-    let destinationUrl = url;
-    try {
-      const parsedDest = new URL(url);
-      baseOrigin = parsedDest.origin;
-      if (baseOrigin.includes('ais-dev-')) {
-        baseOrigin = baseOrigin.replace('ais-dev-', 'ais-pre-');
-      }
-      const normalizedDest = new URL(`/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${parsedDest.search}`, baseOrigin);
-      destinationUrl = normalizedDest.toString();
-    } catch {}
-
-    // Check cache keyed by exact full destinationUrl (cache hits only when products & settings match identically)
-    const cached = shortUrlCache.get(destinationUrl);
-    if (cached) {
-      return res.json({ shortUrl: cached });
+    if (parsedUrlObj) {
+      baseOrigin = parsedUrlObj.origin;
+    }
+    if (baseOrigin.includes('ais-dev-')) {
+      baseOrigin = baseOrigin.replace('ais-dev-', 'ais-pre-');
     }
 
-    const isLocalOrigin = destinationUrl.includes('localhost') || destinationUrl.includes('127.0.0.1');
+    const resolvedZap = String(
+      zap ||
+      parsedUrlObj?.searchParams.get('zap') ||
+      activeSeller?.whatsapp ||
+      paymentSettings?.merchantWhatsapp ||
+      company?.phone ||
+      ''
+    ).replace(/\D/g, '');
+    const resolvedCompanyId = String(parsedUrlObj?.searchParams.get('empresa') || company?.id || '').trim();
+    const resolvedPix = String(parsedUrlObj?.searchParams.get('pix') || activeSeller?.pixKey || paymentSettings?.pixKey || '').trim();
+    const resolvedBanco = String(parsedUrlObj?.searchParams.get('banco') || activeSeller?.receivingBank || paymentSettings?.receivingBank || '').trim();
+    const compactProducts = parsedUrlObj?.searchParams.get('p')
+      ? parseCompactProductsParam(parsedUrlObj.searchParams.get('p') || '')
+      : [];
+    const resolvedProducts = Array.isArray(products) && products.length > 0 ? products : compactProducts;
 
-    // 1. Create/reuse company-named is.gd link tied deterministically to this catalog payload hash
+    const hashSeed = `${urlSlug}|${resolvedZap}|${resolvedPix}|${resolvedProducts.map((p: any) => `${p.name}:${p.salePrice}:${p.currentStock}`).join(',')}`;
+    const urlHash = computeShortHash(hashSeed || url);
+    const shortCode = `${cleanSlug || 'loja'}_${urlHash}`;
+    const cleanSelfShortUrl = `${baseOrigin}/l/${encodeURIComponent(shortCode)}`;
+
+    // Persist short link record + products cleanly in stores_db.json so /l/:code ALWAYS hydrates live data with zero query params
+    const db = readDb();
+    if (!db['_shortLinks'] || typeof db['_shortLinks'] !== 'object') {
+      db['_shortLinks'] = {};
+    }
+    const existingStore = (urlSlug && db[urlSlug]) || (resolvedCompanyId && db[resolvedCompanyId]);
+    const finalRecordProducts = resolvedProducts.length > 0
+      ? resolvedProducts
+      : (Array.isArray(existingStore?.products) ? existingStore.products : []);
+
+    db['_shortLinks'][shortCode] = {
+      code: shortCode,
+      slug: urlSlug || 'loja',
+      storeName: resolvedStoreName || urlSlug || 'Loja',
+      companyId: resolvedCompanyId || existingStore?.company?.id || '',
+      zap: resolvedZap,
+      pix: resolvedPix,
+      banco: resolvedBanco,
+      company: company || existingStore?.company || { id: resolvedCompanyId || `empresa_${urlSlug}`, name: resolvedStoreName || urlSlug, phone: resolvedZap },
+      paymentSettings: paymentSettings || existingStore?.paymentSettings || { merchantWhatsapp: resolvedZap, pixKey: resolvedPix, receivingBank: resolvedBanco },
+      activeSeller: activeSeller || existingStore?.activeSeller || null,
+      products: finalRecordProducts,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Ensure _phoneIndex knows this registered mobile number if not yet indexed
+    if (resolvedZap.length >= 8 && urlSlug && urlSlug !== 'loja') {
+      if (!db['_phoneIndex'] || typeof db['_phoneIndex'] !== 'object') {
+        db['_phoneIndex'] = {};
+      }
+      for (const variant of normalizePhoneVariants(resolvedZap)) {
+        if (!db['_phoneIndex'][variant] || existingStore?.slug === urlSlug) {
+          db['_phoneIndex'][variant] = urlSlug;
+        }
+      }
+    }
+    writeDb(db);
+
+    const cacheKey = `${shortCode}|${cleanSelfShortUrl}`;
+    const cached = shortUrlCache.get(cacheKey);
+    if (cached) {
+      return res.json({ shortUrl: cached, cleanSelfShortUrl, shortCode });
+    }
+
+    const isLocalOrigin = baseOrigin.includes('localhost') || baseOrigin.includes('127.0.0.1');
+
+    // Create company-named is.gd link pointing to cleanSelfShortUrl (/l/empresa_hash -> zero query codes anywhere!)
     if (!isLocalOrigin && cleanSlug && cleanSlug !== 'loja') {
-      const urlHash = computeShortHash(destinationUrl);
       const rand2 = Math.floor(10 + Math.random() * 89).toString();
       const basePrefix = cleanSlug.slice(0, 24) || 'loja';
       const candidateParams = [
-        `${basePrefix}_${urlHash}`,
-        `loja_${cleanSlug.slice(0, 19)}_${urlHash}`,
-        `${cleanSlug.slice(0, 21)}_${urlHash}${rand2}`
+        shortCode,
+        `${basePrefix}_${urlHash}${rand2}`
       ].filter((slug, idx, arr) => slug.length >= 5 && slug.length <= 30 && arr.indexOf(slug) === idx);
 
       const expectedCheck = cleanSlug.slice(0, 20);
@@ -617,9 +843,9 @@ app.post('/api/shorten', async (req, res) => {
             body: new URLSearchParams({
               format: 'simple',
               shorturl: customParam,
-              url: destinationUrl
+              url: cleanSelfShortUrl
             }).toString(),
-            signal: AbortSignal.timeout(4500)
+            signal: AbortSignal.timeout(2200)
           });
           if (resp.ok) {
             const text = (await resp.text()).trim();
@@ -628,22 +854,21 @@ app.post('/api/shorten', async (req, res) => {
               !text.includes('Error') &&
               text.toLowerCase().includes(expectedCheck)
             ) {
-              shortUrlCache.set(destinationUrl, text);
-              return res.json({ shortUrl: text });
+              shortUrlCache.set(cacheKey, text);
+              return res.json({ shortUrl: text, cleanSelfShortUrl, shortCode });
             }
           } else if (resp.status === 406 || resp.status === 400) {
-            // If slug already exists on is.gd, verify it redirects to this EXACT destinationUrl before reusing
             try {
               const checkRes = await fetch(`https://is.gd/${customParam}`, {
                 method: 'HEAD',
                 redirect: 'manual',
-                signal: AbortSignal.timeout(2500)
+                signal: AbortSignal.timeout(1500)
               });
               const loc = checkRes.headers.get('location') || '';
-              if (loc === destinationUrl) {
+              if (loc === cleanSelfShortUrl) {
                 const reusable = `https://is.gd/${customParam}`;
-                shortUrlCache.set(destinationUrl, reusable);
-                return res.json({ shortUrl: reusable });
+                shortUrlCache.set(cacheKey, reusable);
+                return res.json({ shortUrl: reusable, cleanSelfShortUrl, shortCode });
               }
             } catch {}
           }
@@ -651,8 +876,8 @@ app.post('/api/shorten', async (req, res) => {
       }
     }
 
-    // Fallback: ALWAYS return direct official store link with exact company name AND updated products
-    return res.json({ shortUrl: destinationUrl });
+    // Fallback: ALWAYS return ultra-clean self-hosted short link (/l/empresa_hash) with ZERO query codes
+    return res.json({ shortUrl: cleanSelfShortUrl, cleanSelfShortUrl, shortCode });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
     res.status(500).json({ error: err.message || 'Shorten failed' });
@@ -665,14 +890,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '67',
-    versionName: 'v67.0',
+    version: '68',
+    versionName: 'v68.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Vínculo em tempo real de cada número de celular cadastrado com os produtos atualizados da empresa (v67)',
+      'Links compartilhados limpos contendo apenas o nome da empresa sem códigos na URL (v68)',
+      'Vínculo em tempo real de cada número de celular cadastrado com os produtos atualizados da empresa',
       'Área de Teste restrita da Administradora para validar celular, empresa e links no WhatsApp e redes sociais',
-      'Botão Compartilhar padronizado e layout responsivo na Área do Cliente para celular e app instalado',
-      'Sincronização automática em tempo real entre painel da empresa, celular instalado e clientes'
+      'Sincronização automática em tempo real entre painel da empresa, app instalado e clientes'
     ]
   });
 });
@@ -687,18 +912,35 @@ const escapeHtml = (str: string): string =>
 
 const injectStoreMeta = (html: string, req: express.Request): string => {
   try {
-    const rawLoja = typeof req.query.loja === 'string' ? req.query.loja : (typeof req.params?.slug === 'string' ? req.params.slug : '');
+    const paramSlug = typeof req.params?.slug === 'string' ? req.params.slug : '';
+    const rawLoja = typeof req.query.loja === 'string' ? req.query.loja : paramSlug;
     const rawNome = typeof req.query.nome === 'string' ? req.query.nome : '';
     const rawP = typeof req.query.p === 'string' ? req.query.p : '';
     if (!rawLoja && !rawNome) return html;
 
     const db = readDb();
-    const slug = normalizeSlug(rawLoja || rawNome);
-    const clean = cleanSlugAlphanumeric(rawLoja || rawNome);
-    const dbStore = db[slug] || db[clean] || db[rawLoja];
+    const shortLinks = db['_shortLinks'] || {};
+    const shortRec = (paramSlug && (shortLinks[paramSlug] || shortLinks[normalizeSlug(paramSlug)])) || null;
 
-    const displayName = (rawNome || dbStore?.company?.name || rawLoja.replace(/[-_]/g, ' ')).trim();
+    const strippedFromCode = rawLoja ? rawLoja.replace(/[_-][a-z0-9]{3,8}$/i, '') : '';
+    const lookupKey = shortRec?.slug || shortRec?.storeName || rawNome || strippedFromCode || rawLoja;
+    const slug = normalizeSlug(lookupKey);
+    const clean = cleanSlugAlphanumeric(lookupKey);
+    const dbStore =
+      db[slug] ||
+      db[clean] ||
+      db[lookupKey] ||
+      (shortRec?.companyId && db[shortRec.companyId]) ||
+      (shortRec?.zap && findStoreByPhone(db, shortRec.zap)) ||
+      null;
+
+    const displayName = (rawNome || dbStore?.company?.name || shortRec?.storeName || strippedFromCode || rawLoja).replace(/[-_]+/g, ' ').trim();
     if (!displayName) return html;
+
+    const resolvedProducts =
+      Array.isArray(dbStore?.products) && dbStore.products.length > 0
+        ? dbStore.products
+        : (Array.isArray(shortRec?.products) ? shortRec.products : []);
 
     let itemNames: string[] = [];
     if (rawP) {
@@ -711,24 +953,54 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
           try { return decodeURIComponent(first); } catch { return first; }
         })
         .filter(Boolean);
-    } else if (Array.isArray(dbStore?.products) && dbStore.products.length > 0) {
-      itemNames = dbStore.products.slice(0, 5).map((p: any) => p.name).filter(Boolean);
+    } else if (resolvedProducts.length > 0) {
+      itemNames = resolvedProducts.slice(0, 5).map((p: any) => p.name).filter(Boolean);
     }
 
     const totalCount = rawP
       ? rawP.split('*').filter(Boolean).length
-      : (Array.isArray(dbStore?.products) ? dbStore.products.length : 0);
+      : resolvedProducts.length;
 
     const titleText = `${displayName} - Catálogo Oficial & Pedidos`;
     const descText = itemNames.length > 0
       ? `Confira ${totalCount} ${totalCount === 1 ? 'produto' : 'produtos'} em ${displayName} (${itemNames.join(', ')}) e faça seu pedido direto pelo WhatsApp!`
       : `Confira o catálogo digital atualizado da ${displayName} e faça seus pedidos direto pelo WhatsApp!`;
 
-    return html
-      .replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(titleText)}</title>`)
-      .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, `<meta name="description" content="${escapeHtml(descText)}" />`)
-      .replace(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${escapeHtml(titleText)}" />`)
-      .replace(/<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:description" content="${escapeHtml(descText)}" />`);
+    let updatedHtml = html
+      .replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${escapeHtml(titleText)}</title>`)
+      .replace(/<meta[^>]+name=["']description["'][^>]*>/i, `<meta name="description" content="${escapeHtml(descText)}" />`)
+      .replace(/<meta[^>]+property=["']og:title["'][^>]*>/i, `<meta property="og:title" content="${escapeHtml(titleText)}" />`)
+      .replace(/<meta[^>]+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${escapeHtml(descText)}" />`);
+
+    // Inject synchronous hydration payload so cold opens on /l/:code or /loja/:slug load company + phone + products immediately
+    if (shortRec || dbStore) {
+      const boundZap = String(shortRec?.zap || '').replace(/\D/g, '');
+      const baseCompany = dbStore?.company || shortRec?.company || { id: `empresa_${slug}`, name: displayName, slug };
+      const baseSettings = {
+        ...(dbStore?.paymentSettings || shortRec?.paymentSettings || {}),
+        ...(boundZap ? { merchantWhatsapp: boundZap } : {}),
+        ...(shortRec?.pix ? { pixKey: shortRec.pix } : {}),
+        ...(shortRec?.banco ? { receivingBank: shortRec.banco } : {})
+      };
+      const initialPayload = {
+        slug: dbStore?.slug || slug,
+        company: {
+          ...baseCompany,
+          name: displayName,
+          ...(boundZap ? { phone: boundZap } : {})
+        },
+        paymentSettings: baseSettings,
+        products: resolvedProducts,
+        zap: boundZap
+      };
+      const safeJson = JSON.stringify(initialPayload).replace(/</g, '\\u003c');
+      updatedHtml = updatedHtml.replace(
+        '</head>',
+        `<script>window.__INITIAL_SHORT_LINK_DATA__=${safeJson};</script>\n</head>`
+      );
+    }
+
+    return updatedHtml;
   } catch {
     return html;
   }

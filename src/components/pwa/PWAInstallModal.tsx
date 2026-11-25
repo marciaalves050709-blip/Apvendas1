@@ -21,7 +21,7 @@ import QRCode from 'qrcode';
 import { AlertTriangle, Compass } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { useApp } from '../../context/AppContext';
-import { buildStoreShareUrl, shortenUrl } from '../../utils/shareHelper';
+import { buildStoreCleanUrl, buildStoreShareUrl, shortenUrl } from '../../utils/shareHelper';
 import confetti from 'canvas-confetti';
 
 interface PWAInstallModalProps {
@@ -42,8 +42,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   } = usePWAInstall();
 
   const { currentCompany, paymentSettings, activeSeller, products } = useApp();
+  const cleanCompanyStoreUrl = buildStoreCleanUrl(currentCompany, paymentSettings);
   const fullStoreShareUrl = buildStoreShareUrl(currentCompany, paymentSettings, activeSeller, products);
-  const [companyStoreUrl, setCompanyStoreUrl] = useState<string>(fullStoreShareUrl);
+  const [companyStoreUrl, setCompanyStoreUrl] = useState<string>(cleanCompanyStoreUrl);
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -52,14 +53,20 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    setCompanyStoreUrl(fullStoreShareUrl);
-    shortenUrl(fullStoreShareUrl, currentCompany?.name || 'loja').then((short) => {
-      if (!cancelled && short) {
+    setCompanyStoreUrl(cleanCompanyStoreUrl);
+    shortenUrl(fullStoreShareUrl, currentCompany?.name || 'loja', {
+      company: currentCompany,
+      paymentSettings,
+      activeSeller,
+      products,
+      zap: activeSeller?.whatsapp || paymentSettings?.merchantWhatsapp || currentCompany?.phone
+    }).then((short) => {
+      if (!cancelled && short && !short.includes('?p=')) {
         setCompanyStoreUrl(short);
       }
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [isOpen, fullStoreShareUrl, currentCompany?.name]);
+  }, [isOpen, cleanCompanyStoreUrl, fullStoreShareUrl, currentCompany, paymentSettings, activeSeller, products]);
 
   useEffect(() => {
     if (!isOpen) return;

@@ -264,46 +264,6 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     return effectiveProducts && effectiveProducts.length > 0 ? shareUrl : cleanUrl;
   }, [effectiveProducts, shareUrl, cleanUrl]);
 
-  // Automatic Link Shortening in the background with company name AND latest products
-  const triggerShorten = async (targetUrl: string, storeName: string): Promise<string> => {
-    setIsShortening(true);
-    const fallbackUrl = targetUrl || catalogShareUrl;
-    try {
-      const res = await shortenUrl(fallbackUrl, storeName);
-      if (res && res.startsWith('http') && !res.includes('da.gd')) {
-        setShortUrl(res);
-        return res;
-      } else {
-        setShortUrl(fallbackUrl);
-        return fallbackUrl;
-      }
-    } catch {
-      setShortUrl(fallbackUrl);
-      return fallbackUrl;
-    } finally {
-      setIsShortening(false);
-    }
-  };
-
-  // Pre-generate shortened URL with company name and updated catalog whenever modal opens, products change, or company changes
-  useEffect(() => {
-    if (isOpen) {
-      setShortUrl('');
-      triggerShorten(catalogShareUrl, effectiveCompany?.name || 'loja');
-    }
-  }, [isOpen, catalogShareUrl, effectiveCompany?.name]);
-
-  // Active URL to share: Always preserves exact company name AND delivers all updated products
-  const activeUrl = useMemo(() => {
-    if (urlMode === 'short') {
-      if (shortUrl && !shortUrl.includes('da.gd') && shortUrl.startsWith('http')) {
-        return shortUrl;
-      }
-      return catalogShareUrl;
-    }
-    return catalogShareUrl;
-  }, [urlMode, shortUrl, catalogShareUrl]);
-
   const sellerForSelectedPhone = useMemo(() => {
     if (!selectedSharePhone) return effectiveSeller;
     return {
@@ -316,6 +276,58 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       whatsapp: selectedSharePhone
     };
   }, [selectedSharePhone, effectiveSeller, effectiveCompany?.ownerName, effectiveSettings?.pixKey]);
+
+  // Automatic Link Shortening in the background with company name, registered phone AND latest products
+  const triggerShorten = async (targetUrl: string, storeName: string): Promise<string> => {
+    setIsShortening(true);
+    const payloadUrl = targetUrl || catalogShareUrl;
+    try {
+      const res = await shortenUrl(payloadUrl, storeName, {
+        company: effectiveCompany,
+        paymentSettings: effectiveSettings,
+        activeSeller: sellerForSelectedPhone,
+        products: effectiveProducts,
+        zap: selectedSharePhone || sellerForSelectedPhone?.whatsapp
+      });
+      if (res && res.startsWith('http') && !res.includes('da.gd') && !res.includes('?p=') && !res.includes('&p=')) {
+        setShortUrl(res);
+        return res;
+      } else {
+        setShortUrl(cleanUrl);
+        return cleanUrl;
+      }
+    } catch {
+      setShortUrl(cleanUrl);
+      return cleanUrl;
+    } finally {
+      setIsShortening(false);
+    }
+  };
+
+  // Pre-generate shortened URL with company name and updated catalog whenever modal opens, products change, phone changes, or company changes
+  useEffect(() => {
+    if (isOpen) {
+      setShortUrl('');
+      triggerShorten(catalogShareUrl, effectiveCompany?.name || 'loja');
+    }
+  }, [isOpen, catalogShareUrl, effectiveCompany?.name, selectedSharePhone]);
+
+  // Active URL to share: Strictly clean (ONLY company name / short code — NEVER exposes ?loja=...&pix=...&p=...)
+  const activeUrl = useMemo(() => {
+    if (urlMode === 'short') {
+      if (
+        shortUrl &&
+        !shortUrl.includes('da.gd') &&
+        !shortUrl.includes('?p=') &&
+        !shortUrl.includes('&p=') &&
+        shortUrl.startsWith('http')
+      ) {
+        return shortUrl;
+      }
+      return cleanUrl;
+    }
+    return cleanUrl;
+  }, [urlMode, shortUrl, cleanUrl]);
 
   const shareMessage = useMemo(() => {
     return buildStoreShareMessage(effectiveCompany, activeUrl, sellerForSelectedPhone, effectiveSettings, effectiveProducts);
@@ -339,21 +351,27 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   if (!isOpen) return null;
 
-  // 1. Direct WhatsApp Share
-  const handleShareToWhatsApp = async () => {
-    let finalUrl = activeUrl;
-    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
-      finalUrl = await triggerShorten(catalogShareUrl, effectiveCompany?.name || 'loja');
-    }
-    if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = catalogShareUrl;
-    }
+  // Helper to sync live store catalog and resolve freshest clean URL before launching WhatsApp or social network
+  const resolveFreshShareUrl = async (): Promise<string> => {
     if (effectiveCompany && effectiveProducts.length > 0) {
       await Promise.race([
         syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts).catch(() => false),
         new Promise(resolve => setTimeout(resolve, 1500))
       ]);
     }
+    let finalUrl = activeUrl;
+    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd') || shortUrl.includes('?p='))) {
+      finalUrl = await triggerShorten(catalogShareUrl, effectiveCompany?.name || 'loja');
+    }
+    if (!finalUrl || finalUrl.includes('da.gd') || finalUrl.includes('?p=') || finalUrl.includes('&p=')) {
+      finalUrl = cleanUrl;
+    }
+    return finalUrl;
+  };
+
+  // 1. Direct WhatsApp Share
+  const handleShareToWhatsApp = async () => {
+    const finalUrl = await resolveFreshShareUrl();
     const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, sellerForSelectedPhone, effectiveSettings, effectiveProducts);
     const encoded = encodeURIComponent(finalMsg);
     const waUrl = `https://api.whatsapp.com/send?text=${encoded}`;
@@ -366,24 +384,6 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       window.location.href = waUrl;
     }
     onShowToast('success', 'WhatsApp Aberto!', `Catálogo encurtado da loja ${effectiveCompany.name} com ${effectiveProducts.length} produtos pronto para envio.`);
-  };
-
-  // Helper to resolve freshest share URL before launching any social network
-  const resolveFreshShareUrl = async (): Promise<string> => {
-    let finalUrl = activeUrl;
-    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd'))) {
-      finalUrl = await triggerShorten(catalogShareUrl, effectiveCompany?.name || 'loja');
-    }
-    if (!finalUrl || finalUrl.includes('da.gd')) {
-      finalUrl = catalogShareUrl;
-    }
-    if (effectiveCompany && effectiveProducts.length > 0) {
-      await Promise.race([
-        syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts).catch(() => false),
-        new Promise(resolve => setTimeout(resolve, 1500))
-      ]);
-    }
-    return finalUrl;
   };
 
   // 2. Native Mobile Web Share API (Instagram, Facebook, Telegram, Messenger, WhatsApp)
@@ -459,7 +459,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // 4. Copy Full Promotional Message
   const handleCopyMessage = async () => {
     const finalUrl = await resolveFreshShareUrl();
-    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings, effectiveProducts);
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, sellerForSelectedPhone, effectiveSettings, effectiveProducts);
     const success = await copyTextToClipboard(finalMsg);
     if (success) {
       setCopiedMessage(true);

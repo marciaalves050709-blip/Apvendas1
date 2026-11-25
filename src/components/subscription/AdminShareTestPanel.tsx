@@ -3,6 +3,7 @@ import { useApp, getTenantKey } from '../../context/AppContext';
 import { CompanyAccount, PaymentSettings, Product, SellerProfile } from '../../types';
 import { formatCurrency } from '../../utils/pixHelper';
 import {
+  buildStoreCleanUrl,
   buildStoreShareMessage,
   buildStoreShareUrl,
   collectCompanyPhones,
@@ -382,7 +383,12 @@ export const AdminShareTestPanel: React.FC = () => {
     );
   }, [phoneInput, selectedRecord]);
 
-  // Build exact share URL for selected company + phone + latest products
+  // Build clean company URL (fallback without query codes) + full payload URL for internal server binding
+  const cleanDirectUrl = useMemo(() => {
+    if (!selectedRecord) return '';
+    return buildStoreCleanUrl(selectedRecord.company, selectedRecord.paymentSettings);
+  }, [selectedRecord]);
+
   const directShareUrl = useMemo(() => {
     if (!selectedRecord) return '';
     return buildStoreShareUrl(
@@ -410,14 +416,20 @@ export const AdminShareTestPanel: React.FC = () => {
 
     setIsGeneratingLink(true);
     try {
-      const res = await shortenUrl(directShareUrl, selectedRecord.company.name);
-      setShortUrl(res || directShareUrl);
+      const res = await shortenUrl(directShareUrl, selectedRecord.company.name, {
+        company: selectedRecord.company,
+        paymentSettings: selectedRecord.paymentSettings,
+        activeSeller: selectedRecord.activeSeller || undefined,
+        products: selectedRecord.products,
+        zap: effectivePhone || undefined
+      });
+      setShortUrl(res && !res.includes('?p=') ? res : cleanDirectUrl);
     } catch {
-      setShortUrl(directShareUrl);
+      setShortUrl(cleanDirectUrl);
     } finally {
       setIsGeneratingLink(false);
     }
-  }, [selectedRecord, directShareUrl, refreshServerCatalog]);
+  }, [selectedRecord, directShareUrl, cleanDirectUrl, effectivePhone, refreshServerCatalog]);
 
   useEffect(() => {
     let active = true;
@@ -426,12 +438,18 @@ export const AdminShareTestPanel: React.FC = () => {
       return;
     }
     setIsGeneratingLink(true);
-    shortenUrl(directShareUrl, selectedRecord.company.name)
+    shortenUrl(directShareUrl, selectedRecord.company.name, {
+      company: selectedRecord.company,
+      paymentSettings: selectedRecord.paymentSettings,
+      activeSeller: selectedRecord.activeSeller || undefined,
+      products: selectedRecord.products,
+      zap: effectivePhone || undefined
+    })
       .then((res) => {
-        if (active) setShortUrl(res || directShareUrl);
+        if (active) setShortUrl(res && !res.includes('?p=') ? res : cleanDirectUrl);
       })
       .catch(() => {
-        if (active) setShortUrl(directShareUrl);
+        if (active) setShortUrl(cleanDirectUrl);
       })
       .finally(() => {
         if (active) setIsGeneratingLink(false);
@@ -439,9 +457,9 @@ export const AdminShareTestPanel: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [selectedRecord?.id, selectedRecord?.company?.name, directShareUrl]);
+  }, [selectedRecord?.id, selectedRecord?.company?.name, directShareUrl, cleanDirectUrl, effectivePhone]);
 
-  const finalShareUrl = shortUrl || directShareUrl;
+  const finalShareUrl = (shortUrl && !shortUrl.includes('?p=')) ? shortUrl : cleanDirectUrl;
 
   const shareMessage = useMemo(() => {
     if (!selectedRecord || !finalShareUrl) return '';
@@ -755,10 +773,10 @@ export const AdminShareTestPanel: React.FC = () => {
             </button>
           </div>
 
-          {directShareUrl && directShareUrl !== finalShareUrl && (
-            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 truncate">
-              <span className="font-bold text-slate-300 shrink-0">Link direto com produtos:</span>
-              <span className="font-mono truncate">{directShareUrl}</span>
+          {selectedRecord && (
+            <div className="text-[10px] text-emerald-300 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Link limpo sem códigos na URL: entrega {selectedRecord.products.length} produtos da empresa no celular selecionado.</span>
             </div>
           )}
         </div>

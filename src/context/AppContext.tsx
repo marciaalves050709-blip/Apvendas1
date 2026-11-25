@@ -377,26 +377,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) 
     : null;
   
-  // Also check pathname (e.g. /loja/minha-empresa or /l/minha-empresa)
+  // Also check pathname (e.g. /loja/minha-empresa or /l/maquiagemtop_1t22)
   let pathLojaName = '';
+  let pathShortCode = '';
   if (typeof window !== 'undefined' && window.location.pathname) {
     const parts = window.location.pathname.split('/').filter(Boolean);
     if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
-      pathLojaName = decodeURIComponent(parts[1]);
+      const rawSeg = decodeURIComponent(parts[1]);
+      if (parts[0] === 'l') {
+        pathShortCode = rawSeg;
+        pathLojaName = rawSeg.replace(/[_-][a-z0-9]{3,8}$/i, '');
+      } else {
+        pathLojaName = rawSeg;
+      }
     }
   }
+
+  const ssrInitialStore = typeof window !== 'undefined' ? (window as any).__INITIAL_SHORT_LINK_DATA__ : null;
 
   const rawUrlStore = initialUrlParams?.get('loja') || 
                       initialUrlParams?.get('nome') ||
                       initialUrlParams?.get('empresa') || 
                       initialUrlParams?.get('company') || 
                       initialUrlParams?.get('companyId') ||
+                      ssrInitialStore?.company?.name ||
+                      ssrInitialStore?.slug ||
                       pathLojaName;
 
   const initialCompanyFromUrl = rawUrlStore;
   const initialTabFromUrl = initialUrlParams?.get('tab') as ActiveTab | null;
 
-  const initialUrlHasProducts = Boolean(initialUrlParams?.get('p') || initialUrlParams?.get('pdata'));
+  const initialUrlHasProducts = Boolean(initialUrlParams?.get('p') || initialUrlParams?.get('pdata') || (Array.isArray(ssrInitialStore?.products) && ssrInitialStore.products.length > 0));
   const initialUrlHasExplicitVersion = Boolean(initialUrlParams?.get('v'));
   const initialUrlVersion = Number(initialUrlParams?.get('v')) || 0;
   const urlCatalogInfoRef = useRef<{ hasUrlProducts: boolean; hasExplicitVersion: boolean; urlVersion: number; urlSlug: string }>({
@@ -547,10 +558,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Multi-Company (Infinite Users) Workspaces
   const [companies, setCompanies] = useState<CompanyAccount[]>(() => {
-    const urlCompName = initialUrlParams?.get('nome') || (initialUrlParams?.get('loja') ? initialUrlParams.get('loja')!.replace(/[-_]/g, ' ') : pathLojaName.replace(/[-_]/g, ' '));
-    const urlCompEmoji = initialUrlParams?.get('emoji');
-    const urlCompZap = initialUrlParams?.get('zap');
-    const urlCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa');
+    const urlCompName = initialUrlParams?.get('nome') || ssrInitialStore?.company?.name || (initialUrlParams?.get('loja') ? initialUrlParams.get('loja')!.replace(/[-_]/g, ' ') : pathLojaName.replace(/[-_]/g, ' '));
+    const urlCompEmoji = initialUrlParams?.get('emoji') || ssrInitialStore?.company?.logoEmoji;
+    const urlCompZap = initialUrlParams?.get('zap') || ssrInitialStore?.zap || ssrInitialStore?.company?.phone;
+    const urlCompId = initialUrlParams?.get('id') || initialUrlParams?.get('empresa') || ssrInitialStore?.company?.id;
 
     const list: CompanyAccount[] = (() => {
       try {
@@ -688,11 +699,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Persistence loader for PaymentSettings (customized per company workspace)
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     try {
-      const urlZap = initialUrlParams?.get('zap');
-      const urlPix = initialUrlParams?.get('pix');
-      const rawBanco = initialUrlParams?.get('banco');
+      const urlZap = initialUrlParams?.get('zap') || ssrInitialStore?.zap || ssrInitialStore?.paymentSettings?.merchantWhatsapp;
+      const urlPix = initialUrlParams?.get('pix') || ssrInitialStore?.paymentSettings?.pixKey;
+      const rawBanco = initialUrlParams?.get('banco') || ssrInitialStore?.paymentSettings?.receivingBank;
       const urlBanco: BankProvider | undefined = rawBanco ? (rawBanco as BankProvider) : undefined;
-      const urlNome = initialUrlParams?.get('nome') || (initialUrlParams?.get('loja') ? decodeURIComponent(initialUrlParams.get('loja')!).replace(/[-_]/g, ' ') : undefined);
+      const urlNome = initialUrlParams?.get('nome') || ssrInitialStore?.company?.name || (initialUrlParams?.get('loja') ? decodeURIComponent(initialUrlParams.get('loja')!).replace(/[-_]/g, ' ') : undefined);
 
       const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
@@ -755,8 +766,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // Products state (isolated per company, supports shared catalog unpack)
+  // Products state (isolated per company, supports shared catalog unpack & SSR short-link hydration)
   const [products, setProducts] = useState<Product[]>(() => {
+    if (ssrInitialStore && Array.isArray(ssrInitialStore.products) && ssrInitialStore.products.length > 0) {
+      try {
+        localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(ssrInitialStore.products));
+      } catch {}
+      return ssrInitialStore.products;
+    }
+
     // Check if products are passed directly in URL from a promotional shared link
     if (initialUrlParams) {
       // 1. Ultra-compact format 'p' (Format: Name_Price_Stock_Unit_Category_WholesalePrice_WholesaleQty joined by '*')
@@ -1732,8 +1750,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const cleanSearch = (window.location.search || '').replace(/%26/gi, '&');
       const params = new URLSearchParams(cleanSearch);
       const urlLoja = params.get('loja') || pathLojaName;
-      const urlNome = params.get('nome');
-      const urlCompId = params.get('empresa') || params.get('id');
+      const urlNome = params.get('nome') || ssrInitialStore?.company?.name || '';
+      const urlCompId = params.get('empresa') || params.get('id') || ssrInitialStore?.company?.id || null;
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
       const targetUrlSlug = normalizeStoreSlug(urlLoja || incomingName);
 
@@ -1903,9 +1921,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
         : '';
       const targetQuery = targetUrlSlug || urlCompId || currentActiveSlug || savedSlug || 'latest';
-      const fetchEndpoint = (!targetUrlSlug && !urlCompId && urlPhoneDigits.length >= 8)
-        ? `/api/stores/by-phone/${encodeURIComponent(urlPhoneDigits)}?t=${Date.now()}`
-        : `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`;
+      const fetchEndpoint = pathShortCode
+        ? `/api/short/${encodeURIComponent(pathShortCode)}?t=${Date.now()}`
+        : ((!targetUrlSlug && !urlCompId && urlPhoneDigits.length >= 8)
+            ? `/api/stores/by-phone/${encodeURIComponent(urlPhoneDigits)}?t=${Date.now()}`
+            : `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`);
 
       // 2. Fetch store catalog and settings from backend API (respecting newer ?p= URL products)
       fetch(fetchEndpoint, { cache: 'no-store' })
@@ -2061,7 +2081,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version).replace(/^v/i, '').trim() !== '67') {
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version).replace(/^v/i, '').trim() !== '68') {
               const nextVer = String(msg.version).replace(/^v/i, '').trim();
               window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
               const reloadGuardKey = `pwa_version_upgraded_${nextVer}`;
@@ -3322,11 +3342,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : '';
       const savedSlug = typeof window !== 'undefined' ? (localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug')) : null;
       const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (currentSlug || savedSlug || '');
-      const endpoint = targetQuery
-        ? `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`
-        : (cleanUrlZap.length >= 8
-            ? `/api/stores/by-phone/${encodeURIComponent(cleanUrlZap)}?t=${Date.now()}`
-            : `/api/stores/latest?t=${Date.now()}`);
+      const endpoint = pathShortCode
+        ? `/api/short/${encodeURIComponent(pathShortCode)}?t=${Date.now()}`
+        : (targetQuery
+            ? `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`
+            : (cleanUrlZap.length >= 8
+                ? `/api/stores/by-phone/${encodeURIComponent(cleanUrlZap)}?t=${Date.now()}`
+                : `/api/stores/latest?t=${Date.now()}`));
       const res = await fetch(endpoint, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
@@ -3403,7 +3425,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 1) Syncs merchant changes (if any) and pulls freshest catalog immediately
   // 2) Resolves newest /api/version, purges SW + CacheStorage + HTTP disk cache, and reloads seamlessly
   const triggerOneClickUpdate = async (): Promise<void> => {
-    showToast('info', 'Atualizando em Tempo Real...', 'Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v67)...');
+    showToast('info', 'Atualizando em Tempo Real...', 'Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v68)...');
     try {
       if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany?.name) {
         await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
@@ -3411,13 +3433,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await refreshStoreCatalog().catch(() => {});
     } catch {}
 
-    let latestVer = '67';
+    let latestVer = '68';
     try {
       const verRes = await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' });
       if (verRes.ok) {
         const verJson = await verRes.json();
         if (verJson?.version) {
-          latestVer = String(verJson.version).replace(/^v/i, '').trim() || '67';
+          latestVer = String(verJson.version).replace(/^v/i, '').trim() || '68';
         }
       }
     } catch {}

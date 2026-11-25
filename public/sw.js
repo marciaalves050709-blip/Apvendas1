@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 67 (Live Network-First & Real-Time Update Safe)
-const CACHE_NAME = 'appvendas-pwa-v67';
+// appvendas Service Worker (PWA) - Version 68 (Live Network-First & Real-Time Update Safe)
+const CACHE_NAME = 'appvendas-pwa-v68';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -45,7 +45,7 @@ self.addEventListener('activate', (event) => {
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v67' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v68' });
         }
       } catch (e) {}
     })

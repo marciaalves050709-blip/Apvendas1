@@ -341,8 +341,9 @@ export function buildStoreShareMessage(
     ? `\n🛍️ *Destaques (${products.length} ${products.length === 1 ? 'item' : 'itens'}):* ${products.slice(0, 4).map(p => p.name).join(', ')}${products.length > 4 ? '...' : ''}\n`
     : '';
 
-  // Safety: Guarantee link NEVER contains da.gd and always defaults to clean company link
-  const safeShareUrl = shareUrl && !shareUrl.includes('da.gd') && shareUrl.startsWith('http')
+  // Safety: Guarantee link NEVER contains da.gd or raw query codes (?loja=...&p=...) and always defaults to clean company link
+  const hasRawQueryCodes = shareUrl.includes('?p=') || shareUrl.includes('&p=') || shareUrl.includes('&loja=') || shareUrl.includes('&pix=');
+  const safeShareUrl = shareUrl && !shareUrl.includes('da.gd') && !hasRawQueryCodes && shareUrl.startsWith('http')
     ? shareUrl
     : buildStoreCleanUrl(company, paymentSettings);
 
@@ -365,14 +366,26 @@ Acesse o catálogo da ${compName} e aproveite!`
 }
 
 /**
- * Shortens a URL while STRICTLY guaranteeing that the company name appears in the resulting link.
- * Never returns nameless random links from external shorteners.
+ * Shortens a URL while STRICTLY guaranteeing that the company name appears in the resulting link
+ * and NEVER exposing raw query-string codes (?loja=...&pix=...&p=...).
  */
-export async function shortenUrl(longUrl: string, storeName?: string): Promise<string> {
+export interface ShortenExtraData {
+  company?: CompanyAccount;
+  paymentSettings?: Partial<PaymentSettings>;
+  activeSeller?: SellerProfile;
+  products?: Product[];
+  zap?: string;
+}
+
+export async function shortenUrl(
+  longUrl: string,
+  storeName?: string,
+  extraData?: ShortenExtraData
+): Promise<string> {
   if (!longUrl) return '';
 
   // Resolve store name from argument, query params, or /loja/:slug pathname inside longUrl
-  let resolvedName = (storeName || '').trim();
+  let resolvedName = (storeName || extraData?.company?.name || '').trim();
   if (!resolvedName || resolvedName.toLowerCase() === 'loja') {
     try {
       const parsed = new URL(longUrl);
@@ -380,7 +393,7 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
       if (!resolvedName || resolvedName.toLowerCase() === 'loja') {
         const parts = parsed.pathname.split('/').filter(Boolean);
         if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
-          resolvedName = decodeURIComponent(parts[1]);
+          resolvedName = decodeURIComponent(parts[1]).replace(/[_-][a-z0-9]{3,8}$/i, '');
         }
       }
     } catch {}
@@ -415,7 +428,8 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
     origin = origin.replace('ais-dev-', 'ais-pre-');
   }
 
-  let destinationUrl = `${origin}/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}`;
+  const cleanFallbackUrl = `${origin}/loja/${encodeURIComponent(urlSlug || 'loja')}`;
+  let destinationUrl = cleanFallbackUrl;
   try {
     const parsedLong = new URL(longUrl);
     let destOrigin = parsedLong.origin;
@@ -435,18 +449,23 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
       lower.includes(urlSlug) ||
       (cleanPrefix.length >= 3 && lower.includes(cleanPrefix)) ||
       (urlPrefix.length >= 3 && lower.includes(urlPrefix)) ||
-      lower.includes(`/loja/${urlSlug}`)
+      lower.includes(`/loja/${urlSlug}`) ||
+      lower.includes(`/l/${cleanSlug}`)
     );
   };
 
-  // 0. Primary: Fast server-side proxy (CORS-free, bypasses adblockers and mobile restrictions)
+  // 0. Primary: Fast server-side proxy (persists _shortLinks + live products & phone, returns is.gd or /l/empresa_hash)
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     const apiRes = await fetch('/api/shorten', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: destinationUrl, storeName: resolvedName || storeName }),
+      body: JSON.stringify({
+        url: destinationUrl,
+        storeName: resolvedName || storeName,
+        ...(extraData || {})
+      }),
       signal: controller.signal
     });
     clearTimeout(timer);
@@ -457,15 +476,24 @@ export async function shortenUrl(longUrl: string, storeName?: string): Promise<s
         typeof data.shortUrl === 'string' &&
         data.shortUrl.startsWith('http') &&
         !data.shortUrl.includes('da.gd') &&
+        !data.shortUrl.includes('?p=') &&
+        !data.shortUrl.includes('&p=') &&
         hasCompanyInLink(data.shortUrl)
       ) {
         return data.shortUrl;
+      }
+      if (
+        data &&
+        typeof data.cleanSelfShortUrl === 'string' &&
+        data.cleanSelfShortUrl.startsWith('http')
+      ) {
+        return data.cleanSelfShortUrl;
       }
     }
   } catch {
     // fallback below
   }
 
-  // Fallback: ALWAYS return official direct store URL with exact company name AND latest products
-  return destinationUrl;
+  // Fallback: ALWAYS return clean official company URL (/loja/empresa) — NEVER expose ?loja=&nome=&pix=&p= query codes
+  return cleanFallbackUrl;
 }
