@@ -2061,7 +2061,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version).replace(/^v/i, '').trim() !== '66') {
+            if (msg.type === 'CONNECTED' && msg.version && String(msg.version).replace(/^v/i, '').trim() !== '67') {
               const nextVer = String(msg.version).replace(/^v/i, '').trim();
               window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
               const reloadGuardKey = `pwa_version_upgraded_${nextVer}`;
@@ -2146,12 +2146,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   });
                 }
 
-                // Persist to tenant storage
+                // Persist to tenant storage (products AND payment settings / phones)
                 try {
                   const compId = msg.storeData.company?.id || activeCompanyId;
                   localStorage.setItem(getTenantKey('products', compId), JSON.stringify(msg.storeData.products));
+                  if (msg.storeData.paymentSettings) {
+                    localStorage.setItem(getTenantKey('payment_settings', compId), JSON.stringify(msg.storeData.paymentSettings));
+                  }
                   if (compId === DEFAULT_COMPANY_ID) {
                     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(msg.storeData.products));
+                    if (msg.storeData.paymentSettings) {
+                      localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(msg.storeData.paymentSettings));
+                    }
                   }
                 } catch {}
               }
@@ -3309,12 +3315,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) : null;
       const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa') || pathLojaName;
+      const urlZap = urlParams?.get('zap') || urlParams?.get('cel') || urlParams?.get('celular') || urlParams?.get('whatsapp') || '';
+      const cleanUrlZap = urlZap.replace(/\D/g, '');
       const currentSlug = currentCompany?.name && currentCompany.name !== 'Minha Loja'
         ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
         : '';
       const savedSlug = typeof window !== 'undefined' ? (localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug')) : null;
-      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (currentSlug || savedSlug || 'latest');
-      const res = await fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' });
+      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (currentSlug || savedSlug || '');
+      const endpoint = targetQuery
+        ? `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`
+        : (cleanUrlZap.length >= 8
+            ? `/api/stores/by-phone/${encodeURIComponent(cleanUrlZap)}?t=${Date.now()}`
+            : `/api/stores/latest?t=${Date.now()}`);
+      const res = await fetch(endpoint, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (!data || data.isPlaceholder) {
@@ -3390,7 +3403,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 1) Syncs merchant changes (if any) and pulls freshest catalog immediately
   // 2) Resolves newest /api/version, purges SW + CacheStorage + HTTP disk cache, and reloads seamlessly
   const triggerOneClickUpdate = async (): Promise<void> => {
-    showToast('info', 'Atualizando em Tempo Real...', 'Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v66)...');
+    showToast('info', 'Atualizando em Tempo Real...', 'Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v67)...');
     try {
       if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany?.name) {
         await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
@@ -3398,13 +3411,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await refreshStoreCatalog().catch(() => {});
     } catch {}
 
-    let latestVer = '66';
+    let latestVer = '67';
     try {
       const verRes = await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' });
       if (verRes.ok) {
         const verJson = await verRes.json();
         if (verJson?.version) {
-          latestVer = String(verJson.version).replace(/^v/i, '').trim() || '66';
+          latestVer = String(verJson.version).replace(/^v/i, '').trim() || '67';
         }
       }
     } catch {}

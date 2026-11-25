@@ -165,8 +165,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = '66';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v66';
+const CURRENT_SW_VERSION = '67';
+const CURRENT_CACHE_NAME = 'appvendas-pwa-v67';
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)
@@ -267,6 +267,13 @@ if (typeof window !== 'undefined') {
         console.log('[PWA] Service worker active:', event.data.version);
         if (swVer && swVer !== CURRENT_SW_VERSION) {
           window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: swVer } }));
+          const reloadGuardKey = `pwa_version_upgraded_${swVer}`;
+          if (!sessionStorage.getItem(reloadGuardKey)) {
+            sessionStorage.setItem(reloadGuardKey, 'true');
+            if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+              (window as any).__clearAppCacheAndReload(swVer);
+            }
+          }
         }
       }
     });

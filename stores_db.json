@@ -402,7 +402,10 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-25T16:16:42.440Z"
+    "registeredPhones": [
+      "11999999999"
+    ],
+    "updatedAt": "2026-11-25T17:08:52.895Z"
   },
   "_latest": {
     "slug": "loja-da-ana",
@@ -588,7 +591,10 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-25T16:16:42.440Z"
+    "registeredPhones": [
+      "11999999999"
+    ],
+    "updatedAt": "2026-11-25T17:08:52.895Z"
   },
   "loja-da-ana": {
     "slug": "loja-da-ana",
@@ -774,7 +780,10 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-25T16:16:42.440Z"
+    "registeredPhones": [
+      "11999999999"
+    ],
+    "updatedAt": "2026-11-25T17:08:52.895Z"
   },
   "lojadaana": {
     "slug": "loja-da-ana",
@@ -960,6 +969,13 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-25T16:16:42.440Z"
+    "registeredPhones": [
+      "11999999999"
+    ],
+    "updatedAt": "2026-11-25T17:08:52.895Z"
+  },
+  "_phoneIndex": {
+    "11999999999": "loja-da-ana",
+    "5511999999999": "loja-da-ana"
   }
 }

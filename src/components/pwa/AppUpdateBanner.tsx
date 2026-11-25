@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw, X, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-const CLIENT_BUILD_VER = '66';
+const CLIENT_BUILD_VER = '67';
 
 interface AppUpdateBannerProps {
   onOpenUpdateModal?: () => void;

@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '66', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '67', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -665,14 +665,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '66',
-    versionName: 'v66.0',
+    version: '67',
+    versionName: 'v67.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Atualização em 1 clique corrigida com limpeza real de cache HTTP/SW e sincronização em tempo real (v66)',
-      'Rotas /loja/:empresa respondem direto com 200 OK sem erro de redirecionamento no app instalado',
-      'Links compartilhados no WhatsApp e redes sociais com nome de cada empresa, prévia e produtos',
-      'Sincronização em tempo real automática entre painel da empresa, celular instalado e clientes'
+      'Vínculo em tempo real de cada número de celular cadastrado com os produtos atualizados da empresa (v67)',
+      'Área de Teste restrita da Administradora para validar celular, empresa e links no WhatsApp e redes sociais',
+      'Botão Compartilhar padronizado e layout responsivo na Área do Cliente para celular e app instalado',
+      'Sincronização automática em tempo real entre painel da empresa, celular instalado e clientes'
     ]
   });
 });

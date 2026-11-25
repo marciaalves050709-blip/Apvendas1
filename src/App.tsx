@@ -82,7 +82,7 @@ const MainLayout: React.FC = () => {
   // SEM a barra lateral de gestão (Sidebar), SEM cabeçalho duplicado e SEM a barra de abas de gestão!
   if (isClientStoreTab) {
     return (
-      <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans overflow-hidden flex-col">
+      <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] w-full max-w-full bg-slate-100 text-slate-900 font-sans overflow-hidden overflow-x-hidden flex-col">
         <AppUpdateBanner onOpenUpdateModal={openUpdateModal} />
         <MobileInstallBanner />
         <ClientStoreView />

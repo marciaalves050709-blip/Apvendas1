@@ -111,10 +111,9 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     onShowToast('success', 'Nome da Loja Atualizado!', `O link agora está configurado com "${clean}"`);
   };
 
-  // Fetch server catalog for secondary companies when local storage has no products for that tenant
+  // Fetch latest server catalog & registered phone numbers whenever ShareCompanyModal opens or target company switches
   useEffect(() => {
     if (!isOpen || !effectiveCompany?.id) return;
-    if (effectiveCompany.id === currentCompany?.id) return;
     const rawSlug = (effectiveCompany.slug || effectiveCompany.name || effectiveCompany.id || '')
       .toLowerCase()
       .normalize('NFD')
@@ -139,7 +138,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
         }
       })
       .catch(() => {});
-  }, [isOpen, effectiveCompany?.id, effectiveCompany?.slug, effectiveCompany?.name, currentCompany?.id]);
+  }, [isOpen, effectiveCompany?.id, effectiveCompany?.slug, effectiveCompany?.name]);
 
   // Dynamically resolve products and payment settings for the target company
   const effectiveProducts = useMemo(() => {
@@ -305,9 +304,22 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     return catalogShareUrl;
   }, [urlMode, shortUrl, catalogShareUrl]);
 
+  const sellerForSelectedPhone = useMemo(() => {
+    if (!selectedSharePhone) return effectiveSeller;
+    return {
+      ...(effectiveSeller || {
+        id: 'vendedor_principal',
+        name: effectiveCompany?.ownerName || 'Atendente',
+        pixKey: effectiveSettings?.pixKey || '',
+        pixKeyType: 'PHONE' as const
+      }),
+      whatsapp: selectedSharePhone
+    };
+  }, [selectedSharePhone, effectiveSeller, effectiveCompany?.ownerName, effectiveSettings?.pixKey]);
+
   const shareMessage = useMemo(() => {
-    return buildStoreShareMessage(effectiveCompany, activeUrl, effectiveSeller, effectiveSettings, effectiveProducts);
-  }, [effectiveCompany, activeUrl, effectiveSeller, effectiveSettings, effectiveProducts]);
+    return buildStoreShareMessage(effectiveCompany, activeUrl, sellerForSelectedPhone, effectiveSettings, effectiveProducts);
+  }, [effectiveCompany, activeUrl, sellerForSelectedPhone, effectiveSettings, effectiveProducts]);
 
   // Generate QR Code based on active URL
   useEffect(() => {
@@ -338,11 +350,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
     if (effectiveCompany && effectiveProducts.length > 0) {
       await Promise.race([
-        syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => false),
+        syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts).catch(() => false),
         new Promise(resolve => setTimeout(resolve, 1500))
       ]);
     }
-    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, effectiveSeller, effectiveSettings, effectiveProducts);
+    const finalMsg = buildStoreShareMessage(effectiveCompany, finalUrl, sellerForSelectedPhone, effectiveSettings, effectiveProducts);
     const encoded = encodeURIComponent(finalMsg);
     const waUrl = `https://api.whatsapp.com/send?text=${encoded}`;
     try {
@@ -367,7 +379,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
     if (effectiveCompany && effectiveProducts.length > 0) {
       await Promise.race([
-        syncStoreToServer(effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts).catch(() => false),
+        syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts).catch(() => false),
         new Promise(resolve => setTimeout(resolve, 1500))
       ]);
     }
