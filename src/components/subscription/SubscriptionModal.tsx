@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp, checkIsMasterPassword } from '../../context/AppContext';
 import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
 import { PixRadarScanner } from './PixRadarScanner';
+import { AdminShareTestPanel } from './AdminShareTestPanel';
 import { 
   X, 
   Check, 
@@ -706,6 +707,9 @@ export const SubscriptionModal: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Área de Teste da Administradora: Celular + Empresa + Link Compartilhar */}
+              <AdminShareTestPanel />
 
               {/* Botões de Ação da Administradora */}
               <div className="pt-2 flex items-center justify-between border-t border-amber-200/80 flex-wrap gap-2">

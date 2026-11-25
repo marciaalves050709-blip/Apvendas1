@@ -1879,10 +1879,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         });
 
+        const urlZap = params.get('zap') || params.get('cel') || params.get('celular') || '';
+        const cleanUrlZap = urlZap.replace(/\D/g, '');
         setPaymentSettings(ps => ({
           ...ps,
           merchantName: incomingName,
-          sellers: ps.sellers ? ps.sellers.map(s => ({ ...s, merchantName: incomingName })) : ps.sellers
+          ...(cleanUrlZap.length >= 8 ? { merchantWhatsapp: cleanUrlZap } : {}),
+          sellers: ps.sellers ? ps.sellers.map((s, idx) => ({
+            ...s,
+            merchantName: incomingName,
+            ...(idx === 0 && cleanUrlZap.length >= 8 && (!s.whatsapp || s.id === ps.activeSellerId) ? { whatsapp: cleanUrlZap } : {})
+          })) : ps.sellers
         }));
 
         if (typeof document !== 'undefined') {
@@ -1890,14 +1897,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      const urlPhoneDigits = (params.get('cel') || params.get('celular') || params.get('zap') || '').replace(/\D/g, '');
       const savedSlug = localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug');
       const currentActiveSlug = currentCompany?.name && currentCompany.name !== 'Minha Loja'
         ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
         : '';
       const targetQuery = targetUrlSlug || urlCompId || currentActiveSlug || savedSlug || 'latest';
+      const fetchEndpoint = (!targetUrlSlug && !urlCompId && urlPhoneDigits.length >= 8)
+        ? `/api/stores/by-phone/${encodeURIComponent(urlPhoneDigits)}?t=${Date.now()}`
+        : `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`;
 
       // 2. Fetch store catalog and settings from backend API (respecting newer ?p= URL products)
-      fetch(`/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`, { cache: 'no-store' })
+      fetch(fetchEndpoint, { cache: 'no-store' })
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (!data || data.isPlaceholder) {
@@ -2373,20 +2384,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updatePaymentSettings = (newSettings: Partial<PaymentSettings>) => {
     hasMerchantMutationRef.current = true;
     setPaymentSettings(prev => ({ ...prev, ...newSettings }));
-    if (newSettings.merchantName && newSettings.merchantName.trim()) {
-      const cleanName = newSettings.merchantName.trim();
+    if ((newSettings.merchantName && newSettings.merchantName.trim()) || newSettings.merchantWhatsapp !== undefined) {
+      const cleanName = newSettings.merchantName?.trim();
+      const cleanPhone = newSettings.merchantWhatsapp !== undefined ? newSettings.merchantWhatsapp.trim() : undefined;
       setCompanies(prev => {
         const next = prev.map(c => c.id === activeCompanyId ? {
           ...c,
-          name: cleanName,
-          slug: normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-')
+          ...(cleanName ? { name: cleanName, slug: normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-') } : {}),
+          ...(cleanPhone !== undefined ? { phone: cleanPhone } : {})
         } : c);
         try {
           localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
         } catch {}
         return next;
       });
-      if (typeof document !== 'undefined') {
+      if (cleanName && typeof document !== 'undefined') {
         document.title = `${cleanName} - Gestão & Vendas`;
       }
     }
@@ -2578,9 +2590,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
-    if (data.name) {
-      const cleanName = data.name.trim();
-      const normSlug = normalizeStoreSlug(cleanName);
+    const cleanPhoneUpdate = data.phone !== undefined ? data.phone.trim() : undefined;
+    if (data.name || cleanPhoneUpdate !== undefined) {
+      const cleanName = data.name?.trim();
+      const normSlug = cleanName ? normalizeStoreSlug(cleanName) : '';
       if (normSlug) {
         try {
           localStorage.setItem('appvendas_last_visited_store_slug', normSlug);
@@ -2589,10 +2602,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setPaymentSettings(ps => ({ 
         ...ps, 
-        merchantName: cleanName,
-        sellers: ps.sellers ? ps.sellers.map(s => ({ ...s, merchantName: cleanName })) : ps.sellers
+        ...(cleanName ? { merchantName: cleanName } : {}),
+        ...(cleanPhoneUpdate !== undefined ? { merchantWhatsapp: cleanPhoneUpdate } : {}),
+        sellers: ps.sellers ? ps.sellers.map((s, idx) => ({
+          ...s,
+          ...(cleanName ? { merchantName: cleanName } : {}),
+          ...(cleanPhoneUpdate !== undefined && (s.id === ps.activeSellerId || idx === 0) && (!s.whatsapp || s.whatsapp === current?.phone) ? { whatsapp: cleanPhoneUpdate } : {})
+        })) : ps.sellers
       }));
-      if (typeof document !== 'undefined') {
+      if (cleanName && typeof document !== 'undefined') {
         document.title = `${cleanName} - Gestão & Vendas`;
       }
     }
@@ -2605,21 +2623,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const newId = `empresa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const cleanPhone = companyData.phone?.trim() || '';
     const newComp: CompanyAccount = {
       id: newId,
       name: companyData.name.trim(),
       slug: normalizeStoreSlug(companyData.name.trim()) || companyData.name.trim().toLowerCase().replace(/\s+/g, '-'),
       ownerName: companyData.ownerName?.trim() || 'Usuário',
-      phone: companyData.phone?.trim() || '',
+      phone: cleanPhone,
       category: companyData.category || 'Comércio & Varejo',
       logoEmoji: companyData.logoEmoji || '🏪',
       createdAt: new Date().toISOString()
     };
 
+    const initialSeller: SellerProfile = {
+      id: 'vendedor_principal',
+      name: newComp.ownerName && newComp.ownerName !== 'Usuário' ? newComp.ownerName : 'Atendente',
+      whatsapp: cleanPhone,
+      pixKey: '',
+      pixKeyType: 'PHONE',
+      merchantName: newComp.name,
+      merchantCity: 'Barcarena PA',
+      receivingBank: 'NUBANK',
+      isDefault: true,
+    };
+
     const initialTenantSettings: PaymentSettings = {
       ...DEFAULT_PAYMENT_SETTINGS,
       merchantName: newComp.name,
-      merchantWhatsapp: newComp.phone || ''
+      merchantWhatsapp: cleanPhone,
+      sellers: [initialSeller],
+      activeSellerId: initialSeller.id,
     };
 
     try {
@@ -2655,8 +2688,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPaymentSettings(initialTenantSettings);
     setCart([]);
 
-    // Register new empty company cleanly on the server
-    syncStoreToServer(newComp, initialTenantSettings, activeSeller, [], true).catch(() => {});
+    // Register new empty company cleanly on the server with its own seller/phone
+    syncStoreToServer(newComp, initialTenantSettings, initialSeller, [], true).catch(() => {});
 
     if (typeof document !== 'undefined') {
       document.title = `${newComp.name} - Gestão & Vendas`;
@@ -2695,10 +2728,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadedMoves = loadTenant<StockMovement[]>('movements', companyId === DEFAULT_COMPANY_ID ? INITIAL_MOVEMENTS : []);
     const loadedCusts = loadTenant<Customer[]>('customers', companyId === DEFAULT_COMPANY_ID ? INITIAL_CUSTOMERS : []);
     const loadedSupps = loadTenant<Supplier[]>('suppliers', companyId === DEFAULT_COMPANY_ID ? INITIAL_SUPPLIERS : []);
-    const loadedSettings = loadTenant<PaymentSettings>('payment_settings', { ...DEFAULT_PAYMENT_SETTINGS, merchantName: target.name });
+    const loadedSettings = loadTenant<PaymentSettings>('payment_settings', {
+      ...DEFAULT_PAYMENT_SETTINGS,
+      merchantName: target.name,
+      merchantWhatsapp: target.phone || '',
+      sellers: [{
+        ...DEFAULT_SELLERS[0],
+        merchantName: target.name,
+        whatsapp: target.phone || ''
+      }]
+    });
     if (loadedSettings) {
       loadedSettings.merchantCity = sanitizeMerchantCity(loadedSettings.merchantCity);
     }
+
+    const loadedSeller = loadedSettings?.sellers?.find(s => s.id === loadedSettings.activeSellerId) || loadedSettings?.sellers?.[0];
 
     setProducts(loadedProds);
     setSales(loadedSales);
@@ -2709,7 +2753,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart([]);
 
     if (loadedProds.length > 0) {
-      syncStoreToServer(target, loadedSettings, activeSeller, loadedProds).catch(() => {});
+      syncStoreToServer(target, loadedSettings, loadedSeller, loadedProds).catch(() => {});
     }
 
     if (typeof document !== 'undefined') {

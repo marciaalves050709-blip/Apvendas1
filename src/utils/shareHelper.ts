@@ -69,6 +69,96 @@ export function buildStoreCleanUrl(
   return `${origin}/loja/${encodeURIComponent(storeSlug)}`;
 }
 
+export interface CompanyPhoneEntry {
+  phone: string; // canonical digits without leading 55 when 12+ digits
+  whatsappDigits: string; // digits formatted for ?zap= / wa.me (with 55 when BR 10/11 digits)
+  formatted: string;
+  label: string;
+  sellerId?: string;
+  isActive: boolean;
+}
+
+export function normalizePhoneDigits(phone?: string): string {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('55') && digits.length >= 12) {
+    return digits.slice(2);
+  }
+  return digits;
+}
+
+export function toWhatsappDigits(phone?: string): string {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
+    return `55${digits}`;
+  }
+  return digits;
+}
+
+export function formatPhoneQuick(phone?: string): string {
+  const d = normalizePhoneDigits(phone);
+  if (d.length === 11) {
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  }
+  if (d.length === 10) {
+    return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  }
+  return phone || '';
+}
+
+export function phonesMatch(a?: string, b?: string): boolean {
+  const na = normalizePhoneDigits(a);
+  const nb = normalizePhoneDigits(b);
+  if (!na || !nb) return false;
+  return na === nb || (na.length >= 8 && nb.length >= 8 && (na.endsWith(nb) || nb.endsWith(na)));
+}
+
+export function collectCompanyPhones(
+  company?: CompanyAccount | null,
+  paymentSettings?: Partial<PaymentSettings> | null,
+  activeSeller?: SellerProfile | null
+): CompanyPhoneEntry[] {
+  const result: CompanyPhoneEntry[] = [];
+  const seen = new Set<string>();
+  const activeCanon = normalizePhoneDigits(
+    activeSeller?.whatsapp || paymentSettings?.merchantWhatsapp || company?.phone
+  );
+
+  const pushEntry = (raw?: string, label?: string, sellerId?: string) => {
+    const canon = normalizePhoneDigits(raw);
+    if (canon.length < 8 || seen.has(canon)) return;
+    seen.add(canon);
+    result.push({
+      phone: canon,
+      whatsappDigits: toWhatsappDigits(raw),
+      formatted: formatPhoneQuick(canon),
+      label: label || 'WhatsApp da Empresa',
+      sellerId,
+      isActive: canon === activeCanon
+    });
+  };
+
+  if (activeSeller?.whatsapp) {
+    pushEntry(activeSeller.whatsapp, activeSeller.name || 'Atendente Ativo', activeSeller.id);
+  }
+  if (Array.isArray(paymentSettings?.sellers)) {
+    for (const s of paymentSettings.sellers) {
+      if (s?.whatsapp) {
+        pushEntry(s.whatsapp, s.name || 'Vendedor', s.id);
+      }
+    }
+  }
+  if (paymentSettings?.merchantWhatsapp) {
+    pushEntry(paymentSettings.merchantWhatsapp, 'WhatsApp da Loja');
+  }
+  if (company?.phone) {
+    pushEntry(company.phone, company.ownerName || 'Empresa');
+  }
+
+  return result;
+}
+
 /**
  * Builds the canonical public store URL containing the company AND all available products.
  * This URL is used by the URL shortener to deliver all products when opened.
@@ -77,7 +167,8 @@ export function buildStoreShareUrl(
   company: CompanyAccount,
   paymentSettings?: PaymentSettings,
   activeSeller?: SellerProfile,
-  products?: Product[]
+  products?: Product[],
+  phoneOverride?: string
 ): string {
   let origin = typeof window !== 'undefined' && window.location.origin 
     ? window.location.origin 
@@ -106,9 +197,9 @@ export function buildStoreShareUrl(
   url.searchParams.set('tab', 'client-store');
   url.searchParams.set('empresa', company?.id || 'empresa_principal');
 
-  const zap = activeSeller?.whatsapp || paymentSettings?.merchantWhatsapp || company?.phone;
+  const zap = phoneOverride || activeSeller?.whatsapp || paymentSettings?.merchantWhatsapp || company?.phone;
   if (zap) {
-    const cleanZap = zap.replace(/\D/g, '');
+    const cleanZap = toWhatsappDigits(zap);
     if (cleanZap) url.searchParams.set('zap', cleanZap);
   }
 
@@ -196,11 +287,13 @@ export async function syncStoreToServer(
       .replace(/^-|-$/g, '')
       .trim() || 'loja';
 
+    const registeredPhones = collectCompanyPhones(company, paymentSettings, activeSeller).map(e => e.phone);
     const payload = JSON.stringify({
       company,
       paymentSettings,
       activeSeller,
       products: products || [],
+      registeredPhones,
       forceClear: Boolean(forceClear)
     });
 

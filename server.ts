@@ -114,6 +114,77 @@ const cleanSlugAlphanumeric = (str: string): string => {
     .trim();
 };
 
+const normalizePhoneVariants = (phone?: string): string[] => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 8) return [];
+  const variants = new Set<string>();
+  variants.add(digits);
+  if (digits.startsWith('55') && digits.length >= 12) {
+    variants.add(digits.slice(2));
+  } else if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
+    variants.add('55' + digits);
+  }
+  return Array.from(variants);
+};
+
+const collectStorePhones = (storeData: any): string[] => {
+  const raw = new Set<string>();
+  if (!storeData) return [];
+  if (storeData.company?.phone) raw.add(String(storeData.company.phone));
+  if (storeData.paymentSettings?.merchantWhatsapp) raw.add(String(storeData.paymentSettings.merchantWhatsapp));
+  if (storeData.activeSeller?.whatsapp) raw.add(String(storeData.activeSeller.whatsapp));
+  if (Array.isArray(storeData.paymentSettings?.sellers)) {
+    for (const s of storeData.paymentSettings.sellers) {
+      if (s?.whatsapp) raw.add(String(s.whatsapp));
+    }
+  }
+  if (Array.isArray(storeData.registeredPhones)) {
+    for (const p of storeData.registeredPhones) {
+      if (p) raw.add(String(p));
+    }
+  }
+  const canonical = new Set<string>();
+  for (const r of raw) {
+    const d = r.replace(/\D/g, '');
+    if (d.length >= 8) {
+      canonical.add(d.startsWith('55') && d.length >= 12 ? d.slice(2) : d);
+    }
+  }
+  return Array.from(canonical);
+};
+
+const findStoreByPhone = (db: Record<string, any>, phoneInput: string): any | null => {
+  const variants = normalizePhoneVariants(phoneInput);
+  if (variants.length === 0) return null;
+
+  const phoneIndex = db['_phoneIndex'] || {};
+  for (const v of variants) {
+    const indexedSlug = phoneIndex[v];
+    if (indexedSlug && db[indexedSlug] && !String(indexedSlug).startsWith('_')) {
+      return db[indexedSlug];
+    }
+  }
+
+  // Fallback scan across all stored companies
+  const candidates: any[] = [];
+  for (const [k, s] of Object.entries(db)) {
+    if (k.startsWith('_') || !s || typeof s !== 'object' || !s.slug) continue;
+    const storePhones = collectStorePhones(s);
+    const hasMatch = storePhones.some(sp => {
+      const spVars = normalizePhoneVariants(sp);
+      return spVars.some(sv => variants.includes(sv));
+    });
+    if (hasMatch) {
+      candidates.push(s);
+    }
+  }
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+    return candidates[0];
+  }
+  return null;
+};
+
 // API: Save/Sync Store Catalog and Details (Always persists latest live catalog and pushes live to all connected PWAs)
 app.post('/api/stores/:slug', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -125,7 +196,7 @@ app.post('/api/stores/:slug', (req, res) => {
     const slug = normalizeSlug(rawSlug) || 'loja';
     const cleanSlug = cleanSlugAlphanumeric(rawSlug) || 'loja';
 
-    const { company, paymentSettings, products, activeSeller, forceClear } = req.body;
+    const { company, paymentSettings, products, activeSeller, forceClear, registeredPhones } = req.body;
     const db = readDb();
 
     const productList = Array.isArray(products) ? products : [];
@@ -136,13 +207,19 @@ app.post('/api/stores/:slug', (req, res) => {
       ? productList 
       : (forceClear ? [] : (existingStore && Array.isArray(existingStore.products) ? existingStore.products : []));
 
-    const storeData = {
+    const storeDraft = {
       slug,
       cleanSlug,
       company: company || (existingStore?.company || { name: rawSlug }),
       paymentSettings: paymentSettings || (existingStore?.paymentSettings || {}),
       products: finalProducts,
       activeSeller: activeSeller || (existingStore?.activeSeller || null),
+      registeredPhones: Array.isArray(registeredPhones) ? registeredPhones : (existingStore?.registeredPhones || []),
+    };
+    const mergedPhones = collectStorePhones(storeDraft);
+    const storeData = {
+      ...storeDraft,
+      registeredPhones: mergedPhones,
       updatedAt: new Date().toISOString()
     };
 
@@ -150,22 +227,42 @@ app.post('/api/stores/:slug', (req, res) => {
       company: existingStore.company,
       paymentSettings: existingStore.paymentSettings,
       products: existingStore.products,
-      activeSeller: existingStore.activeSeller
+      activeSeller: existingStore.activeSeller,
+      registeredPhones: existingStore.registeredPhones || []
     }) : '';
 
     const nextPayloadHash = JSON.stringify({
       company: storeData.company,
       paymentSettings: storeData.paymentSettings,
       products: storeData.products,
-      activeSeller: storeData.activeSeller
+      activeSeller: storeData.activeSeller,
+      registeredPhones: storeData.registeredPhones
     });
 
+    // Always ensure _phoneIndex links every registered mobile phone to this store slug
+    if (!db['_phoneIndex'] || typeof db['_phoneIndex'] !== 'object') {
+      db['_phoneIndex'] = {};
+    }
+    let phoneIndexChanged = false;
+    for (const phoneNum of mergedPhones) {
+      for (const variant of normalizePhoneVariants(phoneNum)) {
+        if (db['_phoneIndex'][variant] !== slug) {
+          db['_phoneIndex'][variant] = slug;
+          phoneIndexChanged = true;
+        }
+      }
+    }
+
     if (prevPayloadHash && prevPayloadHash === nextPayloadHash) {
+      if (phoneIndexChanged) {
+        writeDb(db);
+      }
       return res.json({
         success: true,
         unchanged: true,
         slug,
         cleanSlug,
+        registeredPhones: storeData.registeredPhones,
         productCount: storeData.products.length,
         clientsNotified: 0,
         updatedAt: existingStore.updatedAt || storeData.updatedAt
@@ -193,7 +290,7 @@ app.post('/api/stores/:slug', (req, res) => {
     }
 
     writeDb(db);
-    console.log(`[StoreDB] Store "${slug}" synced with ${storeData.products.length} products. Broadcasting to ${liveSyncClients.size} live clients.`);
+    console.log(`[StoreDB] Store "${slug}" synced with ${storeData.products.length} products and ${mergedPhones.length} phone(s). Broadcasting to ${liveSyncClients.size} live clients.`);
 
     // Instant Real-Time Push to all connected installed PWAs & buyers
     const broadcastPayload = JSON.stringify({
@@ -240,16 +337,18 @@ app.get('/api/stores/:slug', (req, res) => {
     const cleanSlug = cleanSlugAlphanumeric(rawSlug);
     const db = readDb();
 
-    // 1. Direct key match
-    if (db[slug]) return res.json(db[slug]);
-    if (db[cleanSlug]) return res.json(db[cleanSlug]);
-    if (db[rawSlug]) return res.json(db[rawSlug]);
+    // 1. Direct key match (ignore private keys starting with _)
+    if (!rawSlug.startsWith('_')) {
+      if (db[slug]) return res.json(db[slug]);
+      if (db[cleanSlug]) return res.json(db[cleanSlug]);
+      if (db[rawSlug]) return res.json(db[rawSlug]);
+    }
 
     // 2. Special keywords: 'latest', 'default', 'current', '_latest', 'loja', 'store'
     const isLatestKeyword = ['latest', 'default', 'current', '_latest', 'loja', 'store', 'principal', 'empresa_principal'].includes(rawSlug.toLowerCase());
     if (isLatestKeyword) {
       if (db['_latest']) return res.json(db['_latest']);
-      const all = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
+      const all = Object.entries(db).filter(([k, s]: [string, any]) => !k.startsWith('_') && s && s.slug).map(([, s]) => s);
       if (all.length > 0) {
         all.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
         return res.json(all[0]);
@@ -257,25 +356,34 @@ app.get('/api/stores/:slug', (req, res) => {
     }
 
     // 3. Flexible search across all stores
-    const found = Object.values(db).find((s: any) => {
-      if (!s) return false;
-      if (s.slug === slug) return true;
-      if (cleanSlug && (s.cleanSlug === cleanSlug || cleanSlugAlphanumeric(s.slug) === cleanSlug)) return true;
-      if (s.company?.id && (s.company.id === rawSlug || s.company.id === slug)) return true;
-      if (s.company?.name) {
-        const compNorm = normalizeSlug(s.company.name);
-        if (compNorm === slug) return true;
-        if (cleanSlug && cleanSlugAlphanumeric(s.company.name) === cleanSlug) return true;
-      }
-      return false;
-    });
+    const found = Object.entries(db)
+      .filter(([k]) => !k.startsWith('_'))
+      .map(([, s]) => s)
+      .find((s: any) => {
+        if (!s || typeof s !== 'object') return false;
+        if (s.slug === slug) return true;
+        if (cleanSlug && (s.cleanSlug === cleanSlug || cleanSlugAlphanumeric(s.slug) === cleanSlug)) return true;
+        if (s.company?.id && (s.company.id === rawSlug || s.company.id === slug)) return true;
+        if (s.company?.name) {
+          const compNorm = normalizeSlug(s.company.name);
+          if (compNorm === slug) return true;
+          if (cleanSlug && cleanSlugAlphanumeric(s.company.name) === cleanSlug) return true;
+        }
+        return false;
+      });
 
     if (found) {
       return res.json(found);
     }
 
-    // 4. Fallback only if generic keyword was requested or if exactly one store exists
-    const allStores = Object.values(db).filter((s: any) => s && s.slug && s.slug !== '_latest');
+    // 3b. Phone-number lookup fallback if rawSlug is a phone number
+    const byPhone = findStoreByPhone(db, rawSlug);
+    if (byPhone) {
+      return res.json(byPhone);
+    }
+
+    // 4. Fallback only if generic keyword was requested
+    const allStores = Object.entries(db).filter(([k, s]: [string, any]) => !k.startsWith('_') && s && s.slug).map(([, s]) => s);
     if (isLatestKeyword && allStores.length > 0) {
       allStores.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
       return res.json(allStores[0]);
@@ -326,6 +434,67 @@ app.get('/api/store/latest', (_req, res) => {
   res.status(404).json({ error: 'Nenhuma loja cadastrada ainda' });
 });
 
+// API: Lookup store and its updated products directly by registered mobile phone number
+app.get('/api/stores/by-phone/:phone', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  try {
+    const db = readDb();
+    const found = findStoreByPhone(db, req.params.phone);
+    if (found) {
+      return res.json({
+        ...found,
+        found: true,
+        registeredPhones: collectStorePhones(found)
+      });
+    }
+    return res.json({
+      found: false,
+      isPlaceholder: true,
+      products: []
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Deduplicated catalog of all companies + registered phone numbers + products (for Admin Test Area)
+app.get('/api/admin/stores-catalog', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  try {
+    const db = readDb();
+    const byKey = new Map<string, any>();
+    for (const [k, s] of Object.entries(db)) {
+      if (k.startsWith('_') || !s || typeof s !== 'object' || !s.slug) continue;
+      const dedupeKey = s.company?.id || s.slug || k;
+      const existing = byKey.get(dedupeKey);
+      const sTime = new Date(s.updatedAt || 0).getTime();
+      const eTime = existing ? new Date(existing.updatedAt || 0).getTime() : -1;
+      if (!existing || sTime >= eTime) {
+        byKey.set(dedupeKey, {
+          slug: s.slug,
+          company: s.company || { id: dedupeKey, name: s.slug },
+          registeredPhones: collectStorePhones(s),
+          paymentSettings: s.paymentSettings || {},
+          activeSeller: s.activeSeller || null,
+          products: Array.isArray(s.products) ? s.products : [],
+          productsCount: Array.isArray(s.products) ? s.products.length : 0,
+          updatedAt: s.updatedAt || null
+        });
+      }
+    }
+    const stores = Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+    );
+    res.json({ stores });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // API: List all synced stores (for debugging / health check)
 app.get('/api/stores', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -334,10 +503,11 @@ app.get('/api/stores', (_req, res) => {
   try {
     const db = readDb();
     const list = Object.keys(db)
-      .filter(k => k !== '_latest')
+      .filter(k => !k.startsWith('_'))
       .map(slug => ({
         slug,
         name: db[slug].company?.name || slug,
+        phones: collectStorePhones(db[slug]),
         productsCount: Array.isArray(db[slug].products) ? db[slug].products.length : 0,
         updatedAt: db[slug].updatedAt
       }));

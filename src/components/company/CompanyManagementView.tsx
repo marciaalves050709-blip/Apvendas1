@@ -4,6 +4,7 @@ import { Product, Category, Supplier, BankProvider, SellerProfile } from '../../
 import { formatCurrency, generatePixPayload, BANKS_LIST, sounds } from '../../utils/pixHelper';
 import { getProductImage, CATEGORY_EMOJIS, ALL_ACTIVITY_CATEGORIES } from '../../utils/productImages';
 import QRCode from 'qrcode';
+import { AdminShareTestPanel } from '../subscription/AdminShareTestPanel';
 import { 
   Building2, 
   Lock, 
@@ -38,7 +39,8 @@ import {
   UserCheck,
   QrCode,
   CreditCard,
-  Share2
+  Share2,
+  FlaskConical
 } from 'lucide-react';
 
 export const CompanyManagementView: React.FC = () => {
@@ -67,11 +69,13 @@ export const CompanyManagementView: React.FC = () => {
     setIsSellerWhatsappModalOpen,
     currentCompany,
     updateCurrentCompany,
-    openShareModal
+    openShareModal,
+    isMasterAdmin,
+    isAdmin
   } = useApp();
 
-  // Active Sub-tab inside Company Area: 'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security'
-  const [activeSubTab, setActiveSubTab] = useState<'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security'>('costs');
+  // Active Sub-tab inside Company Area: 'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security' | 'admin-share-test'
+  const [activeSubTab, setActiveSubTab] = useState<'costs' | 'suppliers' | 'pix-whatsapp' | 'extend-trial' | 'security' | 'admin-share-test'>('costs');
 
   // Extend Trial for Client state
   const [newClientName, setNewClientName] = useState('');
@@ -164,7 +168,8 @@ export const CompanyManagementView: React.FC = () => {
     }
     const cleanStoreName = merchantNameInput.trim() || currentCompany?.name || 'Minha Loja';
     updateCurrentCompany({
-      name: cleanStoreName
+      name: cleanStoreName,
+      phone: cleanWhatsapp
     });
     updatePaymentSettings({
       pixKey: cleanKey,
@@ -545,6 +550,21 @@ export const CompanyManagementView: React.FC = () => {
           <KeyRound className="w-4 h-4 text-amber-600" />
           <span>Alterar Senha da Empresa</span>
         </button>
+
+        {(isMasterAdmin || isAdmin) && (
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('admin-share-test')}
+            className={`py-2.5 px-4 rounded-t-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border-b-2 whitespace-nowrap ${
+              activeSubTab === 'admin-share-test'
+                ? 'border-cyan-600 text-cyan-800 bg-white shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FlaskConical className="w-4 h-4 text-cyan-600" />
+            <span>Teste Admin (Celular &amp; Link)</span>
+          </button>
+        )}
       </div>
 
       {/* Sub-Tab Content */}
@@ -1487,6 +1507,13 @@ export const CompanyManagementView: React.FC = () => {
                 <span>Salvar Nova Senha</span>
               </button>
             </form>
+          </div>
+        )}
+
+        {/* ======================= TAB 4: TESTE ADMIN (RESTRITA) ======================= */}
+        {activeSubTab === 'admin-share-test' && (isMasterAdmin || isAdmin) && (
+          <div className="max-w-4xl mx-auto">
+            <AdminShareTestPanel />
           </div>
         )}
       </div>
