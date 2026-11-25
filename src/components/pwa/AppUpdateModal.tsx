@@ -22,7 +22,7 @@ interface AppUpdateModalProps {
 
 export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose }) => {
   const { isInstalled, isStandalone, isIOS, isAndroid } = usePWAInstall();
-  const { currentCompany, triggerOneClickUpdate } = useApp();
+  const { currentCompany, triggerOneClickUpdate, appVersion } = useApp();
   const [isUpdating, setIsUpdating] = useState(false);
 
   if (!isOpen) return null;
@@ -33,7 +33,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
       await triggerOneClickUpdate();
     } catch {
       if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-        (window as any).__clearAppCacheAndReload('68');
+        (window as any).__clearAppCacheAndReload(appVersion);
       }
     } finally {
       setTimeout(() => setIsUpdating(false), 5000);
@@ -58,7 +58,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
                   Atualizar Aplicativo
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-slate-950 uppercase">
-                  Versão 68
+                  Versão {appVersion}
                 </span>
               </div>
               <p className="text-xs text-indigo-200 truncate mt-0.5">
@@ -139,7 +139,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
             <div className="flex items-center gap-1.5 text-slate-900 font-black text-[11px] uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>O que há de novo na versão 68:</span>
+              <span>O que há de novo na versão {appVersion}:</span>
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-[11px]">
@@ -217,7 +217,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ isOpen, onClose 
         {/* Footer */}
         <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
           <span className="text-[11px] text-slate-500 font-medium">
-            Versão do Sistema: <strong>v68 (Novembro/2026)</strong>
+            Versão do Sistema: <strong>v{appVersion} (Novembro/2026)</strong>
           </span>
           <button
             type="button"

@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { CLIENT_APP_VERSION, CLIENT_CACHE_NAME } from './config/version';
 
 // Automatic global migration and cache sanitization for existing and new users
 try {
@@ -165,8 +166,8 @@ try {
 }
 
 // Force-bust stale caches and register PWA service worker with auto-update
-const CURRENT_SW_VERSION = '68';
-const CURRENT_CACHE_NAME = 'appvendas-pwa-v68';
+const CURRENT_SW_VERSION = CLIENT_APP_VERSION;
+const CURRENT_CACHE_NAME = CLIENT_CACHE_NAME;
 
 if (typeof window !== 'undefined') {
   // Support forced cache cleanup via URL parameter (?atualizar=1 or ?limpar_cache=1)

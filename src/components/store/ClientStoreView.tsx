@@ -114,7 +114,8 @@ export const ClientStoreView: React.FC = () => {
     openShareModal,
     openUpdateModal,
     refreshStoreCatalog,
-    triggerOneClickUpdate
+    triggerOneClickUpdate,
+    appVersion
   } = useApp();
 
   // Client Session State
@@ -1185,10 +1186,15 @@ export const ClientStoreView: React.FC = () => {
               Catálogo de Produtos & Pedidos Rápidos via WhatsApp
             </p>
             <div className="pt-1 flex items-center justify-center gap-2">
-              <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs">
+              <button
+                type="button"
+                onClick={handleQuickAppUpdate}
+                className="text-[10px] text-emerald-800 hover:bg-emerald-100 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
+                title={`Versão ${appVersion} Oficial - Toque para atualizar em tempo real`}
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Versão 66 Oficial
-              </span>
+                <span>Versão {appVersion} Oficial</span>
+              </button>
               <button
                 type="button"
                 onClick={handleQuickAppUpdate}

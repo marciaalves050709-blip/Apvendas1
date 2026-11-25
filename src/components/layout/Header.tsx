@@ -60,7 +60,8 @@ export const Header: React.FC = () => {
     openCompanyAreaUnlock,
     openShareModal,
     openUpdateModal,
-    triggerOneClickUpdate
+    triggerOneClickUpdate,
+    appVersion
   } = useApp();
 
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
@@ -195,7 +196,7 @@ export const Header: React.FC = () => {
           type="button"
           onClick={handleQuickAppUpdate}
           className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all cursor-pointer font-bold text-xs flex items-center gap-1 active:scale-95 shadow-2xs"
-          title="Atualizar aplicativo instalado para a versão mais recente (v68) em 1 clique"
+          title={`Atualizar aplicativo instalado para a versão mais recente (v${appVersion}) em 1 clique`}
         >
           <RefreshCw className="w-3.5 h-3.5 text-indigo-600 animate-spin-hover" />
           <span className="hidden sm:inline">Atualizar App</span>

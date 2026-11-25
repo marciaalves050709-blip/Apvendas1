@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '68', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '69', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -890,13 +890,13 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '68',
-    versionName: 'v68.0',
+    version: '69',
+    versionName: 'v69.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Links compartilhados limpos contendo apenas o nome da empresa sem códigos na URL (v68)',
+      'Indicador dinâmico de versão (ponto verde + Atualizar App) sincronizado automaticamente em tempo real (v69)',
+      'Links compartilhados limpos contendo apenas o nome da empresa sem códigos na URL',
       'Vínculo em tempo real de cada número de celular cadastrado com os produtos atualizados da empresa',
-      'Área de Teste restrita da Administradora para validar celular, empresa e links no WhatsApp e redes sociais',
       'Sincronização automática em tempo real entre painel da empresa, app instalado e clientes'
     ]
   });

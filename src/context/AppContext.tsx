@@ -32,6 +32,7 @@ import {
   DEMO_PRODUCTS
 } from '../data/mockDisposables';
 import { syncStoreToServer } from '../utils/shareHelper';
+import { CLIENT_APP_VERSION } from '../config/version';
 
 interface Toast {
   id: string;
@@ -202,6 +203,7 @@ interface AppContextType {
   closeShareModal: () => void;
 
   // App Installed Update Modal & Real-Time 1-Click Update
+  appVersion: string;
   isUpdateModalOpen: boolean;
   setIsUpdateModalOpen: (open: boolean) => void;
   openUpdateModal: () => void;
@@ -461,10 +463,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setShareModalCompany(null);
   };
 
-  // App Installed Update Modal State
+  // App Installed Update Modal State & Dynamic Live Version
+  const [appVersion, setAppVersion] = useState<string>(CLIENT_APP_VERSION);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const openUpdateModal = () => setIsUpdateModalOpen(true);
   const closeUpdateModal = () => setIsUpdateModalOpen(false);
+
+  // Sync live server version on startup & when window focuses
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncVer = () => {
+      fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (data?.version) {
+            const cleanVer = String(data.version).replace(/^v/i, '').trim();
+            if (cleanVer) setAppVersion(cleanVer);
+          }
+        })
+        .catch(() => {});
+    };
+    syncVer();
+    const onFocus = () => syncVer();
+    const onVerEvent = (ev: Event) => {
+      const incoming = String((ev as CustomEvent<{ version?: string }>)?.detail?.version || '').replace(/^v/i, '').trim();
+      if (incoming) setAppVersion(incoming);
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('app-update-available', onVerEvent);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('app-update-available', onVerEvent);
+    };
+  }, []);
 
   // Confidential Company Management Area (starts LOCKED so clients never see company costs, POS, sales or suppliers)
   const [isCompanyAreaUnlocked, setIsCompanyAreaUnlocked] = useState<boolean>(() => {
@@ -2081,14 +2112,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version && String(msg.version).replace(/^v/i, '').trim() !== '68') {
+            if (msg.type === 'CONNECTED' && msg.version) {
               const nextVer = String(msg.version).replace(/^v/i, '').trim();
-              window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
-              const reloadGuardKey = `pwa_version_upgraded_${nextVer}`;
-              if (!sessionStorage.getItem(reloadGuardKey)) {
-                sessionStorage.setItem(reloadGuardKey, 'true');
-                if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                  (window as any).__clearAppCacheAndReload(nextVer);
+              if (nextVer) {
+                setAppVersion(nextVer);
+              }
+              if (nextVer && nextVer !== CLIENT_APP_VERSION) {
+                window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
+                const reloadGuardKey = `pwa_version_upgraded_${nextVer}`;
+                if (!sessionStorage.getItem(reloadGuardKey)) {
+                  sessionStorage.setItem(reloadGuardKey, 'true');
+                  if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+                    (window as any).__clearAppCacheAndReload(nextVer);
+                  }
                 }
               }
             }
@@ -3425,7 +3461,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 1) Syncs merchant changes (if any) and pulls freshest catalog immediately
   // 2) Resolves newest /api/version, purges SW + CacheStorage + HTTP disk cache, and reloads seamlessly
   const triggerOneClickUpdate = async (): Promise<void> => {
-    showToast('info', 'Atualizando em Tempo Real...', 'Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v68)...');
+    showToast('info', 'Atualizando em Tempo Real...', `Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v${appVersion})...`);
     try {
       if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany?.name) {
         await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
@@ -3433,13 +3469,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await refreshStoreCatalog().catch(() => {});
     } catch {}
 
-    let latestVer = '68';
+    let latestVer = appVersion || CLIENT_APP_VERSION;
     try {
       const verRes = await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' });
       if (verRes.ok) {
         const verJson = await verRes.json();
         if (verJson?.version) {
-          latestVer = String(verJson.version).replace(/^v/i, '').trim() || '68';
+          latestVer = String(verJson.version).replace(/^v/i, '').trim() || latestVer;
+          setAppVersion(latestVer);
         }
       }
     } catch {}
@@ -3748,6 +3785,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openShareModal,
         closeShareModal,
         // App Installed Update Modal & Real-Time 1-Click Update
+        appVersion,
         isUpdateModalOpen,
         setIsUpdateModalOpen,
         openUpdateModal,
