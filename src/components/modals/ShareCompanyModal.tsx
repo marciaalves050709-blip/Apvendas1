@@ -107,6 +107,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     }
     updateCurrentCompany({ name: clean });
     updatePaymentSettings({ merchantName: clean });
+    setShortUrl('');
     setIsEditingName(false);
     onShowToast('success', 'Nome da Loja Atualizado!', `O link agora está configurado com "${clean}"`);
   };
@@ -114,7 +115,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   // Fetch latest server catalog & registered phone numbers whenever ShareCompanyModal opens or target company switches
   useEffect(() => {
     if (!isOpen || !effectiveCompany?.id) return;
-    const rawSlug = (effectiveCompany.slug || effectiveCompany.name || effectiveCompany.id || '')
+    const rawSlug = (effectiveCompany.name || effectiveCompany.slug || effectiveCompany.id || '')
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -124,29 +125,45 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       .trim();
     if (!rawSlug) return;
 
+    const applyServerData = (data: any) => {
+      if (data && !data.isPlaceholder && Array.isArray(data.products) && data.products.length > 0) {
+        setServerStoreCache(prev => ({
+          ...prev,
+          [effectiveCompany.id]: {
+            products: data.products,
+            paymentSettings: data.paymentSettings
+          }
+        }));
+        return true;
+      }
+      return false;
+    };
+
     fetch(`/api/stores/${encodeURIComponent(rawSlug)}?t=${Date.now()}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data && !data.isPlaceholder && Array.isArray(data.products) && data.products.length > 0) {
-          setServerStoreCache(prev => ({
-            ...prev,
-            [effectiveCompany.id]: {
-              products: data.products,
-              paymentSettings: data.paymentSettings
+      .then(async (data) => {
+        if (applyServerData(data)) return;
+        const phoneCand = normalizePhoneDigits(effectiveCompany.phone || effectiveSettings?.merchantWhatsapp || effectiveSeller?.whatsapp);
+        if (phoneCand.length >= 8) {
+          try {
+            const pRes = await fetch(`/api/stores/by-phone/${encodeURIComponent(phoneCand)}?t=${Date.now()}`, { cache: 'no-store' });
+            if (pRes.ok) {
+              const pData = await pRes.json();
+              applyServerData(pData);
             }
-          }));
+          } catch {}
         }
       })
       .catch(() => {});
-  }, [isOpen, effectiveCompany?.id, effectiveCompany?.slug, effectiveCompany?.name]);
+  }, [isOpen, effectiveCompany?.id, effectiveCompany?.slug, effectiveCompany?.name, effectiveCompany?.phone]);
 
   // Dynamically resolve products and payment settings for the target company
   const effectiveProducts = useMemo(() => {
     try {
       if (effectiveCompany?.id) {
-        // 1. If effectiveCompany is the current active company, products in memory is ALWAYS the freshest state!
-        if (effectiveCompany.id === currentCompany?.id) {
-          return products || [];
+        // 1. If effectiveCompany is the current active company and memory has products, return freshest memory state
+        if (effectiveCompany.id === currentCompany?.id && Array.isArray(products) && products.length > 0) {
+          return products;
         }
 
         // 2. Check the primary tenant products key from AppContext
@@ -176,13 +193,13 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       }
     } catch {}
 
-    // Fallback: If effectiveCompany is current company, return current products
-    if (effectiveCompany?.id === currentCompany?.id) {
-      return products || [];
-    }
-
+    // 5. Fallback to backend server cache fetched for this company/phone
     if (effectiveCompany?.id && serverStoreCache[effectiveCompany.id]?.products?.length) {
       return serverStoreCache[effectiveCompany.id].products;
+    }
+
+    if (effectiveCompany?.id === currentCompany?.id) {
+      return products || [];
     }
 
     if (companies.length <= 1 && products && products.length > 0) {
@@ -256,9 +273,11 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       const sellerForSync = selectedSharePhone
         ? { ...(effectiveSeller || { id: 'vendedor_principal', name: effectiveCompany.ownerName || 'Atendente', pixKey: effectiveSettings?.pixKey || '', pixKeyType: 'PHONE' as const }), whatsapp: selectedSharePhone }
         : effectiveSeller;
-      syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSync, effectiveProducts).catch(() => {});
+      syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSync, effectiveProducts, {
+        setAsActive: effectiveCompany.id === currentCompany?.id
+      }).catch(() => {});
     }
-  }, [isOpen, effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts, selectedSharePhone]);
+  }, [isOpen, effectiveCompany, effectiveSettings, effectiveSeller, effectiveProducts, selectedSharePhone, currentCompany?.id]);
 
   const catalogShareUrl = useMemo(() => {
     return effectiveProducts && effectiveProducts.length > 0 ? shareUrl : cleanUrl;
@@ -289,7 +308,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
         products: effectiveProducts,
         zap: selectedSharePhone || sellerForSelectedPhone?.whatsapp
       });
-      if (res && res.startsWith('http') && !res.includes('da.gd') && !res.includes('?p=') && !res.includes('&p=')) {
+      if (res && res.startsWith('http') && !res.includes('da.gd') && !res.includes('ais-pre-') && !res.includes('ais-dev-') && !res.includes('?p=') && !res.includes('&p=')) {
         setShortUrl(res);
         return res;
       } else {
@@ -318,6 +337,8 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
       if (
         shortUrl &&
         !shortUrl.includes('da.gd') &&
+        !shortUrl.includes('ais-pre-') &&
+        !shortUrl.includes('ais-dev-') &&
         !shortUrl.includes('?p=') &&
         !shortUrl.includes('&p=') &&
         shortUrl.startsWith('http')
@@ -353,17 +374,19 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   // Helper to sync live store catalog and resolve freshest clean URL before launching WhatsApp or social network
   const resolveFreshShareUrl = async (): Promise<string> => {
-    if (effectiveCompany && effectiveProducts.length > 0) {
+    if (effectiveCompany) {
       await Promise.race([
-        syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts).catch(() => false),
+        syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts, {
+          setAsActive: effectiveCompany.id === currentCompany?.id
+        }).catch(() => false),
         new Promise(resolve => setTimeout(resolve, 1500))
       ]);
     }
     let finalUrl = activeUrl;
-    if (urlMode === 'short' && (!shortUrl || shortUrl.includes('da.gd') || shortUrl.includes('?p='))) {
+    if (urlMode === 'short' && (!shortUrl || isShortening || shortUrl.includes('da.gd') || shortUrl.includes('ais-pre-') || shortUrl.includes('ais-dev-') || shortUrl.includes('?p='))) {
       finalUrl = await triggerShorten(catalogShareUrl, effectiveCompany?.name || 'loja');
     }
-    if (!finalUrl || finalUrl.includes('da.gd') || finalUrl.includes('?p=') || finalUrl.includes('&p=')) {
+    if (!finalUrl || finalUrl.includes('da.gd') || finalUrl.includes('ais-pre-') || finalUrl.includes('ais-dev-') || finalUrl.includes('?p=') || finalUrl.includes('&p=')) {
       finalUrl = cleanUrl;
     }
     return finalUrl;
@@ -391,13 +414,10 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
     const finalUrl = await resolveFreshShareUrl();
     const emoji = effectiveCompany?.logoEmoji || '🏪';
     const compName = effectiveCompany?.name || 'Loja Virtual';
-    const prodHighlight = effectiveProducts.length > 0
-      ? `Confira ${effectiveProducts.length} produtos (${effectiveProducts.slice(0, 3).map(p => p.name).join(', ')}${effectiveProducts.length > 3 ? '...' : ''}) e faça seu pedido pelo WhatsApp:`
-      : `Confira nosso catálogo atualizado e faça seu pedido pelo WhatsApp:`;
 
     const shareData = {
       title: `${compName} - Catálogo Oficial`,
-      text: `${emoji} *${compName.toUpperCase()}*\n${prodHighlight}`,
+      text: `${emoji} *${compName.toUpperCase()}*\nConfira nosso catálogo atualizado e faça seu pedido pelo WhatsApp:`,
       url: finalUrl,
     };
 
@@ -418,7 +438,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
   const handleShareTelegram = async () => {
     const finalUrl = await resolveFreshShareUrl();
     const compName = effectiveCompany?.name || 'Loja Virtual';
-    const summary = `${effectiveCompany?.logoEmoji || '🏪'} Catálogo Oficial - ${compName} (${effectiveProducts.length} produtos)`;
+    const summary = `${effectiveCompany?.logoEmoji || '🏪'} Catálogo Oficial - ${compName}`;
     const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(finalUrl)}&text=${encodeURIComponent(summary)}`;
     try {
       const win = window.open(tgUrl, '_blank');

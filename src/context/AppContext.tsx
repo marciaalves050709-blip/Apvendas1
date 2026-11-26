@@ -380,6 +380,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     : null;
   
   // Also check pathname (e.g. /loja/minha-empresa or /l/maquiagemtop_1t22)
+  const ssrInitialStore = typeof window !== 'undefined' ? (window as any).__INITIAL_SHORT_LINK_DATA__ : null;
   let pathLojaName = '';
   let pathShortCode = '';
   if (typeof window !== 'undefined' && window.location.pathname) {
@@ -388,14 +389,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const rawSeg = decodeURIComponent(parts[1]);
       if (parts[0] === 'l') {
         pathShortCode = rawSeg;
-        pathLojaName = rawSeg.replace(/[_-][a-z0-9]{3,8}$/i, '');
+        pathLojaName = ssrInitialStore?.slug || ssrInitialStore?.company?.name || rawSeg.replace(/[_-][a-z0-9]{4}$/i, '');
       } else {
         pathLojaName = rawSeg;
       }
     }
   }
-
-  const ssrInitialStore = typeof window !== 'undefined' ? (window as any).__INITIAL_SHORT_LINK_DATA__ : null;
 
   const rawUrlStore = initialUrlParams?.get('loja') || 
                       initialUrlParams?.get('nome') ||
@@ -1947,16 +1946,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const urlPhoneDigits = (params.get('cel') || params.get('celular') || params.get('zap') || '').replace(/\D/g, '');
-      const savedSlug = localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug');
-      const currentActiveSlug = currentCompany?.name && currentCompany.name !== 'Minha Loja'
-        ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
-        : '';
-      const targetQuery = targetUrlSlug || urlCompId || currentActiveSlug || savedSlug || 'latest';
+      const isRootAppLaunch = !targetUrlSlug && !urlCompId && !pathShortCode && urlPhoneDigits.length < 8;
       const fetchEndpoint = pathShortCode
         ? `/api/short/${encodeURIComponent(pathShortCode)}?t=${Date.now()}`
-        : ((!targetUrlSlug && !urlCompId && urlPhoneDigits.length >= 8)
+        : targetUrlSlug || urlCompId
+          ? `/api/stores/${encodeURIComponent(targetUrlSlug || urlCompId || '')}?t=${Date.now()}`
+          : urlPhoneDigits.length >= 8
             ? `/api/stores/by-phone/${encodeURIComponent(urlPhoneDigits)}?t=${Date.now()}`
-            : `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`);
+            : `/api/store/latest?t=${Date.now()}`;
 
       // 2. Fetch store catalog and settings from backend API (respecting newer ?p= URL products)
       fetch(fetchEndpoint, { cache: 'no-store' })
@@ -2028,7 +2025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
               return;
             }
-            if (data.products.length > 0 || targetUrlSlug) {
+            if (data.products.length > 0 || targetUrlSlug || pathShortCode || isRootAppLaunch) {
               setProducts(prev => {
                 const prevStr = JSON.stringify(prev);
                 const newStr = JSON.stringify(data.products);
@@ -2036,8 +2033,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
               const targetCompId = data.company?.id || urlCompId || activeCompanyId;
               try {
+                localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(data.products));
                 localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
-                if (targetCompId === DEFAULT_COMPANY_ID) {
+                if (targetCompId === DEFAULT_COMPANY_ID || activeCompanyId === DEFAULT_COMPANY_ID) {
                   localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
                 }
               } catch {}
@@ -2045,30 +2043,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
 
           const isDefaultName = (n?: string) => !n || n === 'Minha Loja' || n === 'Minha Empresa' || n === 'appvendas' || n === 'App vendas' || n === 'App Vendas';
-          const incomingMatchesCurrent = Boolean(targetUrlSlug || urlCompId) || !currentActiveSlug || normalizeStoreSlug(data.slug || data.company?.name) === currentActiveSlug;
+          const incomingMatchesCurrent = Boolean(targetUrlSlug || urlCompId || pathShortCode || isRootAppLaunch);
 
           if (data.company && data.company.name && !data.isPlaceholder && incomingMatchesCurrent) {
+            const targetCompId = data.company.id || urlCompId || activeCompanyId;
+            const resolvedCompName = incomingName || data.company.name;
+            const resolvedCompSlug = data.slug || normalizeStoreSlug(resolvedCompName) || data.company.slug;
             setCompanies(prev => {
-              const targetCompId = data.company.id || urlCompId || activeCompanyId;
-              const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(data.slug));
+              const idx = prev.findIndex(c => c.id === targetCompId || (isRootAppLaunch && prev.length === 1) || normalizeStoreSlug(c.slug) === normalizeStoreSlug(resolvedCompSlug));
               if (idx >= 0) {
-                const keepExistingName = !incomingName && !targetUrlSlug && !isDefaultName(prev[idx].name) && normalizeStoreSlug(prev[idx].name) !== normalizeStoreSlug(data.company.name);
                 const merged = {
                   ...prev[idx],
                   ...data.company,
-                  name: incomingName || (keepExistingName ? prev[idx].name : data.company.name),
-                  slug: keepExistingName ? prev[idx].slug : (data.company.slug || prev[idx].slug)
+                  id: targetCompId,
+                  name: resolvedCompName,
+                  slug: resolvedCompSlug
                 };
                 if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
                 const copy = [...prev];
                 copy[idx] = merged;
+                try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(copy)); } catch {}
                 return copy;
               }
-              return [...prev, { ...data.company, name: incomingName || data.company.name }];
+              const next = [...prev, { ...data.company, id: targetCompId, name: resolvedCompName, slug: resolvedCompSlug }];
+              try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
+              return next;
             });
-            if (data.company.id && !urlCompId && data.company.id !== activeCompanyId && !currentActiveSlug) {
-              setActiveCompanyId(data.company.id);
-              try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, data.company.id); } catch {}
+            if (targetCompId && targetCompId !== activeCompanyId) {
+              setActiveCompanyId(targetCompId);
+              try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, targetCompId); } catch {}
+            }
+            if (resolvedCompName && typeof document !== 'undefined') {
+              document.title = `${resolvedCompName} - Catálogo & Pedidos`;
+            }
+            if (resolvedCompSlug) {
+              try {
+                localStorage.setItem('appvendas_last_visited_store_slug', resolvedCompSlug);
+                localStorage.setItem('appvendas_last_store_slug', resolvedCompSlug);
+                localStorage.setItem('appvendas_last_visited_store_name', resolvedCompName);
+              } catch {}
             }
           }
           if (data.paymentSettings && incomingMatchesCurrent) {
@@ -2076,10 +2089,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const rawSellerList = Array.isArray(data.paymentSettings.sellers)
                 ? data.paymentSettings.sellers.map((s: SellerProfile) => ({
                     ...s,
-                    merchantName: isDefaultName(s.merchantName) ? (incomingName || data.company?.name || ps.merchantName) : s.merchantName
+                    merchantName: isDefaultName(s.merchantName) ? (incomingName || data.company?.name || ps.merchantName) : (incomingName || data.company?.name || s.merchantName)
                   }))
                 : ps.sellers;
-              const resolvedMerchant = incomingName || (isDefaultName(data.paymentSettings.merchantName) ? ps.merchantName : data.paymentSettings.merchantName);
+              const resolvedMerchant = incomingName || data.company?.name || (isDefaultName(data.paymentSettings.merchantName) ? ps.merchantName : data.paymentSettings.merchantName);
               const next = {
                 ...ps,
                 ...data.paymentSettings,
@@ -2133,9 +2146,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const updatedCleanSlug = msg.cleanSlug;
               const updatedCompId = msg.companyId;
 
-              // Check if this update matches our current store / company
+              // Check if this update applies to this window:
+              // - Root app (/ without specific /loja/ or /l/ in URL) tracks any setAsActive update OR matching store so AI Studio & Installed App stay 100% synced!
+              // - Specific shared store links (/loja/:slug or /l/:code) stay locked ONLY to that store's slug.
+              const isOnRootUrl = !urlCatalogInfoRef.current.urlSlug && !pathShortCode;
               const activeNameIsPlaceholder = !currentCompany?.name || ['minha loja', 'minha empresa', 'appvendas', 'app vendas'].includes(currentCompany.name.trim().toLowerCase());
               const activeTargetSlug = normalizeStoreSlug(
+                urlCatalogInfoRef.current.urlSlug ||
                 currentCompany?.slug || 
                 currentCompany?.name || 
                 localStorage.getItem('appvendas_last_visited_store_slug') || 
@@ -2144,6 +2161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const activeTargetClean = cleanSlugAlphanumeric(activeTargetSlug);
 
               const isMatch = 
+                (isOnRootUrl && (msg.setAsActive === true || !activeTargetSlug || activeTargetSlug === 'latest')) ||
                 !activeTargetSlug ||
                 activeTargetSlug === 'latest' ||
                 activeTargetSlug === updatedSlug ||
@@ -2164,18 +2182,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   return msg.storeData.products;
                 });
 
-                // Update company details safely without overwriting a non-placeholder custom company name
+                // Update company details so AI Studio and Installed App ALWAYS show the exact same company name
                 if (msg.storeData.company && msg.storeData.company.name) {
+                  const nextCompId = msg.storeData.company.id || updatedCompId || activeCompanyId;
+                  if (isOnRootUrl && msg.setAsActive === true && nextCompId && nextCompId !== activeCompanyId) {
+                    setActiveCompanyId(nextCompId);
+                    try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, nextCompId); } catch {}
+                  }
                   setCompanies(prev => {
-                    const idx = prev.findIndex(c => c.id === activeCompanyId);
-                    if (idx < 0) return prev;
+                    const idx = prev.findIndex(c => c.id === nextCompId || c.id === activeCompanyId || normalizeStoreSlug(c.slug) === updatedSlug);
+                    if (idx < 0) {
+                      const next = [...prev, { ...msg.storeData.company, id: nextCompId, slug: updatedSlug || msg.storeData.company.slug }];
+                      try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
+                      return next;
+                    }
                     const existingIsPlaceholder = !prev[idx].name || ['minha loja', 'minha empresa', 'appvendas', 'app vendas'].includes(prev[idx].name.trim().toLowerCase());
                     const sameSlug = normalizeStoreSlug(prev[idx].name) === updatedSlug || cleanSlugAlphanumeric(prev[idx].name) === updatedCleanSlug;
+                    const allowNameSync = isOnRootUrl || existingIsPlaceholder || sameSlug;
                     const merged = {
                       ...prev[idx],
                       ...msg.storeData.company,
-                      name: (existingIsPlaceholder || sameSlug) ? msg.storeData.company.name : prev[idx].name,
-                      slug: (existingIsPlaceholder || sameSlug) ? (msg.storeData.company.slug || prev[idx].slug) : prev[idx].slug
+                      name: allowNameSync ? msg.storeData.company.name : prev[idx].name,
+                      slug: allowNameSync ? (updatedSlug || msg.storeData.company.slug || prev[idx].slug) : prev[idx].slug
                     };
                     if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
                     const next = [...prev];
@@ -2183,14 +2211,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
                     return next;
                   });
+                  if (isOnRootUrl && updatedSlug) {
+                    try {
+                      localStorage.setItem('appvendas_last_visited_store_slug', updatedSlug);
+                      localStorage.setItem('appvendas_last_store_slug', updatedSlug);
+                      localStorage.setItem('appvendas_last_visited_store_name', msg.storeData.company.name);
+                    } catch {}
+                  }
                 }
 
                 // Update payment settings safely without returning a new object when unchanged
                 if (msg.storeData.paymentSettings) {
                   setPaymentSettings(prev => {
+                    const allowNameSync = isOnRootUrl || activeNameIsPlaceholder || normalizeStoreSlug(currentCompany?.name) === updatedSlug;
                     const nextMerchant = ['appvendas', 'app vendas'].includes((msg.storeData.paymentSettings.merchantName || '').trim().toLowerCase())
-                      ? prev.merchantName
-                      : (activeNameIsPlaceholder || normalizeStoreSlug(currentCompany?.name) === updatedSlug ? (msg.storeData.paymentSettings.merchantName || prev.merchantName) : prev.merchantName);
+                      ? (msg.storeData.company?.name || prev.merchantName)
+                      : (allowNameSync ? (msg.storeData.paymentSettings.merchantName || msg.storeData.company?.name || prev.merchantName) : prev.merchantName);
                     const nextSellers = Array.isArray(msg.storeData.paymentSettings.sellers)
                       ? msg.storeData.paymentSettings.sellers.map((s: SellerProfile) => ({
                           ...s,
@@ -2206,10 +2242,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 try {
                   const compId = msg.storeData.company?.id || activeCompanyId;
                   localStorage.setItem(getTenantKey('products', compId), JSON.stringify(msg.storeData.products));
+                  localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(msg.storeData.products));
                   if (msg.storeData.paymentSettings) {
                     localStorage.setItem(getTenantKey('payment_settings', compId), JSON.stringify(msg.storeData.paymentSettings));
                   }
-                  if (compId === DEFAULT_COMPANY_ID) {
+                  if (compId === DEFAULT_COMPANY_ID || activeCompanyId === DEFAULT_COMPANY_ID) {
                     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(msg.storeData.products));
                     if (msg.storeData.paymentSettings) {
                       localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(msg.storeData.paymentSettings));
@@ -2368,7 +2405,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync to local storage per-tenant (Multi-tenant isolation)
   useEffect(() => {
     try {
-      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(products));
+      const tenantKey = getTenantKey('products', activeCompanyId);
+      if (products.length === 0 && !hasMerchantMutationRef.current) {
+        const existingTenant = localStorage.getItem(tenantKey);
+        if (existingTenant) {
+          try {
+            const parsed = JSON.parse(existingTenant);
+            if (Array.isArray(parsed) && parsed.length > 0) return;
+          } catch {}
+        }
+      }
+      localStorage.setItem(tenantKey, JSON.stringify(products));
       if (activeCompanyId === DEFAULT_COMPANY_ID) {
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
       }
@@ -2502,8 +2549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) &&
       currentCompany &&
       currentCompany.name &&
-      products &&
-      products.length > 0
+      (products.length > 0 || hasMerchantMutationRef.current)
     ) {
       const signature = JSON.stringify({
         companyId: currentCompany.id,
@@ -2514,7 +2560,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       if (signature === lastSyncedSignatureRef.current) return;
       lastSyncedSignatureRef.current = signature;
-      syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+      syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: true }).catch(() => {});
     }
   }, [currentCompany?.name, currentCompany?.id, products, paymentSettings, activeSeller, isCompanyAreaUnlocked, isAdmin, isMasterAdmin]);
 
@@ -2600,23 +2646,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Set Company Name directly (Replaces "appvendas" everywhere)
+  // Set Company Name directly (Replaces "appvendas" everywhere and syncs across AI Studio & Installed Apps)
   const setCompanyName = (newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
     hasMerchantMutationRef.current = true;
+    const newSlug = normalizeStoreSlug(trimmed) || trimmed.toLowerCase().replace(/\s+/g, '-');
+    const updatedCompany: CompanyAccount = { ...currentCompany, name: trimmed, slug: newSlug };
+    const nextSettings: PaymentSettings = {
+      ...paymentSettings,
+      merchantName: trimmed,
+      sellers: paymentSettings.sellers ? paymentSettings.sellers.map(s => ({ ...s, merchantName: trimmed })) : paymentSettings.sellers
+    };
     setCompanies(prev => {
-      const next = prev.map(c => c.id === activeCompanyId ? { ...c, name: trimmed, slug: normalizeStoreSlug(trimmed) || trimmed.toLowerCase().replace(/\s+/g, '-') } : c);
+      const next = prev.map(c => c.id === activeCompanyId ? updatedCompany : c);
       try {
         localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
       } catch {}
       return next;
     });
-    setPaymentSettings(prev => ({ 
-      ...prev, 
-      merchantName: trimmed,
-      sellers: prev.sellers ? prev.sellers.map(s => ({ ...s, merchantName: trimmed })) : prev.sellers
-    }));
+    setPaymentSettings(nextSettings);
+    try {
+      localStorage.setItem('appvendas_last_visited_store_slug', newSlug);
+      localStorage.setItem('appvendas_last_store_slug', newSlug);
+      localStorage.setItem('appvendas_last_visited_store_name', trimmed);
+    } catch {}
+    syncStoreToServer(updatedCompany, nextSettings, activeSeller, products, { setAsActive: true, isRename: true }).catch(() => {});
     if (typeof document !== 'undefined') {
       document.title = `${trimmed} - Gestão & Vendas`;
     }
@@ -2626,56 +2681,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateCurrentCompany = (data: Partial<CompanyAccount>) => {
     hasMerchantMutationRef.current = true;
     // If ownerName or phone matches Márcia Alves, auto-apply master admin
-    const current = companies.find(c => c.id === activeCompanyId);
+    const current = companies.find(c => c.id === activeCompanyId) || currentCompany;
     const checkName = data.ownerName !== undefined ? data.ownerName : current?.ownerName;
     const checkPhone = data.phone !== undefined ? data.phone : current?.phone;
     if (checkIsAdminCredentials(checkName, checkPhone)) {
       checkAndApplyAdminCredentials(checkName, checkPhone);
     }
 
+    const cleanNameUpdate = data.name ? data.name.trim() : undefined;
+    const cleanPhoneUpdate = data.phone !== undefined ? data.phone.trim() : undefined;
+    const updatedSlug = cleanNameUpdate
+      ? (normalizeStoreSlug(cleanNameUpdate) || cleanNameUpdate.toLowerCase().replace(/\s+/g, '-'))
+      : current.slug;
+    const updatedCompObj: CompanyAccount = {
+      ...current,
+      ...data,
+      ...(cleanNameUpdate ? { name: cleanNameUpdate, slug: updatedSlug } : {}),
+      ...(cleanPhoneUpdate !== undefined ? { phone: cleanPhoneUpdate } : {})
+    };
+
     setCompanies(prev => {
-      const next = prev.map(c => {
-        if (c.id === activeCompanyId) {
-          const updated = { ...c, ...data };
-          if (data.name) {
-            const cleanName = data.name.trim();
-            updated.name = cleanName;
-            updated.slug = normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-');
-          }
-          return updated;
-        }
-        return c;
-      });
+      const next = prev.map(c => (c.id === activeCompanyId ? updatedCompObj : c));
       try {
         localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next));
       } catch {}
       return next;
     });
 
-    const cleanPhoneUpdate = data.phone !== undefined ? data.phone.trim() : undefined;
+    const nextSettings: PaymentSettings = (data.name || cleanPhoneUpdate !== undefined)
+      ? {
+          ...paymentSettings,
+          ...(cleanNameUpdate ? { merchantName: cleanNameUpdate } : {}),
+          ...(cleanPhoneUpdate !== undefined ? { merchantWhatsapp: cleanPhoneUpdate } : {}),
+          sellers: paymentSettings.sellers ? paymentSettings.sellers.map((s, idx) => ({
+            ...s,
+            ...(cleanNameUpdate ? { merchantName: cleanNameUpdate } : {}),
+            ...(cleanPhoneUpdate !== undefined && (s.id === paymentSettings.activeSellerId || idx === 0) && (!s.whatsapp || s.whatsapp === current?.phone) ? { whatsapp: cleanPhoneUpdate } : {})
+          })) : paymentSettings.sellers
+        }
+      : paymentSettings;
+
     if (data.name || cleanPhoneUpdate !== undefined) {
-      const cleanName = data.name?.trim();
-      const normSlug = cleanName ? normalizeStoreSlug(cleanName) : '';
-      if (normSlug) {
+      if (updatedSlug) {
         try {
-          localStorage.setItem('appvendas_last_visited_store_slug', normSlug);
-          localStorage.setItem('appvendas_last_store_slug', normSlug);
+          localStorage.setItem('appvendas_last_visited_store_slug', updatedSlug);
+          localStorage.setItem('appvendas_last_store_slug', updatedSlug);
+          if (cleanNameUpdate) localStorage.setItem('appvendas_last_visited_store_name', cleanNameUpdate);
         } catch {}
       }
-      setPaymentSettings(ps => ({ 
-        ...ps, 
-        ...(cleanName ? { merchantName: cleanName } : {}),
-        ...(cleanPhoneUpdate !== undefined ? { merchantWhatsapp: cleanPhoneUpdate } : {}),
-        sellers: ps.sellers ? ps.sellers.map((s, idx) => ({
-          ...s,
-          ...(cleanName ? { merchantName: cleanName } : {}),
-          ...(cleanPhoneUpdate !== undefined && (s.id === ps.activeSellerId || idx === 0) && (!s.whatsapp || s.whatsapp === current?.phone) ? { whatsapp: cleanPhoneUpdate } : {})
-        })) : ps.sellers
-      }));
-      if (cleanName && typeof document !== 'undefined') {
-        document.title = `${cleanName} - Gestão & Vendas`;
+      setPaymentSettings(nextSettings);
+      if (cleanNameUpdate && typeof document !== 'undefined') {
+        document.title = `${cleanNameUpdate} - Gestão & Vendas`;
       }
     }
+
+    syncStoreToServer(updatedCompObj, nextSettings, activeSeller, products, { setAsActive: true, isRename: Boolean(cleanNameUpdate) }).catch(() => {});
   };
 
   const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }): CompanyAccount => {
@@ -2750,8 +2810,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPaymentSettings(initialTenantSettings);
     setCart([]);
 
-    // Register new empty company cleanly on the server with its own seller/phone
-    syncStoreToServer(newComp, initialTenantSettings, initialSeller, [], true).catch(() => {});
+    // Register new company cleanly on the server as active store with its own seller/phone
+    syncStoreToServer(newComp, initialTenantSettings, initialSeller, [], { forceClear: true, setAsActive: true }).catch(() => {});
 
     if (typeof document !== 'undefined') {
       document.title = `${newComp.name} - Gestão & Vendas`;
@@ -2764,6 +2824,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = companies.find(c => c.id === companyId);
     if (!target) return;
 
+    hasMerchantMutationRef.current = true;
     setActiveCompanyId(companyId);
 
     // Update active store slug & clear URL catalog lock when user switches company manually
@@ -2773,6 +2834,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         localStorage.setItem('appvendas_last_visited_store_slug', targetNormSlug);
         localStorage.setItem('appvendas_last_store_slug', targetNormSlug);
+        localStorage.setItem('appvendas_last_visited_store_name', target.name);
       } catch {}
     }
 
@@ -2814,9 +2876,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPaymentSettings(loadedSettings);
     setCart([]);
 
-    if (loadedProds.length > 0) {
-      syncStoreToServer(target, loadedSettings, loadedSeller, loadedProds).catch(() => {});
-    }
+    syncStoreToServer(target, loadedSettings, loadedSeller, loadedProds, { setAsActive: true }).catch(() => {});
 
     if (typeof document !== 'undefined') {
       document.title = `${target.name} - Gestão & Vendas`;
@@ -3212,7 +3272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
       }
     } catch {}
-    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, { setAsActive: true }).catch(() => {});
 
     // Initial stock movement record if stock > 0
     if (newProduct.currentStock > 0) {
@@ -3247,7 +3307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
       }
     } catch {}
-    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, { setAsActive: true }).catch(() => {});
     showToast('success', 'Produto Atualizado', 'As informações foram salvas e sincronizadas.');
   };
 
@@ -3267,7 +3327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
       }
     } catch {}
-    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, nextProducts.length === 0).catch(() => {});
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, { forceClear: nextProducts.length === 0, setAsActive: true }).catch(() => {});
     showToast('info', 'Produto Removido', `O item "${prod.name}" foi excluído.`);
   };
 
@@ -3324,7 +3384,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : p
     );
     setProducts(nextProducts);
-    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(nextProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
+      }
+    } catch {}
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, { setAsActive: true }).catch(() => {});
 
     setMovements(prev => [movement, ...prev]);
     showToast(
@@ -3360,37 +3426,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const nextProducts = products.map(p => (p.id === productId ? { ...p, currentStock: newStock, updatedAt: new Date().toISOString() } : p));
     setProducts(nextProducts);
-    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts).catch(() => {});
+    try {
+      localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(nextProducts));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(nextProducts));
+      }
+    } catch {}
+    syncStoreToServer(currentCompany, paymentSettings, activeSeller, nextProducts, { setAsActive: true }).catch(() => {});
     setMovements(prev => [movement, ...prev]);
     showToast('success', 'Estoque Ajustado', `Estoque de "${prod.name}" alterado de ${previousStock} para ${newStock}.`);
     return true;
   };
 
-  // Live Refresh for Client Store & Installed App (Guarantees freshest products on demand with zero screen jumping)
+  // Live Refresh for Client Store & Installed App (Guarantees freshest products & unified company name on demand with zero screen jumping)
   const refreshStoreCatalog = async (): Promise<boolean> => {
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) : null;
       const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa') || pathLojaName;
       const urlZap = urlParams?.get('zap') || urlParams?.get('cel') || urlParams?.get('celular') || urlParams?.get('whatsapp') || '';
       const cleanUrlZap = urlZap.replace(/\D/g, '');
-      const currentSlug = currentCompany?.name && currentCompany.name !== 'Minha Loja'
-        ? normalizeStoreSlug(currentCompany.slug || currentCompany.name)
-        : '';
-      const savedSlug = typeof window !== 'undefined' ? (localStorage.getItem('appvendas_last_visited_store_slug') || localStorage.getItem('appvendas_last_store_slug')) : null;
-      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : (currentSlug || savedSlug || '');
+      const isRootAppLaunch = !urlLoja && !pathShortCode && cleanUrlZap.length < 8;
+      const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : '';
       const endpoint = pathShortCode
         ? `/api/short/${encodeURIComponent(pathShortCode)}?t=${Date.now()}`
         : (targetQuery
             ? `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`
             : (cleanUrlZap.length >= 8
                 ? `/api/stores/by-phone/${encodeURIComponent(cleanUrlZap)}?t=${Date.now()}`
-                : `/api/stores/latest?t=${Date.now()}`));
+                : `/api/store/latest?t=${Date.now()}`));
       const res = await fetch(endpoint, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (!data || data.isPlaceholder) {
           if (products && products.length > 0 && currentCompany && (!urlLoja || normalizeStoreSlug(currentCompany.name) === normalizeStoreSlug(urlLoja))) {
-            syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+            syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: isRootAppLaunch }).catch(() => {});
           }
           return false;
         }
@@ -3406,7 +3475,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           urlCatalogInfoRef.current.hasUrlProducts = false;
         }
 
-        if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja)) {
+        if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja || isRootAppLaunch)) {
           if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
             return false;
           }
@@ -3416,26 +3485,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (prevStr === newStr) return prev;
             return data.products;
           });
+          const targetCompId = data.company?.id || activeCompanyId;
           localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(data.products));
-          if (activeCompanyId === DEFAULT_COMPANY_ID) {
+          localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
+          if (activeCompanyId === DEFAULT_COMPANY_ID || targetCompId === DEFAULT_COMPANY_ID) {
             localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
           }
-          if (data.company && data.company.name && data.company.name !== currentCompany.name && (!currentSlug || normalizeStoreSlug(data.slug) === currentSlug)) {
+          const canUpdateCompany = isRootAppLaunch || !urlLoja || normalizeStoreSlug(data.slug || data.company?.name) === normalizeStoreSlug(urlLoja);
+          if (data.company && data.company.name && canUpdateCompany) {
+            const nextSlug = data.slug || normalizeStoreSlug(data.company.name) || data.company.slug;
             setCompanies(prev => {
-              const idx = prev.findIndex(c => c.id === activeCompanyId);
+              const idx = prev.findIndex(c => c.id === activeCompanyId || c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(nextSlug));
               if (idx < 0) return prev;
-              const merged = { ...prev[idx], name: data.company.name };
+              const merged = { ...prev[idx], ...data.company, name: data.company.name, slug: nextSlug || prev[idx].slug };
               if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
               const next = [...prev];
               next[idx] = merged;
+              try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
               return next;
             });
+            if (isRootAppLaunch && targetCompId && targetCompId !== activeCompanyId) {
+              setActiveCompanyId(targetCompId);
+              try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, targetCompId); } catch {}
+            }
           }
-          if (data.paymentSettings && (!currentSlug || normalizeStoreSlug(data.slug) === currentSlug)) {
+          if (data.paymentSettings && canUpdateCompany) {
             setPaymentSettings(ps => {
               const incomingMerchant = ['appvendas', 'app vendas'].includes((data.paymentSettings.merchantName || '').trim().toLowerCase())
-                ? (currentCompany?.name || ps.merchantName)
-                : (data.paymentSettings.merchantName || ps.merchantName);
+                ? (data.company?.name || currentCompany?.name || ps.merchantName)
+                : (data.paymentSettings.merchantName || data.company?.name || ps.merchantName);
               const nextSellers = Array.isArray(data.paymentSettings.sellers)
                 ? data.paymentSettings.sellers.map((s: SellerProfile) => ({
                     ...s,
@@ -3449,7 +3527,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return true;
         } else if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany) {
           // If server has 0 products and current device is merchant/admin, persist to server so buyers get them
-          syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+          syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: isRootAppLaunch }).catch(() => {});
           return true;
         }
       }

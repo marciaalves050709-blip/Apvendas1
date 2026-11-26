@@ -40,21 +40,32 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+export const PUBLIC_STORE_ORIGIN = 'https://www.apvendas1.com.br';
+
+/**
+ * Resolves the public customer-facing origin for shareable links.
+ * Never exposes internal Google AI Studio preview domains (ais-dev- / ais-pre-)
+ * because external crawlers (WhatsApp, social media, other devices) hit "Cookie check".
+ */
+export function getPublicShareOrigin(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const cur = window.location.origin;
+    if (!cur.includes('ais-dev-') && !cur.includes('ais-pre-')) {
+      return cur;
+    }
+  }
+  return PUBLIC_STORE_ORIGIN;
+}
+
 /**
  * Builds the clean public store URL for sharing containing ONLY the company name.
- * E.g.: https://ais-pre-...run.app/?loja=Minha-Empresa
+ * E.g.: https://www.apvendas1.com.br/loja/minha-empresa
  */
 export function buildStoreCleanUrl(
   company: CompanyAccount,
   paymentSettings?: PaymentSettings
 ): string {
-  let origin = typeof window !== 'undefined' && window.location.origin 
-    ? window.location.origin 
-    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
-  
-  if (origin.includes('ais-dev-')) {
-    origin = origin.replace('ais-dev-', 'ais-pre-');
-  }
+  const origin = getPublicShareOrigin();
 
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
   const storeSlug = rawStoreName
@@ -170,13 +181,7 @@ export function buildStoreShareUrl(
   products?: Product[],
   phoneOverride?: string
 ): string {
-  let origin = typeof window !== 'undefined' && window.location.origin 
-    ? window.location.origin 
-    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
-  
-  if (origin.includes('ais-dev-')) {
-    origin = origin.replace('ais-dev-', 'ais-pre-');
-  }
+  const origin = getPublicShareOrigin();
 
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
   const pathSlug = rawStoreName
@@ -274,9 +279,12 @@ export async function syncStoreToServer(
   paymentSettings?: PaymentSettings,
   activeSeller?: SellerProfile,
   products?: Product[],
-  forceClear?: boolean
+  forceClearOrOpts?: boolean | { forceClear?: boolean; setAsActive?: boolean; isRename?: boolean }
 ): Promise<boolean> {
   try {
+    const opts = typeof forceClearOrOpts === 'object' && forceClearOrOpts !== null
+      ? forceClearOrOpts
+      : { forceClear: Boolean(forceClearOrOpts) };
     const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
     const storeSlug = rawStoreName
       .toLowerCase()
@@ -289,12 +297,14 @@ export async function syncStoreToServer(
 
     const registeredPhones = collectCompanyPhones(company, paymentSettings, activeSeller).map(e => e.phone);
     const payload = JSON.stringify({
-      company,
+      company: { ...company, name: rawStoreName, slug: storeSlug },
       paymentSettings,
       activeSeller,
       products: products || [],
       registeredPhones,
-      forceClear: Boolean(forceClear)
+      forceClear: Boolean(opts.forceClear),
+      ...(opts.setAsActive !== undefined ? { setAsActive: opts.setAsActive } : {}),
+      ...(opts.isRename ? { isRename: true } : {})
     });
 
     const res = await fetch(`/api/stores/${encodeURIComponent(storeSlug)}`, {
@@ -329,16 +339,12 @@ export function buildStoreShareMessage(
   shareUrl: string,
   activeSeller?: SellerProfile,
   paymentSettings?: PaymentSettings,
-  products?: Product[]
+  _products?: Product[]
 ): string {
   const compName = (company?.name || paymentSettings?.merchantName || 'Nossa Loja').trim();
   const emoji = company?.logoEmoji || '🏪';
   const sellerInfo = activeSeller?.name && activeSeller.name !== 'Atendente' 
     ? `💬 *Atendimento Especial:* ${activeSeller.name}\n` 
-    : '';
-
-  const productPreview = Array.isArray(products) && products.length > 0
-    ? `\n🛍️ *Destaques (${products.length} ${products.length === 1 ? 'item' : 'itens'}):* ${products.slice(0, 4).map(p => p.name).join(', ')}${products.length > 4 ? '...' : ''}\n`
     : '';
 
   // Safety: Guarantee link NEVER contains da.gd or raw query codes (?loja=...&p=...) and always defaults to clean company link
@@ -351,7 +357,7 @@ export function buildStoreShareMessage(
 `${emoji} *CATÁLOGO OFICIAL - ${compName.toUpperCase()}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 Olá! Preparamos nosso catálogo digital para você conferir os produtos da *${compName}* e fazer seus pedidos com facilidade pelo WhatsApp!
-${productPreview}
+
 🔗 *Acesse nossa loja pelo link:*
 
 ${safeShareUrl}
@@ -393,7 +399,10 @@ export async function shortenUrl(
       if (!resolvedName || resolvedName.toLowerCase() === 'loja') {
         const parts = parsed.pathname.split('/').filter(Boolean);
         if ((parts[0] === 'loja' || parts[0] === 'l') && parts[1]) {
-          resolvedName = decodeURIComponent(parts[1]).replace(/[_-][a-z0-9]{3,8}$/i, '');
+          const decodedPart = decodeURIComponent(parts[1]);
+          resolvedName = parts[0] === 'l'
+            ? decodedPart.replace(/[_-][a-z0-9]{4}$/i, '')
+            : decodedPart;
         }
       }
     } catch {}
@@ -421,20 +430,24 @@ export async function shortenUrl(
         .slice(0, 48)
     : 'loja';
 
-  let origin = typeof window !== 'undefined' && window.location.origin 
-    ? window.location.origin 
-    : 'https://ais-pre-i3xnc7zdrcnzwzesrvdnvw-849259028633.us-east1.run.app';
-  if (origin.includes('ais-dev-')) {
-    origin = origin.replace('ais-dev-', 'ais-pre-');
-  }
+  const origin = getPublicShareOrigin();
 
   const cleanFallbackUrl = `${origin}/loja/${encodeURIComponent(urlSlug || 'loja')}`;
   let destinationUrl = cleanFallbackUrl;
   try {
-    const parsedLong = new URL(longUrl);
+    const seededUrl = (!longUrl.includes('?p=') && extraData?.company && Array.isArray(extraData.products) && extraData.products.length > 0)
+      ? buildStoreShareUrl(
+          extraData.company,
+          extraData.paymentSettings as PaymentSettings | undefined,
+          extraData.activeSeller,
+          extraData.products,
+          extraData.zap
+        )
+      : longUrl;
+    const parsedLong = new URL(seededUrl);
     let destOrigin = parsedLong.origin;
-    if (destOrigin.includes('ais-dev-')) {
-      destOrigin = destOrigin.replace('ais-dev-', 'ais-pre-');
+    if (destOrigin.includes('ais-dev-') || destOrigin.includes('ais-pre-')) {
+      destOrigin = origin;
     }
     const destObj = new URL(`/loja/${encodeURIComponent(urlSlug || cleanSlug || 'loja')}${parsedLong.search}`, destOrigin);
     destinationUrl = destObj.toString();
@@ -454,46 +467,149 @@ export async function shortenUrl(
     );
   };
 
-  // 0. Primary: Fast server-side proxy (persists _shortLinks + live products & phone, returns is.gd or /l/empresa_hash)
-  try {
+  const isSafePublicLink = (candidate?: string): candidate is string => {
+    if (!candidate || typeof candidate !== 'string') return false;
+    if (!candidate.startsWith('http')) return false;
+    if (candidate.includes('da.gd')) return false;
+    if (candidate.includes('ais-pre-') || candidate.includes('ais-dev-')) return false;
+    if (candidate.includes('?p=') || candidate.includes('&p=')) return false;
+    return true;
+  };
+
+  const shortenBody = JSON.stringify({
+    url: destinationUrl,
+    storeName: resolvedName || storeName,
+    ...(extraData || {})
+  });
+
+  const postShorten = async (endpoint: string) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
-    const apiRes = await fetch('/api/shorten', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: destinationUrl,
-        storeName: resolvedName || storeName,
-        ...(extraData || {})
-      }),
-      signal: controller.signal
+    try {
+      const apiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: shortenBody,
+        signal: controller.signal
+      });
+      const ct = apiRes.headers.get('content-type') || '';
+      if (!apiRes.ok || !ct.includes('application/json')) return null;
+      return await apiRes.json();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const trimUrlForGet = (rawTarget: string, maxLen = 1750): string => {
+    if (rawTarget.length <= maxLen) return rawTarget;
+    try {
+      const u = new URL(rawTarget);
+      const pRaw = u.searchParams.get('p');
+      if (!pRaw) return rawTarget.slice(0, maxLen);
+      const items = pRaw.split('*').filter(Boolean);
+      while (items.length > 1) {
+        items.pop();
+        u.searchParams.set('p', items.join('*'));
+        if (u.toString().length <= maxLen) break;
+      }
+      if (u.toString().length > maxLen) {
+        u.searchParams.delete('p');
+      }
+      return u.toString();
+    } catch {
+      return rawTarget;
+    }
+  };
+
+  const shortenViaIsGdJsonp = (target: string, aliasPrefix: string): Promise<string | null> => {
+    if (typeof document === 'undefined' || target.includes('localhost') || target.includes('127.0.0.1')) {
+      return Promise.resolve(null);
+    }
+    const safeTarget = trimUrlForGet(target, 1750);
+    const trySlug = (customAlias: string): Promise<string | null> => new Promise((resolve) => {
+      const cbName = `__isgd_cb_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+      const script = document.createElement('script');
+      let settled = false;
+      const cleanup = () => {
+        try { delete (window as any)[cbName]; } catch {}
+        try { script.remove(); } catch {}
+      };
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          resolve(null);
+        }
+      }, 3000);
+      (window as any)[cbName] = (data: any) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cleanup();
+        const su = data?.shorturl;
+        if (typeof su === 'string' && su.startsWith('http') && hasCompanyInLink(su)) {
+          resolve(su);
+        } else {
+          resolve(null);
+        }
+      };
+      const qs = new URLSearchParams({
+        format: 'json',
+        callback: cbName,
+        shorturl: customAlias,
+        url: safeTarget
+      });
+      script.src = `https://is.gd/create.php?${qs.toString()}`;
+      script.onerror = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve(null);
+        }
+      };
+      document.head.appendChild(script);
     });
-    clearTimeout(timer);
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      if (
-        data &&
-        typeof data.shortUrl === 'string' &&
-        data.shortUrl.startsWith('http') &&
-        !data.shortUrl.includes('da.gd') &&
-        !data.shortUrl.includes('?p=') &&
-        !data.shortUrl.includes('&p=') &&
-        hasCompanyInLink(data.shortUrl)
-      ) {
-        return data.shortUrl;
+
+    return (async () => {
+      const base = (aliasPrefix || 'loja').slice(0, 22);
+      const r1 = Math.random().toString(36).slice(2, 6);
+      const r2 = Math.random().toString(36).slice(2, 7);
+      for (const alias of [`${base}_${r1}`, `${base}_${r2}`]) {
+        if (alias.length >= 5 && alias.length <= 30) {
+          const ok = await trySlug(alias);
+          if (ok) return ok;
+        }
       }
-      if (
-        data &&
-        typeof data.cleanSelfShortUrl === 'string' &&
-        data.cleanSelfShortUrl.startsWith('http')
-      ) {
-        return data.cleanSelfShortUrl;
-      }
+      return null;
+    })();
+  };
+
+  // 0. Primary: Fast server-side shorten API
+  try {
+    const data = await postShorten('/api/shorten');
+    if (isSafePublicLink(data?.shortUrl) && hasCompanyInLink(data.shortUrl)) {
+      return data.shortUrl;
+    }
+    if (isSafePublicLink(data?.cleanSelfShortUrl)) {
+      return data.cleanSelfShortUrl;
     }
   } catch {
     // fallback below
   }
 
-  // Fallback: ALWAYS return clean official company URL (/loja/empresa) — NEVER expose ?loja=&nome=&pix=&p= query codes
+  // 1. Direct browser JSONP is.gd fallback (works on static Vercel hosting even when /api/shorten returns HTML!)
+  try {
+    const jsonpShort = await shortenViaIsGdJsonp(destinationUrl, cleanSlug);
+    if (isSafePublicLink(jsonpShort)) {
+      return jsonpShort;
+    }
+  } catch {
+    // fallback below
+  }
+
+  // Fallback: ALWAYS return clean official company URL (/loja/empresa) — NEVER expose ais-pre- or ?loja=&nome=&pix=&p= query codes
   return cleanFallbackUrl;
 }

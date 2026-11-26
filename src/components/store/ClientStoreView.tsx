@@ -630,7 +630,11 @@ export const ClientStoreView: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-sm text-slate-900 truncate">
-                {clientUser.name.trim() ? `Olá, ${clientUser.name.split(' ')[0]}!` : (paymentSettings.merchantName || currentCompany?.name || 'Catálogo de Produtos')}
+                {clientUser.name.trim()
+                  ? `Olá, ${clientUser.name.split(' ')[0]}!`
+                  : ((currentCompany?.name && currentCompany.name !== 'Minha Loja' && currentCompany.name !== 'Minha Empresa' && currentCompany.name !== 'appvendas')
+                      ? currentCompany.name
+                      : (paymentSettings.merchantName || currentCompany?.name || 'Catálogo de Produtos'))}
               </span>
               <button
                 type="button"

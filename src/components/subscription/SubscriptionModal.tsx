@@ -3,6 +3,7 @@ import { useApp, checkIsMasterPassword } from '../../context/AppContext';
 import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, sounds, SUBSCRIPTION_CONFIG } from '../../utils/pixHelper';
 import { PixRadarScanner } from './PixRadarScanner';
 import { AdminShareTestPanel } from './AdminShareTestPanel';
+import { getPublicShareOrigin } from '../../utils/shareHelper';
 import { 
   X, 
   Check, 
@@ -110,7 +111,7 @@ export const SubscriptionModal: React.FC = () => {
   };
 
   const getClientDirectUrl = (client: ExtendedTrialClient) => {
-    const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
+    const origin = `${getPublicShareOrigin()}/`;
     const cleanDigits = client.clientPhone.replace(/\D/g, '');
     return `${origin}?liberar=teste2dias&cliente=${encodeURIComponent(client.clientName)}&celular=${encodeURIComponent(cleanDigits)}`;
   };

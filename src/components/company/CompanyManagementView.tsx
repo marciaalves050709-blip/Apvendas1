@@ -5,6 +5,7 @@ import { formatCurrency, generatePixPayload, BANKS_LIST, sounds } from '../../ut
 import { getProductImage, CATEGORY_EMOJIS, ALL_ACTIVITY_CATEGORIES } from '../../utils/productImages';
 import QRCode from 'qrcode';
 import { AdminShareTestPanel } from '../subscription/AdminShareTestPanel';
+import { getPublicShareOrigin } from '../../utils/shareHelper';
 import { 
   Building2, 
   Lock, 
@@ -1295,7 +1296,7 @@ export const CompanyManagementView: React.FC = () => {
                       onClick={() => {
                         const cleanPhone = lastLiberatedClient.clientPhone.replace(/\D/g, '');
                         const phoneWithCountry = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-                        const directUrl = `${window.location.origin}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(lastLiberatedClient.clientName)}`;
+                        const directUrl = `${getPublicShareOrigin()}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(lastLiberatedClient.clientName)}`;
                         const text = encodeURIComponent(
                           `Olá ${lastLiberatedClient.clientName}! Seu acesso de teste foi liberado pela Administradora Márcia por mais 2 dias grátis!\n\n` +
                           `Acesse agora o aplicativo no link abaixo:\n${directUrl}`
@@ -1311,7 +1312,7 @@ export const CompanyManagementView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        const directUrl = `${window.location.origin}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(lastLiberatedClient.clientName)}`;
+                        const directUrl = `${getPublicShareOrigin()}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(lastLiberatedClient.clientName)}`;
                         navigator.clipboard.writeText(directUrl);
                         setCopiedClientId(lastLiberatedClient.id);
                         showToast('success', 'Link Copiado!', 'Link exclusivo de liberação copiado.');
@@ -1378,7 +1379,7 @@ export const CompanyManagementView: React.FC = () => {
                             onClick={() => {
                               const cleanPhone = client.clientPhone.replace(/\D/g, '');
                               const phoneWithCountry = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-                              const directUrl = `${window.location.origin}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(client.clientName)}`;
+                              const directUrl = `${getPublicShareOrigin()}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(client.clientName)}`;
                               const text = encodeURIComponent(
                                 `Olá ${client.clientName}! Seu acesso de teste foi liberado pela Administradora Márcia por mais 2 dias grátis!\n\n` +
                                 `Acesse agora o aplicativo no link abaixo:\n${directUrl}`
@@ -1394,7 +1395,7 @@ export const CompanyManagementView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              const directUrl = `${window.location.origin}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(client.clientName)}`;
+                              const directUrl = `${getPublicShareOrigin()}/?tab=client-store&trial=extended&cliente=${encodeURIComponent(client.clientName)}`;
                               navigator.clipboard.writeText(directUrl);
                               setCopiedClientId(client.id);
                               showToast('success', 'Link Copiado!', 'Link copiado.');

@@ -486,7 +486,7 @@ export const AdminShareTestPanel: React.FC = () => {
 
   const telegramShareHref = useMemo(() => {
     if (!finalShareUrl) return '#';
-    const caption = `Confira o catálogo da ${selectedRecord?.company?.name || 'loja'} (${selectedRecord?.products.length || 0} produtos atualizados):`;
+    const caption = `Confira o catálogo da ${selectedRecord?.company?.name || 'loja'}:`;
     return `https://t.me/share/url?url=${encodeURIComponent(finalShareUrl)}&text=${encodeURIComponent(caption)}`;
   }, [finalShareUrl, selectedRecord]);
 

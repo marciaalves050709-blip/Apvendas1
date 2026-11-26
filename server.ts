@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '69', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '72', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -196,11 +196,15 @@ app.post('/api/stores/:slug', (req, res) => {
     const slug = normalizeSlug(rawSlug) || 'loja';
     const cleanSlug = cleanSlugAlphanumeric(rawSlug) || 'loja';
 
-    const { company, paymentSettings, products, activeSeller, forceClear, registeredPhones } = req.body;
+    const { company, paymentSettings, products, activeSeller, forceClear, registeredPhones, setAsActive, isRename } = req.body;
     const db = readDb();
 
     const productList = Array.isArray(products) ? products : [];
-    const existingStore = db[slug] || db[cleanSlug] || (company?.id && db[company.id]);
+    const byCompId = company?.id && db[company.id] ? db[company.id] : null;
+    const existingStore =
+      db[slug] ||
+      db[cleanSlug] ||
+      (byCompId && (byCompId.slug === slug || isRename || setAsActive === true) ? byCompId : null);
     
     // Safety: If incoming products is empty, preserve existing store products unless forceClear is explicitly passed
     const finalProducts = productList.length > 0 
@@ -220,6 +224,7 @@ app.post('/api/stores/:slug', (req, res) => {
     const storeData = {
       ...storeDraft,
       registeredPhones: mergedPhones,
+      ...(setAsActive === true ? { isExplicitActive: true } : {}),
       updatedAt: new Date().toISOString()
     };
 
@@ -253,7 +258,18 @@ app.post('/api/stores/:slug', (req, res) => {
       }
     }
 
-    if (prevPayloadHash && prevPayloadHash === nextPayloadHash) {
+    const shouldUpdateLatest =
+      setAsActive === true ||
+      (setAsActive !== false && (
+        finalProducts.length > 0 ||
+        !(db['_latest'] && Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0) ||
+        db['_latest']?.slug === slug
+      ));
+    const latestAlreadyMatches =
+      !shouldUpdateLatest ||
+      (db['_latest']?.slug === slug && prevPayloadHash === nextPayloadHash);
+
+    if (prevPayloadHash && prevPayloadHash === nextPayloadHash && latestAlreadyMatches) {
       if (phoneIndexChanged) {
         writeDb(db);
       }
@@ -277,15 +293,15 @@ app.post('/api/stores/:slug', (req, res) => {
       db[cleanSlug] = storeData;
     }
 
-    // Also store under company ID if provided (e.g. "empresa_principal")
+    // Store under company ID only if unclaimed, same slug, or explicitly promoted as active/renamed
     if (company && company.id) {
-      db[company.id] = storeData;
+      if (!db[company.id] || db[company.id].slug === slug || setAsActive === true || isRename) {
+        db[company.id] = storeData;
+      }
     }
 
-    // Smart latest store pointer: Only set as _latest if it contains products or if _latest has 0 products or matches this slug
-    const currentLatest = db['_latest'];
-    const currentLatestHasProducts = currentLatest && Array.isArray(currentLatest.products) && currentLatest.products.length > 0;
-    if (finalProducts.length > 0 || !currentLatestHasProducts || currentLatest?.slug === slug) {
+    // Smart latest store pointer: tracks the canonical active store across AI Studio & Installed PWAs
+    if (shouldUpdateLatest) {
       db['_latest'] = storeData;
     }
 
@@ -299,6 +315,7 @@ app.post('/api/stores/:slug', (req, res) => {
       cleanSlug,
       companyId: company?.id,
       companyName: company?.name || rawSlug,
+      setAsActive: setAsActive === true,
       storeData,
       timestamp: Date.now()
     });
@@ -463,8 +480,12 @@ app.get('/api/store/latest', (_req, res) => {
   res.setHeader('Expires', '0');
   const db = readDb();
   
-  // 1. If _latest has products, return it
-  if (db['_latest'] && Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0) {
+  // 1. Return _latest if explicitly marked active/renamed OR if it already holds products
+  if (
+    db['_latest'] &&
+    db['_latest'].company?.name &&
+    (db['_latest'].isExplicitActive || (Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0))
+  ) {
     return res.json(db['_latest']);
   }
 
@@ -633,16 +654,26 @@ app.get('/api/short/:code', (req, res) => {
     const rawCode = decodeURIComponent(String(req.params.code || '')).trim();
     const db = readDb();
     const shortLinks = db['_shortLinks'] || {};
-    const shortRec = shortLinks[rawCode] || shortLinks[normalizeSlug(rawCode)];
+    const rawNorm = normalizeSlug(rawCode);
+    const shortRec =
+      shortLinks[rawCode] ||
+      shortLinks[rawCode.toLowerCase()] ||
+      shortLinks[rawNorm] ||
+      null;
 
+    // Try exact code as store slug BEFORE stripping any trailing hash (protects store names like "loja_da_ana")
+    const exactSlug = normalizeSlug(shortRec?.slug || shortRec?.storeName || '');
+    const directStoreFromCode = !shortRec ? (db[rawNorm] || db[cleanSlugAlphanumeric(rawCode)] || null) : null;
     const fallbackBase = rawCode.replace(/[_-][a-z0-9]{3,8}$/i, '');
-    const targetSlug = normalizeSlug(shortRec?.slug || shortRec?.storeName || fallbackBase || rawCode);
+    const targetSlug = exactSlug || directStoreFromCode?.slug || normalizeSlug(fallbackBase || rawCode);
     const cleanTarget = cleanSlugAlphanumeric(targetSlug);
 
+    const byCompId = shortRec?.companyId && db[shortRec.companyId] ? db[shortRec.companyId] : null;
     const liveStore =
       (targetSlug && db[targetSlug]) ||
       (cleanTarget && db[cleanTarget]) ||
-      (shortRec?.companyId && db[shortRec.companyId]) ||
+      directStoreFromCode ||
+      (byCompId && byCompId.slug === targetSlug ? byCompId : null) ||
       (shortRec?.zap && findStoreByPhone(db, shortRec.zap)) ||
       null;
 
@@ -748,14 +779,15 @@ app.post('/api/shorten', async (req, res) => {
           .slice(0, 48)
       : 'loja';
 
+    const PUBLIC_DOMAIN_ORIGIN = 'https://www.apvendas1.com.br';
     const host = req.get('host') || 'www.apvendas1.com.br';
     const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
     let baseOrigin = `${proto}://${host}`;
     if (parsedUrlObj) {
       baseOrigin = parsedUrlObj.origin;
     }
-    if (baseOrigin.includes('ais-dev-')) {
-      baseOrigin = baseOrigin.replace('ais-dev-', 'ais-pre-');
+    if (baseOrigin.includes('ais-dev-') || baseOrigin.includes('ais-pre-')) {
+      baseOrigin = PUBLIC_DOMAIN_ORIGIN;
     }
 
     const resolvedZap = String(
@@ -774,20 +806,29 @@ app.post('/api/shorten', async (req, res) => {
       : [];
     const resolvedProducts = Array.isArray(products) && products.length > 0 ? products : compactProducts;
 
-    const hashSeed = `${urlSlug}|${resolvedZap}|${resolvedPix}|${resolvedProducts.map((p: any) => `${p.name}:${p.salePrice}:${p.currentStock}`).join(',')}`;
+    const hashSeed = `${baseOrigin}|${urlSlug}|${resolvedZap}|${resolvedPix}|${resolvedProducts.map((p: any) => `${p.name}:${p.salePrice}:${p.currentStock}`).join(',')}`;
     const urlHash = computeShortHash(hashSeed || url);
     const shortCode = `${cleanSlug || 'loja'}_${urlHash}`;
     const cleanSelfShortUrl = `${baseOrigin}/l/${encodeURIComponent(shortCode)}`;
 
-    // Persist short link record + products cleanly in stores_db.json so /l/:code ALWAYS hydrates live data with zero query params
+    // Persist short link record + store catalog cleanly in stores_db.json so BOTH /l/:code and /loja/:slug ALWAYS hydrate live data with zero query params
     const db = readDb();
     if (!db['_shortLinks'] || typeof db['_shortLinks'] !== 'object') {
       db['_shortLinks'] = {};
     }
-    const existingStore = (urlSlug && db[urlSlug]) || (resolvedCompanyId && db[resolvedCompanyId]);
+    const byCompId = resolvedCompanyId && db[resolvedCompanyId] ? db[resolvedCompanyId] : null;
+    const existingStore =
+      (urlSlug && db[urlSlug]) ||
+      (cleanSlug && db[cleanSlugAlphanumeric(urlSlug)]) ||
+      (byCompId && byCompId.slug === urlSlug ? byCompId : null);
     const finalRecordProducts = resolvedProducts.length > 0
       ? resolvedProducts
       : (Array.isArray(existingStore?.products) ? existingStore.products : []);
+
+    const recordCompany = company || existingStore?.company || { id: resolvedCompanyId || `empresa_${urlSlug}`, name: resolvedStoreName || urlSlug, phone: resolvedZap };
+    const recordSettings = paymentSettings || existingStore?.paymentSettings || { merchantWhatsapp: resolvedZap, pixKey: resolvedPix, receivingBank: resolvedBanco };
+    const recordSeller = activeSeller || existingStore?.activeSeller || null;
+    const nowIso = new Date().toISOString();
 
     db['_shortLinks'][shortCode] = {
       code: shortCode,
@@ -797,12 +838,45 @@ app.post('/api/shorten', async (req, res) => {
       zap: resolvedZap,
       pix: resolvedPix,
       banco: resolvedBanco,
-      company: company || existingStore?.company || { id: resolvedCompanyId || `empresa_${urlSlug}`, name: resolvedStoreName || urlSlug, phone: resolvedZap },
-      paymentSettings: paymentSettings || existingStore?.paymentSettings || { merchantWhatsapp: resolvedZap, pixKey: resolvedPix, receivingBank: resolvedBanco },
-      activeSeller: activeSeller || existingStore?.activeSeller || null,
+      company: recordCompany,
+      paymentSettings: recordSettings,
+      activeSeller: recordSeller,
       products: finalRecordProducts,
-      updatedAt: new Date().toISOString()
+      updatedAt: nowIso
     };
+
+    // ALSO keep db[urlSlug] / db[cleanSlug] up to date so direct /loja/:slug and /l/:code fallback NEVER open an empty store!
+    if (urlSlug && urlSlug !== 'loja' && (finalRecordProducts.length > 0 || !existingStore)) {
+      const storeDraft = {
+        slug: urlSlug,
+        cleanSlug: cleanSlugAlphanumeric(urlSlug),
+        company: { ...recordCompany, slug: urlSlug },
+        paymentSettings: recordSettings,
+        products: finalRecordProducts,
+        activeSeller: recordSeller,
+        registeredPhones: Array.isArray(existingStore?.registeredPhones) ? existingStore.registeredPhones : [],
+        updatedAt: nowIso
+      };
+      const mergedPhones = collectStorePhones(storeDraft);
+      const upsertedStore = { ...storeDraft, registeredPhones: mergedPhones };
+      db[urlSlug] = upsertedStore;
+      if (upsertedStore.cleanSlug && upsertedStore.cleanSlug !== urlSlug) {
+        db[upsertedStore.cleanSlug] = upsertedStore;
+      }
+      if (recordCompany?.id && (!db[recordCompany.id] || db[recordCompany.id].slug === urlSlug)) {
+        db[recordCompany.id] = upsertedStore;
+      }
+      if (!db['_phoneIndex'] || typeof db['_phoneIndex'] !== 'object') {
+        db['_phoneIndex'] = {};
+      }
+      for (const phoneNum of mergedPhones) {
+        for (const variant of normalizePhoneVariants(phoneNum)) {
+          if (!db['_phoneIndex'][variant] || existingStore?.slug === urlSlug) {
+            db['_phoneIndex'][variant] = urlSlug;
+          }
+        }
+      }
+    }
 
     // Ensure _phoneIndex knows this registered mobile number if not yet indexed
     if (resolvedZap.length >= 8 && urlSlug && urlSlug !== 'loja') {
@@ -825,13 +899,56 @@ app.post('/api/shorten', async (req, res) => {
 
     const isLocalOrigin = baseOrigin.includes('localhost') || baseOrigin.includes('127.0.0.1');
 
-    // Create company-named is.gd link pointing to cleanSelfShortUrl (/l/empresa_hash -> zero query codes anywhere!)
+    // Build full snapshot target URL on public domain so external opens via is.gd never hit Cookie check AND always deliver products + phone
+    const buildPublicSnapshotUrl = () => {
+      const targetUrl = new URL(`/loja/${encodeURIComponent(urlSlug || 'loja')}`, baseOrigin);
+      if (parsedUrlObj && parsedUrlObj.searchParams.get('p')) {
+        parsedUrlObj.searchParams.forEach((v, k) => targetUrl.searchParams.set(k, v));
+        return targetUrl.toString();
+      }
+      targetUrl.searchParams.set('loja', urlSlug || 'loja');
+      targetUrl.searchParams.set('nome', resolvedStoreName || urlSlug || 'Loja');
+      targetUrl.searchParams.set('tab', 'client-store');
+      if (resolvedCompanyId) targetUrl.searchParams.set('empresa', resolvedCompanyId);
+      if (resolvedZap) targetUrl.searchParams.set('zap', resolvedZap);
+      if (resolvedPix) targetUrl.searchParams.set('pix', resolvedPix);
+      if (resolvedBanco) targetUrl.searchParams.set('banco', resolvedBanco);
+      if (finalRecordProducts.length > 0) {
+        const compactItems: string[] = [];
+        for (const p of finalRecordProducts.slice(0, 60)) {
+          const safeName = (p.name || 'Produto').replace(/[_*~|]/g, ' ').trim().slice(0, 32);
+          const safeCat = (p.category || 'Outros').replace(/[_*~|]/g, ' ').trim().slice(0, 20);
+          const price = Number(p.salePrice) || 0;
+          const stock = Number(p.currentStock) || 0;
+          const unit = (p.unit || 'UN').replace(/[_*~|]/g, '').trim().slice(0, 6);
+          const wp = p.wholesalePrice ? Number(p.wholesalePrice) : '';
+          const wq = p.wholesaleMinQty ? Number(p.wholesaleMinQty) : '';
+          const entry = (wp && wq)
+            ? `${safeName}_${price}_${stock}_${unit}_${safeCat}_${wp}_${wq}`
+            : `${safeName}_${price}_${stock}_${unit}_${safeCat}`;
+          if (encodeURIComponent([...compactItems, entry].join('*')).length > 3000) break;
+          compactItems.push(entry);
+        }
+        if (compactItems.length > 0) {
+          targetUrl.searchParams.set('p', compactItems.join('*'));
+        }
+      }
+      return targetUrl.toString();
+    };
+
+    const isGdTargetUrl = buildPublicSnapshotUrl();
+
+    // Create company-named is.gd link pointing to public domain snapshot URL (never ais-pre- Cookie check, zero query codes visible in shared link!)
     if (!isLocalOrigin && cleanSlug && cleanSlug !== 'loja') {
       const rand2 = Math.floor(10 + Math.random() * 89).toString();
-      const basePrefix = cleanSlug.slice(0, 24) || 'loja';
+      const rand4 = Math.random().toString(36).slice(2, 6);
+      const rand5 = Math.random().toString(36).slice(2, 7);
+      const basePrefix = cleanSlug.slice(0, 22) || 'loja';
       const candidateParams = [
         shortCode,
-        `${basePrefix}_${urlHash}${rand2}`
+        `${basePrefix}_${urlHash}${rand2}`,
+        `${basePrefix}_${rand4}`,
+        `${basePrefix}_${rand5}`
       ].filter((slug, idx, arr) => slug.length >= 5 && slug.length <= 30 && arr.indexOf(slug) === idx);
 
       const expectedCheck = cleanSlug.slice(0, 20);
@@ -843,9 +960,9 @@ app.post('/api/shorten', async (req, res) => {
             body: new URLSearchParams({
               format: 'simple',
               shorturl: customParam,
-              url: cleanSelfShortUrl
+              url: isGdTargetUrl
             }).toString(),
-            signal: AbortSignal.timeout(2200)
+            signal: AbortSignal.timeout(2500)
           });
           if (resp.ok) {
             const text = (await resp.text()).trim();
@@ -865,7 +982,7 @@ app.post('/api/shorten', async (req, res) => {
                 signal: AbortSignal.timeout(1500)
               });
               const loc = checkRes.headers.get('location') || '';
-              if (loc === cleanSelfShortUrl) {
+              if (loc === isGdTargetUrl && !loc.includes('ais-pre-') && !loc.includes('ais-dev-')) {
                 const reusable = `https://is.gd/${customParam}`;
                 shortUrlCache.set(cacheKey, reusable);
                 return res.json({ shortUrl: reusable, cleanSelfShortUrl, shortCode });
@@ -876,7 +993,7 @@ app.post('/api/shorten', async (req, res) => {
       }
     }
 
-    // Fallback: ALWAYS return ultra-clean self-hosted short link (/l/empresa_hash) with ZERO query codes
+    // Fallback: ALWAYS return ultra-clean URL without ais-pre- or raw query codes
     return res.json({ shortUrl: cleanSelfShortUrl, cleanSelfShortUrl, shortCode });
   } catch (err: any) {
     console.error('[ShortenAPI] Error:', err);
@@ -890,14 +1007,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '69',
-    versionName: 'v69.0',
+    version: '72',
+    versionName: 'v72.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Indicador dinâmico de versão (ponto verde + Atualizar App) sincronizado automaticamente em tempo real (v69)',
-      'Links compartilhados limpos contendo apenas o nome da empresa sem códigos na URL',
-      'Vínculo em tempo real de cada número de celular cadastrado com os produtos atualizados da empresa',
-      'Sincronização automática em tempo real entre painel da empresa, app instalado e clientes'
+      'Links compartilhados sempre usando o domínio público (sem passar por Cookie check do preview) e encurtamento direto sem códigos (v72)',
+      'Mensagem de compartilhamento limpa sem descrever produtos do aplicativo',
+      'Sincronização em tempo real entre AI Studio e App Instalado com nome da empresa, telefone e catálogo completos',
+      'Indicador dinâmico de versão (ponto verde + Atualizar App) sincronizado automaticamente em tempo real'
     ]
   });
 });
@@ -912,7 +1029,8 @@ const escapeHtml = (str: string): string =>
 
 const injectStoreMeta = (html: string, req: express.Request): string => {
   try {
-    const paramSlug = typeof req.params?.slug === 'string' ? req.params.slug : '';
+    const paramSlug = typeof req.params?.slug === 'string' ? decodeURIComponent(req.params.slug) : '';
+    const isShortPath = req.path.toLowerCase().startsWith('/l/');
     const rawLoja = typeof req.query.loja === 'string' ? req.query.loja : paramSlug;
     const rawNome = typeof req.query.nome === 'string' ? req.query.nome : '';
     const rawP = typeof req.query.p === 'string' ? req.query.p : '';
@@ -920,17 +1038,22 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
 
     const db = readDb();
     const shortLinks = db['_shortLinks'] || {};
-    const shortRec = (paramSlug && (shortLinks[paramSlug] || shortLinks[normalizeSlug(paramSlug)])) || null;
+    const shortRec = (paramSlug && (shortLinks[paramSlug] || shortLinks[paramSlug.toLowerCase()] || shortLinks[normalizeSlug(paramSlug)])) || null;
 
-    const strippedFromCode = rawLoja ? rawLoja.replace(/[_-][a-z0-9]{3,8}$/i, '') : '';
-    const lookupKey = shortRec?.slug || shortRec?.storeName || rawNome || strippedFromCode || rawLoja;
+    const rawLojaNorm = normalizeSlug(rawLoja);
+    const rawLojaClean = cleanSlugAlphanumeric(rawLoja);
+    const exactMatchBeforeStrip = (!shortRec && rawLoja) ? (db[rawLojaNorm] || db[rawLojaClean] || null) : null;
+    const strippedFromCode = (isShortPath && !exactMatchBeforeStrip && rawLoja) ? rawLoja.replace(/[_-][a-z0-9]{3,8}$/i, '') : rawLoja;
+    const lookupKey = shortRec?.slug || shortRec?.storeName || rawNome || exactMatchBeforeStrip?.slug || strippedFromCode || rawLoja;
     const slug = normalizeSlug(lookupKey);
     const clean = cleanSlugAlphanumeric(lookupKey);
+    const byCompId = shortRec?.companyId && db[shortRec.companyId] ? db[shortRec.companyId] : null;
     const dbStore =
       db[slug] ||
       db[clean] ||
       db[lookupKey] ||
-      (shortRec?.companyId && db[shortRec.companyId]) ||
+      exactMatchBeforeStrip ||
+      (byCompId && byCompId.slug === slug ? byCompId : null) ||
       (shortRec?.zap && findStoreByPhone(db, shortRec.zap)) ||
       null;
 
@@ -942,29 +1065,8 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
         ? dbStore.products
         : (Array.isArray(shortRec?.products) ? shortRec.products : []);
 
-    let itemNames: string[] = [];
-    if (rawP) {
-      itemNames = rawP
-        .split('*')
-        .filter(Boolean)
-        .slice(0, 5)
-        .map(item => {
-          const first = (item.split('_')[0] || '').replace(/\+/g, ' ');
-          try { return decodeURIComponent(first); } catch { return first; }
-        })
-        .filter(Boolean);
-    } else if (resolvedProducts.length > 0) {
-      itemNames = resolvedProducts.slice(0, 5).map((p: any) => p.name).filter(Boolean);
-    }
-
-    const totalCount = rawP
-      ? rawP.split('*').filter(Boolean).length
-      : resolvedProducts.length;
-
     const titleText = `${displayName} - Catálogo Oficial & Pedidos`;
-    const descText = itemNames.length > 0
-      ? `Confira ${totalCount} ${totalCount === 1 ? 'produto' : 'produtos'} em ${displayName} (${itemNames.join(', ')}) e faça seu pedido direto pelo WhatsApp!`
-      : `Confira o catálogo digital atualizado da ${displayName} e faça seus pedidos direto pelo WhatsApp!`;
+    const descText = `Confira o catálogo digital atualizado da ${displayName} e faça seus pedidos direto pelo WhatsApp!`;
 
     let updatedHtml = html
       .replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${escapeHtml(titleText)}</title>`)
