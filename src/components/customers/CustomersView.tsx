@@ -203,7 +203,7 @@ export const CustomersView: React.FC = () => {
                   {cust.phone && (
                     <div className="flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{cust.phone}</span>
+                      <span>WhatsApp / Tel Protegido</span>
                     </div>
                   )}
                   {cust.email && (
@@ -275,7 +275,7 @@ export const CustomersView: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{sup.phone}</span>
+                    <span>WhatsApp / Tel Protegido</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Mail className="w-3.5 h-3.5 text-slate-400" />
@@ -356,11 +356,11 @@ export const CustomersView: React.FC = () => {
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Telefone / WhatsApp</label>
                 <input
-                  type="text"
-                  placeholder="(11) 98765-4321"
+                  type="password"
+                  placeholder="****************"
                   value={customerPhone}
                   onChange={e => setCustomerPhone(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-600"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-600 tracking-widest"
                 />
               </div>
 
@@ -486,11 +486,11 @@ export const CustomersView: React.FC = () => {
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">Telefone / Pedidos</label>
                 <input
-                  type="text"
-                  placeholder="(11) 3456-7800"
+                  type="password"
+                  placeholder="****************"
                   value={supplierPhone}
                   onChange={e => setSupplierPhone(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-600"
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-600 tracking-widest"
                 />
               </div>
 

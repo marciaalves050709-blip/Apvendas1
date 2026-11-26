@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '72', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '73', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -1007,19 +1007,19 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '72',
-    versionName: 'v72.0',
+    version: '73',
+    versionName: 'v73.0',
     buildDate: new Date().toISOString(),
     features: [
-      'Links compartilhados sempre usando o domínio público (sem passar por Cookie check do preview) e encurtamento direto sem códigos (v72)',
-      'Mensagem de compartilhamento limpa sem descrever produtos do aplicativo',
-      'Sincronização em tempo real entre AI Studio e App Instalado com nome da empresa, telefone e catálogo completos',
-      'Indicador dinâmico de versão (ponto verde + Atualizar App) sincronizado automaticamente em tempo real'
+      'Números de telefone totalmente ocultos na interface, painéis e formulários (v73)',
+      'Instalação de PWA própria para cada empresa e cada canal/telefone vinculado sem erros (v73)',
+      'Links compartilhados sempre usando o domínio público sem expor códigos (v72)',
+      'Sincronização em tempo real entre AI Studio e Apps Instalados'
     ]
   });
 });
 
-// Helper to inject company name and products into HTML meta tags for WhatsApp / social previews
+// Helper to escape HTML safely
 const escapeHtml = (str: string): string =>
   String(str || '')
     .replace(/&/g, '&amp;')
@@ -1027,13 +1027,177 @@ const escapeHtml = (str: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+// Keep manifest short_name <= 12 chars without cutting awkwardly
+const makeShortName12 = (raw: string): string => {
+  const cleaned = String(raw || 'appvendas').trim();
+  if (!cleaned) return 'appvendas';
+  return cleaned.slice(0, 12).trim() || 'appvendas';
+};
+
+// Resolve seller/channel from store using opaque channelKey (sellerId or canal_N — never phone digits)
+const resolveChannelFromStore = (store: any, canalParam: string) => {
+  if (!canalParam) return null;
+  const sellers = Array.isArray(store?.paymentSettings?.sellers) ? store.paymentSettings.sellers : [];
+  const byId = sellers.find((s: any) => s?.id === canalParam);
+  if (byId) return byId;
+  const m = canalParam.match(/^canal_(\d+)$/i);
+  if (m) {
+    const idx = parseInt(m[1], 10) - 1;
+    if (sellers[idx]) return sellers[idx];
+  }
+  return null;
+};
+
+// Dynamic Web App Manifest per company & linked channel (ZERO exposed phone digits!)
+app.get(['/manifest.webmanifest', '/manifest.json'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+
+  try {
+    const db = readDb();
+    const shortLinks = db['_shortLinks'] || {};
+
+    let qSlug = typeof req.query.slug === 'string' ? req.query.slug.trim() : '';
+    let qNome = typeof req.query.nome === 'string' ? req.query.nome.trim() : '';
+    let qLoja = typeof req.query.loja === 'string' ? req.query.loja.trim() : '';
+    let qCanal = typeof req.query.canal === 'string' ? req.query.canal.trim() : '';
+    let qEmpresa = typeof req.query.empresa === 'string' ? req.query.empresa.trim() : '';
+    let refererShortCode = '';
+
+    // Inspect Referer when manifest is requested without explicit query params (e.g. cold open on /loja/:slug or /l/:code)
+    const referer = req.get('referer');
+    if (referer && !qSlug && !qLoja && !qNome) {
+      try {
+        const refUrl = new URL(referer);
+        const parts = refUrl.pathname.split('/').filter(Boolean);
+        if (parts[0] === 'loja' && parts[1]) {
+          qSlug = decodeURIComponent(parts[1]);
+        } else if (parts[0] === 'l' && parts[1]) {
+          refererShortCode = decodeURIComponent(parts[1]);
+        }
+        qLoja = qLoja || (refUrl.searchParams.get('loja') || '').trim();
+        qNome = qNome || (refUrl.searchParams.get('nome') || '').trim();
+        qCanal = qCanal || (refUrl.searchParams.get('canal') || '').trim();
+        qEmpresa = qEmpresa || (refUrl.searchParams.get('empresa') || '').trim();
+      } catch {}
+    }
+
+    const shortRec = refererShortCode
+      ? (shortLinks[refererShortCode] || shortLinks[refererShortCode.toLowerCase()] || shortLinks[normalizeSlug(refererShortCode)] || null)
+      : null;
+
+    const rawLookup = shortRec?.slug || shortRec?.storeName || qSlug || qLoja || qNome || '';
+    const normSlug = normalizeSlug(rawLookup);
+    const cleanSlug = cleanSlugAlphanumeric(rawLookup);
+    const byCompId = (qEmpresa && db[qEmpresa]) ? db[qEmpresa] : (shortRec?.companyId && db[shortRec.companyId] ? db[shortRec.companyId] : null);
+    const dbStore =
+      (normSlug && db[normSlug]) ||
+      (cleanSlug && db[cleanSlug]) ||
+      (byCompId && (!normSlug || byCompId.slug === normSlug) ? byCompId : null) ||
+      null;
+
+    const isCompanySpecific = Boolean(normSlug && normSlug !== 'appvendas');
+
+    const displayName = (
+      qNome ||
+      dbStore?.company?.name ||
+      shortRec?.storeName ||
+      (qSlug ? qSlug.replace(/[-_]+/g, ' ') : '') ||
+      (qLoja ? qLoja.replace(/[-_]+/g, ' ') : '')
+    ).trim();
+
+    if (!isCompanySpecific || !displayName) {
+      return res.json({
+        id: '/',
+        name: 'appvendas - PDV e Estoque',
+        short_name: 'appvendas',
+        description: 'Sistema completo de controle de estoque, vendas PDV e catálogo WhatsApp.',
+        lang: 'pt-BR',
+        dir: 'ltr',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        orientation: 'portrait-primary',
+        theme_color: '#4f46e5',
+        background_color: '#0f172a',
+        categories: ['business', 'productivity', 'shopping'],
+        prefer_related_applications: false,
+        icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      });
+    }
+
+    const storeSlug = normalizeSlug(dbStore?.slug || normSlug) || 'loja';
+    const matchedSeller = resolveChannelFromStore(dbStore || shortRec, qCanal);
+    const channelLabel = matchedSeller?.name && matchedSeller.name !== 'Atendente' ? String(matchedSeller.name).trim() : '';
+
+    const baseStartPath = refererShortCode
+      ? `/l/${encodeURIComponent(refererShortCode)}`
+      : `/loja/${encodeURIComponent(storeSlug)}`;
+    const startUrl = qCanal
+      ? `${baseStartPath}?canal=${encodeURIComponent(qCanal)}`
+      : baseStartPath;
+
+    const appName = channelLabel
+      ? `${displayName} • ${channelLabel}`
+      : `${displayName} - Catálogo Oficial`;
+
+    return res.json({
+      id: startUrl,
+      name: appName,
+      short_name: makeShortName12(displayName),
+      description: `Catálogo digital e pedidos da loja ${displayName}.`,
+      lang: 'pt-BR',
+      dir: 'ltr',
+      start_url: startUrl,
+      scope: '/',
+      display: 'standalone',
+      orientation: 'portrait-primary',
+      theme_color: '#059669',
+      background_color: '#0f172a',
+      categories: ['shopping', 'business'],
+      prefer_related_applications: false,
+      icons: [
+        { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
+    });
+  } catch {
+    return res.json({
+      id: '/',
+      name: 'appvendas - PDV e Estoque',
+      short_name: 'appvendas',
+      description: 'Sistema completo de controle de estoque, vendas PDV e catálogo WhatsApp.',
+      lang: 'pt-BR',
+      dir: 'ltr',
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      orientation: 'portrait-primary',
+      theme_color: '#4f46e5',
+      background_color: '#0f172a',
+      icons: [
+        { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
+    });
+  }
+});
+
 const injectStoreMeta = (html: string, req: express.Request): string => {
   try {
     const paramSlug = typeof req.params?.slug === 'string' ? decodeURIComponent(req.params.slug) : '';
     const isShortPath = req.path.toLowerCase().startsWith('/l/');
     const rawLoja = typeof req.query.loja === 'string' ? req.query.loja : paramSlug;
     const rawNome = typeof req.query.nome === 'string' ? req.query.nome : '';
-    const rawP = typeof req.query.p === 'string' ? req.query.p : '';
+    const rawCanal = typeof req.query.canal === 'string' ? req.query.canal.trim() : '';
     if (!rawLoja && !rawNome) return html;
 
     const db = readDb();
@@ -1065,6 +1229,10 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
         ? dbStore.products
         : (Array.isArray(shortRec?.products) ? shortRec.products : []);
 
+    const matchedSeller = resolveChannelFromStore(dbStore || shortRec, rawCanal);
+    const effectiveSlug = dbStore?.slug || slug || 'loja';
+    const manifestHref = `/manifest.webmanifest?slug=${encodeURIComponent(effectiveSlug)}&nome=${encodeURIComponent(displayName)}${rawCanal ? `&canal=${encodeURIComponent(rawCanal)}` : ''}`;
+
     const titleText = `${displayName} - Catálogo Oficial & Pedidos`;
     const descText = `Confira o catálogo digital atualizado da ${displayName} e faça seus pedidos direto pelo WhatsApp!`;
 
@@ -1072,20 +1240,23 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
       .replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${escapeHtml(titleText)}</title>`)
       .replace(/<meta[^>]+name=["']description["'][^>]*>/i, `<meta name="description" content="${escapeHtml(descText)}" />`)
       .replace(/<meta[^>]+property=["']og:title["'][^>]*>/i, `<meta property="og:title" content="${escapeHtml(titleText)}" />`)
-      .replace(/<meta[^>]+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${escapeHtml(descText)}" />`);
+      .replace(/<meta[^>]+property=["']og:description["'][^>]*>/i, `<meta property="og:description" content="${escapeHtml(descText)}" />`)
+      .replace(/<meta[^>]+name=["']apple-mobile-web-app-title["'][^>]*>/i, `<meta name="apple-mobile-web-app-title" content="${escapeHtml(makeShortName12(displayName))}" />`)
+      .replace(/<link[^>]+rel=["']manifest["'][^>]*>/i, `<link rel="manifest" href="${manifestHref}" />`);
 
-    // Inject synchronous hydration payload so cold opens on /l/:code or /loja/:slug load company + phone + products immediately
+    // Inject synchronous hydration payload so cold opens on /l/:code or /loja/:slug load company + channel + products immediately
     if (shortRec || dbStore) {
-      const boundZap = String(shortRec?.zap || '').replace(/\D/g, '');
-      const baseCompany = dbStore?.company || shortRec?.company || { id: `empresa_${slug}`, name: displayName, slug };
+      const boundZap = String(matchedSeller?.whatsapp || shortRec?.zap || '').replace(/\D/g, '');
+      const baseCompany = dbStore?.company || shortRec?.company || { id: `empresa_${effectiveSlug}`, name: displayName, slug: effectiveSlug };
       const baseSettings = {
         ...(dbStore?.paymentSettings || shortRec?.paymentSettings || {}),
+        ...(matchedSeller?.id ? { activeSellerId: matchedSeller.id } : {}),
         ...(boundZap ? { merchantWhatsapp: boundZap } : {}),
-        ...(shortRec?.pix ? { pixKey: shortRec.pix } : {}),
-        ...(shortRec?.banco ? { receivingBank: shortRec.banco } : {})
+        ...(matchedSeller?.pixKey ? { pixKey: matchedSeller.pixKey } : (shortRec?.pix ? { pixKey: shortRec.pix } : {})),
+        ...(matchedSeller?.receivingBank ? { receivingBank: matchedSeller.receivingBank } : (shortRec?.banco ? { receivingBank: shortRec.banco } : {}))
       };
       const initialPayload = {
-        slug: dbStore?.slug || slug,
+        slug: effectiveSlug,
         company: {
           ...baseCompany,
           name: displayName,
@@ -1093,7 +1264,8 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
         },
         paymentSettings: baseSettings,
         products: resolvedProducts,
-        zap: boundZap
+        zap: boundZap,
+        canal: rawCanal || undefined
       };
       const safeJson = JSON.stringify(initialPayload).replace(/</g, '\\u003c');
       updatedHtml = updatedHtml.replace(

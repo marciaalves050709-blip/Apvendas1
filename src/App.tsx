@@ -30,8 +30,16 @@ import { MobileInstallBanner } from './components/pwa/MobileInstallBanner';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 import { AppUpdateModal } from './components/pwa/AppUpdateModal';
 import { AppUpdateBanner } from './components/pwa/AppUpdateBanner';
+import { PWAInstallModal } from './components/pwa/PWAInstallModal';
 
 const MainLayout: React.FC = () => {
+  const [isDirectInstallModalOpen, setIsDirectInstallModalOpen] = React.useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsDirectInstallModalOpen(true);
+    window.addEventListener('open-pwa-install-modal', handler);
+    return () => window.removeEventListener('open-pwa-install-modal', handler);
+  }, []);
   const { 
     activeTab, 
     setActiveTab,
@@ -107,6 +115,7 @@ const MainLayout: React.FC = () => {
           onShowToast={showToast}
         />
         <AppUpdateModal isOpen={isUpdateModalOpen} onClose={closeUpdateModal} />
+        <PWAInstallModal isOpen={isDirectInstallModalOpen} onClose={() => setIsDirectInstallModalOpen(false)} />
         <OfflineIndicator />
         <ToastContainer />
       </div>
@@ -177,6 +186,7 @@ const MainLayout: React.FC = () => {
         onShowToast={showToast}
       />
       <AppUpdateModal isOpen={isUpdateModalOpen} onClose={closeUpdateModal} />
+      <PWAInstallModal isOpen={isDirectInstallModalOpen} onClose={() => setIsDirectInstallModalOpen(false)} />
       <OfflineIndicator />
       <ToastContainer />
     </div>

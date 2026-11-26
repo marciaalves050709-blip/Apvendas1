@@ -1688,7 +1688,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(
       'success',
       '✅ Cliente Liberado!',
-      `${trimmedName} (${clientPhone}) teve o teste estendido por mais ${days} dias com sucesso.`
+      `${trimmedName} teve o teste estendido por mais ${days} dias com sucesso.`
     );
 
     return newRecord;
@@ -1782,8 +1782,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const urlLoja = params.get('loja') || pathLojaName;
       const urlNome = params.get('nome') || ssrInitialStore?.company?.name || '';
       const urlCompId = params.get('empresa') || params.get('id') || ssrInitialStore?.company?.id || null;
+      const urlCanal = (params.get('canal') || ssrInitialStore?.canal || '').trim();
       const incomingName = (urlNome || (urlLoja ? decodeURIComponent(urlLoja).replace(/[-_]/g, ' ') : '')).trim();
       const targetUrlSlug = normalizeStoreSlug(urlLoja || incomingName);
+
+      if (params.get('install') === '1') {
+        const isStandaloneNow =
+          window.matchMedia('(display-mode: standalone)').matches ||
+          (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+        if (!isStandaloneNow) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('open-pwa-install-modal'));
+          }, 450);
+        }
+      }
 
       // Persist active store slug so installed apps opened from home screen load the right store
       if (targetUrlSlug) {
@@ -2092,10 +2104,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     merchantName: isDefaultName(s.merchantName) ? (incomingName || data.company?.name || ps.merchantName) : (incomingName || data.company?.name || s.merchantName)
                   }))
                 : ps.sellers;
+              const matchedCanalSeller = urlCanal && Array.isArray(rawSellerList)
+                ? (rawSellerList.find((s: SellerProfile) => s.id === urlCanal) ||
+                   (/^canal_(\d+)$/i.test(urlCanal) ? rawSellerList[parseInt(urlCanal.replace(/\D/g, ''), 10) - 1] : undefined))
+                : undefined;
               const resolvedMerchant = incomingName || data.company?.name || (isDefaultName(data.paymentSettings.merchantName) ? ps.merchantName : data.paymentSettings.merchantName);
               const next = {
                 ...ps,
                 ...data.paymentSettings,
+                ...(matchedCanalSeller ? {
+                  activeSellerId: matchedCanalSeller.id,
+                  merchantWhatsapp: matchedCanalSeller.whatsapp || data.paymentSettings.merchantWhatsapp || ps.merchantWhatsapp,
+                  ...(matchedCanalSeller.pixKey ? { pixKey: matchedCanalSeller.pixKey } : {}),
+                  ...(matchedCanalSeller.receivingBank ? { receivingBank: matchedCanalSeller.receivingBank } : {})
+                } : {}),
                 merchantName: resolvedMerchant,
                 sellers: rawSellerList
               };
@@ -2395,12 +2417,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [activeCompanyId]);
 
-  // Sync document title with current company name
+  // Sync document title, PWA Web App Manifest, and iOS home screen title with current company & channel
   useEffect(() => {
-    if (currentCompany?.name && typeof document !== 'undefined') {
-      document.title = `${currentCompany.name} - Gestão & Vendas`;
+    if (!currentCompany?.name || typeof document === 'undefined') return;
+    document.title = `${currentCompany.name} - Gestão & Vendas`;
+    const isGeneric = ['Minha Loja', 'Minha Empresa', 'appvendas'].includes(currentCompany.name.trim());
+    const slug = normalizeStoreSlug(currentCompany.slug || currentCompany.name);
+
+    const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (appleTitle) {
+      appleTitle.setAttribute('content', (isGeneric ? 'appvendas' : currentCompany.name).slice(0, 12));
     }
-  }, [currentCompany?.name]);
+
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      if (isGeneric || !slug) {
+        manifestLink.setAttribute('href', '/manifest.webmanifest');
+      } else {
+        const canalSuffix = activeSeller?.id ? `&canal=${encodeURIComponent(activeSeller.id)}` : '';
+        manifestLink.setAttribute(
+          'href',
+          `/manifest.webmanifest?slug=${encodeURIComponent(slug)}&nome=${encodeURIComponent(currentCompany.name)}${canalSuffix}`
+        );
+      }
+    }
+  }, [currentCompany?.name, currentCompany?.slug, paymentSettings?.activeSellerId]);
 
   // Sync to local storage per-tenant (Multi-tenant isolation)
   useEffect(() => {

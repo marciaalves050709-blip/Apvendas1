@@ -278,7 +278,7 @@ export const AccessPaywall: React.FC = () => {
                         setClientLookupInput(e.target.value);
                         setLookupError('');
                       }}
-                      placeholder="Ex: seu nome ou (91) 99319-2405"
+                      placeholder="Ex: seu nome ou telefone cadastrado"
                       className="w-full pl-9 pr-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs text-slate-900 outline-none focus:border-indigo-600 shadow-2xs"
                     />
                   </div>

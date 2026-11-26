@@ -4,7 +4,6 @@ import { Product, Category, PaymentMethod, CartItem } from '../../types';
 import { formatCurrency, generatePixPayload, generatePixE2EId, BANKS_LIST, BankConfig, sounds } from '../../utils/pixHelper';
 import { 
   formatPhoneToWhatsApp, 
-  formatPhoneDisplay, 
   buildWhatsAppOrderMessage, 
   generateWhatsAppLink,
   generateWhatsAppPaymentProofLink,
@@ -538,8 +537,11 @@ export const ClientStoreView: React.FC = () => {
 
   // Copy Pix Key
   const handleCopyPix = () => {
-    const keyToCopy = activeSeller?.pixKey || paymentSettings.pixKey || '91993192405';
-    if (!keyToCopy) return;
+    const keyToCopy = activeSeller?.pixKey || paymentSettings.pixKey || '';
+    if (!keyToCopy) {
+      showToast('info', 'Pix não configurado', 'A loja ainda não configurou uma chave Pix.');
+      return;
+    }
     navigator.clipboard.writeText(keyToCopy);
     setCopiedPixKey(true);
     showToast('info', 'Chave Copiada!', 'Chave Pix copiada com sucesso para a área de transferência.');
@@ -655,7 +657,7 @@ export const ClientStoreView: React.FC = () => {
               {clientUser.phone ? (
                 <>
                   <Smartphone className="w-3 h-3 text-slate-400" />
-                  <span>{formatPhoneDisplay(clientUser.phone)}</span>
+                  <span>WhatsApp Protegido (Oculto)</span>
                 </>
               ) : (
                 <>
@@ -1261,7 +1263,7 @@ export const ClientStoreView: React.FC = () => {
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 flex items-center justify-between">
                   <div>
                     <p className="font-bold">{clientUser.name}</p>
-                    <p className="text-[11px] text-emerald-700">{formatPhoneDisplay(clientUser.phone)}</p>
+                    <p className="text-[11px] text-emerald-700">WhatsApp Identificado (Oculto)</p>
                   </div>
                   <button
                     type="button"
@@ -1428,10 +1430,10 @@ export const ClientStoreView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Seu WhatsApp</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Seu WhatsApp (Oculto)</label>
                     <input
-                      type="tel"
-                      placeholder="(99) 99999-9999"
+                      type="password"
+                      placeholder="****************"
                       value={clientUser.phone}
                       onChange={e => {
                         const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
@@ -1446,7 +1448,7 @@ export const ClientStoreView: React.FC = () => {
                         setClientUser(updated);
                         localStorage.setItem(STORAGE_KEY_CLIENT_USER, JSON.stringify(updated));
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none tracking-widest"
                     />
                   </div>
                 </div>
@@ -2113,14 +2115,14 @@ export const ClientStoreView: React.FC = () => {
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Seu WhatsApp
+                  Seu WhatsApp (Oculto)
                 </label>
                 <input
-                  type="tel"
-                  placeholder="(99) 99999-9999"
+                  type="password"
+                  placeholder="****************"
                   value={inputPhone}
                   onChange={e => handlePhoneChange(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-mono font-medium text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 outline-none tracking-widest"
                 />
               </div>
 

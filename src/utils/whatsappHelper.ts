@@ -98,18 +98,12 @@ export function buildWhatsAppOrderMessage(
 
   if (seller?.name || order.sellerName) {
     const sName = seller?.name || order.sellerName;
-    const sPhone = seller?.whatsapp || order.sellerWhatsapp;
     msg += `👨‍💼 *ATENDIMENTO / VENDEDOR*\n`;
-    msg += `• *Vendedor:* ${sName}\n`;
-    if (sPhone) {
-      msg += `• *Contato:* ${formatPhoneDisplay(sPhone)}\n`;
-    }
-    msg += `\n`;
+    msg += `• *Vendedor:* ${sName}\n\n`;
   }
   
   msg += `👤 *DADOS DO CLIENTE*\n`;
-  msg += `• *Nome:* ${order.customerName}\n`;
-  msg += `• *WhatsApp:* ${formatPhoneDisplay(order.customerPhone)}\n\n`;
+  msg += `• *Nome:* ${order.customerName}\n\n`;
   
   msg += `📍 *RECEBIMENTO / ENTREGA*\n`;
   if (order.deliveryType === 'ENTREGA') {

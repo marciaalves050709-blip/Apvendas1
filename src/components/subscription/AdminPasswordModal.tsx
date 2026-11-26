@@ -114,7 +114,7 @@ export const AdminPasswordModal: React.FC = () => {
             </div>
             <div>
               <span className="block font-bold text-slate-700">WhatsApp:</span>
-              <span className="font-medium text-slate-600">(91) 99319-2405</span>
+              <span className="font-medium text-slate-600">Protegido (Oculto)</span>
             </div>
           </div>
 

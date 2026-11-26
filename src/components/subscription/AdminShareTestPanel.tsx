@@ -8,7 +8,6 @@ import {
   buildStoreShareUrl,
   collectCompanyPhones,
   copyTextToClipboard,
-  formatPhoneQuick,
   normalizePhoneDigits,
   phonesMatch,
   shortenUrl,
@@ -253,7 +252,7 @@ export const AdminShareTestPanel: React.FC = () => {
         seenPair.add(key);
         chips.push({
           phone: clean,
-          formatted: formatPhoneQuick(clean),
+          formatted: 'WhatsApp Protegido',
           companyId: rec.id,
           companyName: rec.company.name,
           productsCount: rec.products.length
@@ -349,13 +348,13 @@ export const AdminShareTestPanel: React.FC = () => {
         rec.company?.phone ||
         '';
       if (primaryPhone) {
-        setPhoneInput(formatPhoneQuick(primaryPhone));
+        setPhoneInput(normalizePhoneDigits(primaryPhone));
       }
     }
   };
 
   const handleSelectPhoneChip = (phone: string, companyId: string) => {
-    setPhoneInput(formatPhoneQuick(phone));
+    setPhoneInput(normalizePhoneDigits(phone));
     setSelectedCompanyId(companyId);
   };
 
@@ -580,7 +579,7 @@ export const AdminShareTestPanel: React.FC = () => {
             Celulares cadastrados nas empresas ({allPhoneQuickChips.length}):
           </span>
           <div className="flex flex-wrap gap-1.5">
-            {allPhoneQuickChips.map((chip) => {
+            {allPhoneQuickChips.map((chip, idx) => {
               const isSelected =
                 chip.companyId === selectedRecord?.id &&
                 phonesMatch(chip.phone, phoneInput);
@@ -596,7 +595,7 @@ export const AdminShareTestPanel: React.FC = () => {
                   }`}
                 >
                   <Phone className="w-3 h-3 shrink-0" />
-                  <span className="font-mono">{chip.formatted}</span>
+                  <span>Canal {idx + 1} (Oculto)</span>
                   <span className="opacity-75">• {chip.companyName}</span>
                   <span
                     className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
@@ -624,11 +623,11 @@ export const AdminShareTestPanel: React.FC = () => {
           </label>
           <input
             id="admin-test-phone-input"
-            type="tel"
+            type="password"
             value={phoneInput}
             onChange={(e) => setPhoneInput(e.target.value)}
-            placeholder="Ex: (91) 99319-2405 ou 91993192405"
-            className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl text-xs font-mono font-bold text-white outline-none"
+            placeholder="****************"
+            className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl text-xs font-mono font-bold text-white outline-none tracking-widest"
           />
         </div>
 
@@ -649,7 +648,7 @@ export const AdminShareTestPanel: React.FC = () => {
             {catalogRecords.map((rec) => (
               <option key={rec.id} value={rec.id}>
                 {rec.company.name} — {rec.products.length} produto{rec.products.length === 1 ? '' : 's'}
-                {rec.registeredPhones[0] ? ` (${formatPhoneQuick(rec.registeredPhones[0])})` : ''}
+                {rec.registeredPhones.length > 0 ? ` (${rec.registeredPhones.length} canal oculto)` : ''}
               </option>
             ))}
           </select>
@@ -679,13 +678,13 @@ export const AdminShareTestPanel: React.FC = () => {
                 </span>
                 {effectivePhone && (
                   <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-mono">
-                    Celular no Link: {formatPhoneQuick(effectivePhone)}
+                    WhatsApp Protegido Vinculado (Oculto)
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-300">
                 {phoneCleanDigits.length >= 8 && !isPhoneLinkedToSelected
-                  ? `Atenção: o celular ${formatPhoneQuick(phoneInput)} ainda não está vinculado ao cadastro de "${selectedRecord.company.name}". O link abaixo usará este número para teste.`
+                  ? `Atenção: o número digitado ainda não está vinculado ao cadastro de "${selectedRecord.company.name}". O link abaixo usará este canal para teste.`
                   : selectedRecord.products.length === 0
                   ? 'Esta empresa ainda não possui produtos cadastrados para aparecer no link compartilhado.'
                   : 'Catálogo atualizado e pronto! O link de compartilhar entrega exatamente os produtos desta empresa vinculados a este celular.'}

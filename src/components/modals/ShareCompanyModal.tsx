@@ -694,7 +694,7 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                 </span>
               </div>
               <div className="flex gap-1.5 flex-wrap">
-                {registeredPhones.map((entry) => {
+                {registeredPhones.map((entry, idx) => {
                   const isSel = normalizePhoneDigits(selectedSharePhone) === normalizePhoneDigits(entry.phone);
                   return (
                     <button
@@ -710,8 +710,8 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
                           : 'bg-white border border-sky-200 text-slate-700 hover:bg-sky-100'
                       }`}
                     >
-                      <span className="font-mono">{entry.formatted}</span>
-                      <span className={`text-[10px] ${isSel ? 'text-sky-100' : 'text-slate-500'}`}>• {entry.label}</span>
+                      <span>Canal {idx + 1}: {entry.label}</span>
+                      <span className={`text-[10px] ${isSel ? 'text-sky-100' : 'text-slate-500'}`}>• Protegido</span>
                     </button>
                   );
                 })}

@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 72 (Live Network-First & Real-Time Update Safe)
-const CACHE_NAME = 'appvendas-pwa-v72';
+// appvendas Service Worker (PWA) - Version 73 (Multi-Company Installable & Live Network-First)
+const CACHE_NAME = 'appvendas-pwa-v73';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -41,11 +41,11 @@ self.addEventListener('activate', (event) => {
     })
     .then(() => self.clients.claim())
     .then(async () => {
-      // Notify all open client windows that the new SW version 72 is active
+      // Notify all open client windows that the new SW version 73 is active
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v72' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v73' });
         }
       } catch (e) {}
     })
@@ -69,9 +69,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // CRITICAL: NEVER intercept /api/, /loja/, or /l/ requests in Service Worker!
-  // Prevents redirect-mode FetchEvent errors (net::ERR_FAILED) and ensures live SSE/store routes hit network directly
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/loja/') || url.pathname.startsWith('/l/')) {
+  // Skip API calls so SSE and live mutations hit network directly
+  if (url.pathname.startsWith('/api/')) {
     return;
   }
 
@@ -95,12 +94,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Direct Network-First for ALL requests passing event.request directly (preserves redirect='manual' for navigate)
-  // Server enforces Cache-Control: no-store on HTML, manifest, and sw.js
-  event.respondWith(
-    fetch(event.request).catch(async () => {
-      // Offline fallback only when network is unavailable
-      if (event.request.mode === 'navigate') {
+  // 2. Navigation requests (including /, /loja/:slug, /l/:code) - handles start_url cleanly for WebAPK installability
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request.url, { credentials: 'same-origin', cache: 'no-store' }).catch(async () => {
         return new Response(
           `<!DOCTYPE html>
           <html lang="pt-BR">
@@ -127,9 +124,14 @@ self.addEventListener('fetch', (event) => {
             status: 200
           }
         );
-      }
+      })
+    );
+    return;
+  }
 
-      // Check cache for icons/images if offline
+  // 3. Network-First for static assets & manifests with cache fallback when offline
+  event.respondWith(
+    fetch(event.request).catch(async () => {
       const cached = await caches.match(event.request);
       if (cached) return cached;
 

@@ -80,12 +80,37 @@ export function buildStoreCleanUrl(
   return `${origin}/loja/${encodeURIComponent(storeSlug)}`;
 }
 
+export function normalizeStoreSlugShared(name?: string): string {
+  return (name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .trim() || 'loja';
+}
+
+export function maskPhoneHidden(phone?: string): string {
+  const d = normalizePhoneDigits(phone);
+  if (!d) return '';
+  return 'WhatsApp Protegido (Oculto)';
+}
+
+export function maskPhoneDots(phone?: string): string {
+  const d = normalizePhoneDigits(phone);
+  if (!d) return '';
+  return '(••) •••••-••••';
+}
+
 export interface CompanyPhoneEntry {
   phone: string; // canonical digits without leading 55 when 12+ digits
   whatsappDigits: string; // digits formatted for ?zap= / wa.me (with 55 when BR 10/11 digits)
   formatted: string;
+  masked: string;
   label: string;
   sellerId?: string;
+  channelKey: string;
   isActive: boolean;
 }
 
@@ -140,12 +165,15 @@ export function collectCompanyPhones(
     const canon = normalizePhoneDigits(raw);
     if (canon.length < 8 || seen.has(canon)) return;
     seen.add(canon);
+    const channelIdx = result.length + 1;
     result.push({
       phone: canon,
       whatsappDigits: toWhatsappDigits(raw),
       formatted: formatPhoneQuick(canon),
-      label: label || 'WhatsApp da Empresa',
+      masked: maskPhoneDots(canon),
+      label: label || `Canal ${channelIdx}`,
       sellerId,
+      channelKey: sellerId || `canal_${channelIdx}`,
       isActive: canon === activeCanon
     });
   };
@@ -161,10 +189,10 @@ export function collectCompanyPhones(
     }
   }
   if (paymentSettings?.merchantWhatsapp) {
-    pushEntry(paymentSettings.merchantWhatsapp, 'WhatsApp da Loja');
+    pushEntry(paymentSettings.merchantWhatsapp, 'WhatsApp da Loja', 'loja_principal');
   }
   if (company?.phone) {
-    pushEntry(company.phone, company.ownerName || 'Empresa');
+    pushEntry(company.phone, company.ownerName || 'Empresa', 'empresa_principal');
   }
 
   return result;

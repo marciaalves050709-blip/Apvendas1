@@ -549,11 +549,11 @@ export const SubscriptionModal: React.FC = () => {
                         <span>Celular / WhatsApp com DDD:</span>
                       </label>
                       <input
-                        type="tel"
+                        type="password"
                         value={newClientPhone}
                         onChange={(e) => setNewClientPhone(e.target.value)}
-                        placeholder="Ex: (91) 99319-2405 ou 91993192405"
-                        className="w-full px-3 py-2 bg-slate-950/80 border border-indigo-400/40 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:border-emerald-400 transition-all font-mono"
+                        placeholder="****************"
+                        className="w-full px-3 py-2 bg-slate-950/80 border border-indigo-400/40 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:border-emerald-400 transition-all font-mono tracking-widest"
                       />
                     </div>
                   </div>
@@ -582,7 +582,7 @@ export const SubscriptionModal: React.FC = () => {
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                         <div>
                           <span className="text-xs font-black text-white">{lastLiberatedClient.clientName}</span>
-                          <span className="text-[11px] text-emerald-300 block font-mono">{lastLiberatedClient.clientPhone}</span>
+                          <span className="text-[11px] text-emerald-300 block font-mono">WhatsApp Vinculado (Oculto)</span>
                         </div>
                       </div>
                       <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-md">
@@ -655,7 +655,7 @@ export const SubscriptionModal: React.FC = () => {
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="font-black text-xs text-white truncate">{client.clientName}</span>
                                   <span className="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded font-mono">
-                                    {client.clientPhone}
+                                    WhatsApp Oculto
                                   </span>
                                   {isStillActive ? (
                                     <span className="text-[9px] px-1.5 py-0.2 bg-emerald-600/30 text-emerald-300 rounded-full font-bold">

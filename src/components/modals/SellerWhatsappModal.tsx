@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SellerProfile, BankProvider } from '../../types';
 import { 
-  formatPhoneDisplay, 
   formatPhoneToWhatsApp 
 } from '../../utils/whatsappHelper';
 import { 
@@ -333,7 +332,7 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                         <p className="font-black text-xs text-slate-900 truncate">{s.name}</p>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                           <Phone className="w-2.5 h-2.5 text-emerald-600" />
-                          <span>{formatPhoneDisplay(s.whatsapp)}</span>
+                          <span>WhatsApp Protegido (Oculto)</span>
                         </p>
                         <p className="text-[10px] text-slate-600 font-mono mt-1 truncate bg-slate-100 px-1.5 py-0.5 rounded-md flex items-center justify-between">
                           <span>Pix: ****************</span>
@@ -434,16 +433,16 @@ export const SellerWhatsappModal: React.FC<SellerWhatsappModalProps> = ({
                 <div className="relative">
                   <Phone className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="text"
+                    type="password"
                     required
-                    placeholder="Ex: 5511999998888 ou 91 98765-4321"
+                    placeholder="****************"
                     value={whatsapp}
                     onChange={e => handlePhoneInputChange(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 rounded-xl text-xs font-semibold text-slate-900 outline-none transition-all"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none transition-all tracking-widest"
                   />
                 </div>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Formatado para WhatsApp: <strong className="text-emerald-700">{formatPhoneToWhatsApp(whatsapp)}</strong> ({formatPhoneDisplay(whatsapp)})
+                  🔒 Número oculto e protegido — os pedidos dos clientes são enviados direto para este WhatsApp.
                 </p>
               </div>
 

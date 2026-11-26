@@ -53,19 +53,13 @@ export function usePWAInstall() {
       setIsIframe(true);
     }
 
-    // 2. Detect standalone mode / already installed
+    // 2. Detect standalone mode (isInstalled must ONLY be true when actually running as standalone installed app)
     const checkStandalone = () => {
       const standaloneQuery = window.matchMedia('(display-mode: standalone)').matches;
       const iosStandalone = (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-      let persistedInstalled = false;
-      try {
-        persistedInstalled = localStorage.getItem('appvendas_pwa_installed') === 'true';
-      } catch {
-        // ignore
-      }
       const runningStandalone = standaloneQuery || iosStandalone;
       setIsStandalone(runningStandalone);
-      setIsInstalled(runningStandalone || persistedInstalled);
+      setIsInstalled(runningStandalone);
     };
 
     checkStandalone();
@@ -97,14 +91,8 @@ export function usePWAInstall() {
     };
 
     const handleAppInstalled = () => {
-      setIsInstalled(true);
-      setIsStandalone(true);
       setGlobalPrompt(null);
-      try {
-        localStorage.setItem('appvendas_pwa_installed', 'true');
-      } catch {
-        // ignore
-      }
+      checkStandalone();
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -121,11 +109,11 @@ export function usePWAInstall() {
     };
   }, []);
 
-  const openDirectInstallInBrowser = () => {
+  const openDirectInstallInBrowser = (targetUrl?: string) => {
     try {
-      const url = new URL(window.location.href);
+      const url = new URL(targetUrl || window.location.href, window.location.origin);
       url.searchParams.set('install', '1');
-      const win = window.open(url.toString(), '_blank');
+      const win = window.open(url.toString(), '_blank', 'noopener,noreferrer');
       return Boolean(win);
     } catch {
       return false;
@@ -135,11 +123,11 @@ export function usePWAInstall() {
   /**
    * Fast, non-blocking install action:
    * - Immediately triggers native install prompt on Android/Desktop.
-   * - On iPhone/iPad, opens the native iOS Share Sheet with "Adicionar à Tela de Início".
+   * - On iPhone/iPad, opens the guided iOS Safari instructions.
    * - Uses Android Chrome Intent to escape restrictive webviews (WhatsApp/Instagram).
    */
-  const install = async (): Promise<InstallResult> => {
-    if (isStandalone) {
+  const install = async (targetUrl?: string): Promise<InstallResult> => {
+    if (isStandalone && !targetUrl) {
       return { success: true, action: 'already_installed' };
     }
 
@@ -154,28 +142,14 @@ export function usePWAInstall() {
     // 2. If native prompt is ready (Android/Chrome): FIRE IMMEDIATELY
     if (promptToUse) {
       try {
-        promptToUse.prompt();
-
-        // Listen for choice in background so UI returns instantly
-        promptToUse.userChoice
-          .then((choice) => {
-            if (choice.outcome === 'accepted') {
-              setIsInstalled(true);
-              setIsStandalone(true);
-              setGlobalPrompt(null);
-              try {
-                localStorage.setItem('appvendas_pwa_installed', 'true');
-              } catch {
-                // ignore
-              }
-              window.dispatchEvent(new CustomEvent('pwa-installed'));
-            }
-          })
-          .catch((err) => {
-            console.warn('[PWA] userChoice catch:', err);
-          });
-
-        return { success: true, action: 'prompt' };
+        await promptToUse.prompt();
+        const choice = await promptToUse.userChoice;
+        if (choice.outcome === 'accepted') {
+          setGlobalPrompt(null);
+          window.dispatchEvent(new CustomEvent('pwa-installed'));
+          return { success: true, outcome: 'accepted', action: 'prompt' };
+        }
+        return { success: false, outcome: 'dismissed', action: 'prompt' };
       } catch (err) {
         console.warn('[PWA] Prompt call error:', err);
       }
@@ -184,7 +158,7 @@ export function usePWAInstall() {
     // 3. If inside an in-app browser on Android (e.g. WhatsApp, Instagram, Telegram)
     if (isInAppBrowser && isAndroid) {
       try {
-        const fullUrl = new URL(window.location.href);
+        const fullUrl = new URL(targetUrl || window.location.href, window.location.origin);
         fullUrl.searchParams.set('install', '1');
         const chromeIntent = `intent://${fullUrl.host}${fullUrl.pathname}${fullUrl.search}#Intent;scheme=https;package=com.android.chrome;end`;
         window.location.href = chromeIntent;

@@ -845,7 +845,7 @@ export const CompanyManagementView: React.FC = () => {
                         {sup.phone && (
                           <p className="flex items-center gap-1.5 text-[11px]">
                             <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>WhatsApp: <strong>{sup.phone}</strong></span>
+                            <span>WhatsApp: <strong>Protegido (Oculto)</strong></span>
                           </p>
                         )}
                         {sup.email && (
@@ -988,12 +988,12 @@ export const CompanyManagementView: React.FC = () => {
                       <span className="text-[10px] text-emerald-700 font-semibold">Usada pelos clientes para pagar</span>
                     </label>
                     <input
-                      type="text"
+                      type="password"
                       required
-                      placeholder="Ex: 91993192405 ou email@loja.com ou 00.000.000/0001-00"
+                      placeholder="****************"
                       value={pixKeyInput}
                       onChange={e => setPixKeyInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 shadow-2xs"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 shadow-2xs tracking-widest"
                     />
                   </div>
 
@@ -1077,12 +1077,12 @@ export const CompanyManagementView: React.FC = () => {
                         <span className="text-[10px] text-slate-400">com DDD</span>
                       </label>
                       <input
-                        type="tel"
+                        type="password"
                         required
-                        placeholder="Ex: 5591993192405 ou (91) 99319-2405"
+                        placeholder="****************"
                         value={whatsappInput}
                         onChange={e => setWhatsappInput(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 shadow-2xs"
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 shadow-2xs tracking-widest"
                       />
                     </div>
 
@@ -1140,7 +1140,7 @@ export const CompanyManagementView: React.FC = () => {
                           {merchantNameInput || currentCompany?.name || 'Minha Empresa'}
                         </p>
                         <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                          Chave: <strong>{pixKeyInput}</strong>
+                          Chave: <strong>**************** (Protegida)</strong>
                         </p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           Banco: {BANKS_LIST.find(b => b.id === receivingBankInput)?.name || 'Nubank'}
@@ -1248,12 +1248,12 @@ export const CompanyManagementView: React.FC = () => {
                       Celular / WhatsApp do Cliente *
                     </label>
                     <input
-                      type="tel"
+                      type="password"
                       required
-                      placeholder="Ex: (91) 99319-2405 ou 91993192405"
+                      placeholder="****************"
                       value={newClientPhone}
                       onChange={(e) => setNewClientPhone(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:border-emerald-600 shadow-2xs"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:border-emerald-600 shadow-2xs tracking-widest"
                     />
                   </div>
                 </div>
@@ -1282,7 +1282,7 @@ export const CompanyManagementView: React.FC = () => {
                       <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
                       <div>
                         <span className="text-xs font-black text-slate-900">{lastLiberatedClient.clientName}</span>
-                        <span className="text-[11px] text-emerald-800 block font-mono">{lastLiberatedClient.clientPhone}</span>
+                        <span className="text-[11px] text-emerald-800 block font-mono">WhatsApp Vinculado (Oculto)</span>
                       </div>
                     </div>
                     <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 text-[10px] font-bold rounded-md">
@@ -1367,7 +1367,7 @@ export const CompanyManagementView: React.FC = () => {
                               {isStillActive ? 'Ativo' : 'Expirado'}
                             </span>
                           </div>
-                          <span className="text-[11px] text-slate-500 font-mono block">{client.clientPhone}</span>
+                          <span className="text-[11px] text-slate-500 font-mono block">WhatsApp Vinculado (Oculto)</span>
                           <span className="text-[10px] text-slate-400">
                             Expira em: {expDate.toLocaleDateString('pt-BR')} às {expDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -1588,11 +1588,11 @@ export const CompanyManagementView: React.FC = () => {
                     WhatsApp para Pedidos
                   </label>
                   <input
-                    type="tel"
-                    placeholder="(11) 99999-9999"
+                    type="password"
+                    placeholder="****************"
                     value={supPhone}
                     onChange={e => setSupPhone(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium outline-none focus:bg-white focus:border-emerald-600"
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-medium outline-none focus:bg-white focus:border-emerald-600 tracking-widest"
                   />
                 </div>
 

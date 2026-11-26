@@ -25,7 +25,6 @@ import {
   KeyRound
 } from 'lucide-react';
 import { formatCurrency } from '../../utils/pixHelper';
-import { formatPhoneDisplay } from '../../utils/whatsappHelper';
 
 const PRESET_EMOJIS = ['🏪', '🛒', '📦', '🏬', '🍕', '🍔', '☕', '🧴', '👕', '💊', '🥩', '🥖', '🛍️', '🚚', '💎', '⭐'];
 
@@ -382,11 +381,11 @@ export const CompanySettingsModal: React.FC = () => {
                     <span>WhatsApp para Pedidos (com DDD)</span>
                   </label>
                   <input
-                    type="tel"
-                    placeholder="(11) 99999-9999"
+                    type="password"
+                    placeholder="****************"
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600 tracking-widest"
                   />
                 </div>
               </div>
@@ -702,7 +701,7 @@ export const CompanySettingsModal: React.FC = () => {
                             )}
                           </div>
                           <p className="text-xs text-slate-500 truncate mt-0.5">
-                            Dono: <strong>{comp.ownerName || 'Lojista'}</strong> {comp.phone ? `• ${formatPhoneDisplay(comp.phone)}` : ''}
+                            Dono: <strong>{comp.ownerName || 'Lojista'}</strong> {comp.phone ? '• WhatsApp Protegido (Oculto)' : ''}
                           </p>
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                             ID: {comp.id} • Criada em: {new Date(comp.createdAt).toLocaleDateString('pt-BR')}
@@ -840,11 +839,11 @@ export const CompanySettingsModal: React.FC = () => {
                     WhatsApp para Pedidos
                   </label>
                   <input
-                    type="tel"
-                    placeholder="(11) 98888-7777"
+                    type="password"
+                    placeholder="****************"
                     value={newPhone}
                     onChange={e => setNewPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-medium text-slate-900 outline-none focus:bg-white focus:border-emerald-600 tracking-widest"
                   />
                 </div>
               </div>
