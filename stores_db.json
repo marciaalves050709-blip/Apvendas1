@@ -35,6 +35,7 @@
   "maquiagemtop": {
     "slug": "maquiagemtop",
     "cleanSlug": "maquiagemtop",
+    "previousSlugs": [],
     "company": {
       "id": "empresa_principal",
       "name": "maquiagemtop",
@@ -216,14 +217,16 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-25T18:38:40.149Z",
     "registeredPhones": [
       "91993192405"
-    ]
+    ],
+    "isExplicitActive": true,
+    "updatedAt": "2026-11-27T17:19:18.180Z"
   },
   "empresa_principal": {
     "slug": "maquiagemtop",
     "cleanSlug": "maquiagemtop",
+    "previousSlugs": [],
     "company": {
       "id": "empresa_principal",
       "name": "maquiagemtop",
@@ -405,199 +408,11 @@
       "receivingBank": "NUBANK",
       "isDefault": true
     },
-    "updatedAt": "2026-11-25T18:38:40.149Z",
     "registeredPhones": [
       "91993192405"
-    ]
-  },
-  "_latest": {
-    "slug": "maquiagemtop",
-    "cleanSlug": "maquiagemtop",
-    "company": {
-      "id": "empresa_principal",
-      "name": "maquiagemtop",
-      "slug": "maquiagemtop",
-      "ownerName": "Marcia",
-      "phone": "5591993192405",
-      "email": "",
-      "category": "Comércio & Serviços",
-      "logoEmoji": "🏪",
-      "createdAt": "2026-10-08T08:41:03.465Z"
-    },
-    "paymentSettings": {
-      "pixKey": "12.345.678/0001-90",
-      "pixKeyType": "CNPJ",
-      "merchantName": "maquiagemtop",
-      "merchantCity": "Barcarena PA",
-      "merchantWhatsapp": "5591993192405",
-      "receivingBank": "NUBANK",
-      "cardProvider": "STONE",
-      "autoPixDetection": false,
-      "autoCardApproval": true,
-      "soundEnabled": true,
-      "sellers": [
-        {
-          "id": "vendedor_principal",
-          "name": "Atendente",
-          "whatsapp": "5591993192405",
-          "pixKey": "12.345.678/0001-90",
-          "pixKeyType": "CNPJ",
-          "merchantName": "maquiagemtop",
-          "merchantCity": "Barcarena PA",
-          "receivingBank": "NUBANK",
-          "isDefault": true
-        }
-      ],
-      "activeSellerId": "vendedor_principal"
-    },
-    "products": [
-      {
-        "id": "prod-gloss-01",
-        "name": "Gloss",
-        "sku": "PROD-GLOSS",
-        "barcode": "789100000001",
-        "category": "Maquiagem",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 5,
-        "salePrice": 10,
-        "currentStock": 50,
-        "minStock": 5,
-        "maxStock": 500,
-        "location": "Prateleira A-01",
-        "description": "Gloss labial brilhante de alta fixação",
-        "updatedAt": "2026-11-19T22:50:17.463Z"
-      },
-      {
-        "id": "prod-colher-sopa-01",
-        "name": "Colher de sopa",
-        "sku": "PROD-COLHER-SOPA-1",
-        "barcode": "789100000002",
-        "category": "Descartáveis",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 4.5,
-        "salePrice": 10,
-        "wholesalePrice": 8.5,
-        "wholesaleMinQty": 5,
-        "currentStock": 50,
-        "minStock": 10,
-        "maxStock": 500,
-        "location": "Prateleira B-01",
-        "description": "Colher de sopa descartável resistente",
-        "updatedAt": "2026-11-10T12:00:00.000Z"
-      },
-      {
-        "id": "prod-colher-sopa-02",
-        "name": "Colher de sopa",
-        "sku": "PROD-COLHER-SOPA-2",
-        "barcode": "789100000003",
-        "category": "Descartáveis",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 4.5,
-        "salePrice": 10,
-        "wholesalePrice": 8.5,
-        "wholesaleMinQty": 5,
-        "currentStock": 50,
-        "minStock": 10,
-        "maxStock": 500,
-        "location": "Prateleira B-02",
-        "description": "Colher de sopa reforçada",
-        "updatedAt": "2026-11-10T12:00:00.000Z"
-      },
-      {
-        "id": "prod-colher-sopa-03",
-        "name": "Colher de sopa",
-        "sku": "PROD-COLHER-SOPA-3",
-        "barcode": "789100000004",
-        "category": "Descartáveis",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 4.5,
-        "salePrice": 10,
-        "wholesalePrice": 8.5,
-        "wholesaleMinQty": 5,
-        "currentStock": 50,
-        "minStock": 10,
-        "maxStock": 500,
-        "location": "Prateleira B-03",
-        "description": "Colher de sopa descartável",
-        "updatedAt": "2026-11-10T12:00:00.000Z"
-      },
-      {
-        "id": "prod-colher-01",
-        "name": "Colher",
-        "sku": "PROD-COLHER-1",
-        "barcode": "789100000005",
-        "category": "Descartáveis",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 4.5,
-        "salePrice": 10,
-        "wholesalePrice": 8.5,
-        "wholesaleMinQty": 5,
-        "currentStock": 50,
-        "minStock": 10,
-        "maxStock": 500,
-        "location": "Prateleira C-01",
-        "description": "Colher prática e reforçada",
-        "updatedAt": "2026-11-10T12:00:00.000Z"
-      },
-      {
-        "id": "prod-colher-02",
-        "name": "Colher",
-        "sku": "PROD-COLHER-2",
-        "barcode": "789100000006",
-        "category": "Descartáveis",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 4.5,
-        "salePrice": 10,
-        "wholesalePrice": 8.5,
-        "wholesaleMinQty": 5,
-        "currentStock": 50,
-        "minStock": 10,
-        "maxStock": 500,
-        "location": "Prateleira C-02",
-        "description": "Colher descartável branca",
-        "updatedAt": "2026-11-10T12:00:00.000Z"
-      },
-      {
-        "id": "prod-prato-01",
-        "name": "Prato",
-        "sku": "PROD-PRATO-1",
-        "barcode": "789100000007",
-        "category": "Descartáveis",
-        "unit": "UN",
-        "itemsPerUnit": 1,
-        "costPrice": 4.5,
-        "salePrice": 10,
-        "wholesalePrice": 8.5,
-        "wholesaleMinQty": 5,
-        "currentStock": 50,
-        "minStock": 10,
-        "maxStock": 500,
-        "location": "Prateleira D-01",
-        "description": "Prato descartável resistente",
-        "updatedAt": "2026-11-10T12:00:00.000Z"
-      }
     ],
-    "activeSeller": {
-      "id": "vendedor_principal",
-      "name": "Atendente",
-      "whatsapp": "5591993192405",
-      "pixKey": "12.345.678/0001-90",
-      "pixKeyType": "CNPJ",
-      "merchantName": "maquiagemtop",
-      "merchantCity": "Barcarena PA",
-      "receivingBank": "NUBANK",
-      "isDefault": true
-    },
-    "updatedAt": "2026-11-25T18:38:40.149Z",
-    "registeredPhones": [
-      "91993192405"
-    ]
+    "isExplicitActive": true,
+    "updatedAt": "2026-11-27T17:19:18.180Z"
   },
   "loja-da-ana": {
     "slug": "loja-da-ana",
@@ -981,7 +796,9 @@
     "11999999999": "loja-da-ana",
     "5511999999999": "loja-da-ana",
     "91993192405": "maquiagemtop",
-    "5591993192405": "maquiagemtop"
+    "5591993192405": "maquiagemtop",
+    "91999990000": "teste-realtime-v77",
+    "5591999990000": "teste-realtime-v77"
   },
   "empresa_loja_da_ana": {
     "slug": "loja-da-ana",
@@ -1171,5 +988,233 @@
       "11999999999"
     ],
     "updatedAt": "2026-11-25T18:39:23.103Z"
+  },
+  "empresa_test_v77": {
+    "slug": "teste-realtime-v77",
+    "cleanSlug": "testerealtimev77",
+    "previousSlugs": [],
+    "company": {
+      "id": "empresa_test_v77",
+      "name": "Teste Realtime V77",
+      "slug": "teste-realtime-v77",
+      "phone": "91999990000"
+    },
+    "paymentSettings": {
+      "merchantName": "Teste Realtime V77",
+      "merchantWhatsapp": "91999990000",
+      "activeSellerId": "v1",
+      "sellers": [
+        {
+          "id": "v1",
+          "name": "Ana",
+          "whatsapp": "91999990000"
+        }
+      ]
+    },
+    "products": [
+      {
+        "id": "p1",
+        "name": "Batom Teste",
+        "salePrice": 25,
+        "currentStock": 10
+      }
+    ],
+    "activeSeller": null,
+    "registeredPhones": [
+      "91999990000"
+    ],
+    "accessPassword": "secret123",
+    "updatedAt": "2026-11-27T17:19:16.581Z"
+  },
+  "_latest": {
+    "slug": "maquiagemtop",
+    "cleanSlug": "maquiagemtop",
+    "previousSlugs": [],
+    "company": {
+      "id": "empresa_principal",
+      "name": "maquiagemtop",
+      "slug": "maquiagemtop",
+      "ownerName": "Marcia",
+      "phone": "5591993192405",
+      "email": "",
+      "category": "Comércio & Serviços",
+      "logoEmoji": "🏪",
+      "createdAt": "2026-10-08T08:41:03.465Z"
+    },
+    "paymentSettings": {
+      "pixKey": "12.345.678/0001-90",
+      "pixKeyType": "CNPJ",
+      "merchantName": "maquiagemtop",
+      "merchantCity": "Barcarena PA",
+      "merchantWhatsapp": "5591993192405",
+      "receivingBank": "NUBANK",
+      "cardProvider": "STONE",
+      "autoPixDetection": false,
+      "autoCardApproval": true,
+      "soundEnabled": true,
+      "sellers": [
+        {
+          "id": "vendedor_principal",
+          "name": "Atendente",
+          "whatsapp": "5591993192405",
+          "pixKey": "12.345.678/0001-90",
+          "pixKeyType": "CNPJ",
+          "merchantName": "maquiagemtop",
+          "merchantCity": "Barcarena PA",
+          "receivingBank": "NUBANK",
+          "isDefault": true
+        }
+      ],
+      "activeSellerId": "vendedor_principal"
+    },
+    "products": [
+      {
+        "id": "prod-gloss-01",
+        "name": "Gloss",
+        "sku": "PROD-GLOSS",
+        "barcode": "789100000001",
+        "category": "Maquiagem",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 5,
+        "salePrice": 10,
+        "currentStock": 50,
+        "minStock": 5,
+        "maxStock": 500,
+        "location": "Prateleira A-01",
+        "description": "Gloss labial brilhante de alta fixação",
+        "updatedAt": "2026-11-19T22:50:17.463Z"
+      },
+      {
+        "id": "prod-colher-sopa-01",
+        "name": "Colher de sopa",
+        "sku": "PROD-COLHER-SOPA-1",
+        "barcode": "789100000002",
+        "category": "Descartáveis",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 4.5,
+        "salePrice": 10,
+        "wholesalePrice": 8.5,
+        "wholesaleMinQty": 5,
+        "currentStock": 50,
+        "minStock": 10,
+        "maxStock": 500,
+        "location": "Prateleira B-01",
+        "description": "Colher de sopa descartável resistente",
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      {
+        "id": "prod-colher-sopa-02",
+        "name": "Colher de sopa",
+        "sku": "PROD-COLHER-SOPA-2",
+        "barcode": "789100000003",
+        "category": "Descartáveis",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 4.5,
+        "salePrice": 10,
+        "wholesalePrice": 8.5,
+        "wholesaleMinQty": 5,
+        "currentStock": 50,
+        "minStock": 10,
+        "maxStock": 500,
+        "location": "Prateleira B-02",
+        "description": "Colher de sopa reforçada",
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      {
+        "id": "prod-colher-sopa-03",
+        "name": "Colher de sopa",
+        "sku": "PROD-COLHER-SOPA-3",
+        "barcode": "789100000004",
+        "category": "Descartáveis",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 4.5,
+        "salePrice": 10,
+        "wholesalePrice": 8.5,
+        "wholesaleMinQty": 5,
+        "currentStock": 50,
+        "minStock": 10,
+        "maxStock": 500,
+        "location": "Prateleira B-03",
+        "description": "Colher de sopa descartável",
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      {
+        "id": "prod-colher-01",
+        "name": "Colher",
+        "sku": "PROD-COLHER-1",
+        "barcode": "789100000005",
+        "category": "Descartáveis",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 4.5,
+        "salePrice": 10,
+        "wholesalePrice": 8.5,
+        "wholesaleMinQty": 5,
+        "currentStock": 50,
+        "minStock": 10,
+        "maxStock": 500,
+        "location": "Prateleira C-01",
+        "description": "Colher prática e reforçada",
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      {
+        "id": "prod-colher-02",
+        "name": "Colher",
+        "sku": "PROD-COLHER-2",
+        "barcode": "789100000006",
+        "category": "Descartáveis",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 4.5,
+        "salePrice": 10,
+        "wholesalePrice": 8.5,
+        "wholesaleMinQty": 5,
+        "currentStock": 50,
+        "minStock": 10,
+        "maxStock": 500,
+        "location": "Prateleira C-02",
+        "description": "Colher descartável branca",
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      },
+      {
+        "id": "prod-prato-01",
+        "name": "Prato",
+        "sku": "PROD-PRATO-1",
+        "barcode": "789100000007",
+        "category": "Descartáveis",
+        "unit": "UN",
+        "itemsPerUnit": 1,
+        "costPrice": 4.5,
+        "salePrice": 10,
+        "wholesalePrice": 8.5,
+        "wholesaleMinQty": 5,
+        "currentStock": 50,
+        "minStock": 10,
+        "maxStock": 500,
+        "location": "Prateleira D-01",
+        "description": "Prato descartável resistente",
+        "updatedAt": "2026-11-10T12:00:00.000Z"
+      }
+    ],
+    "activeSeller": {
+      "id": "vendedor_principal",
+      "name": "Atendente",
+      "whatsapp": "5591993192405",
+      "pixKey": "12.345.678/0001-90",
+      "pixKeyType": "CNPJ",
+      "merchantName": "maquiagemtop",
+      "merchantCity": "Barcarena PA",
+      "receivingBank": "NUBANK",
+      "isDefault": true
+    },
+    "registeredPhones": [
+      "91993192405"
+    ],
+    "isExplicitActive": true,
+    "updatedAt": "2026-11-27T17:19:18.180Z"
   }
 }

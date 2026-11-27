@@ -305,8 +305,37 @@ export async function syncStoreToServer(
       : normalizeStoreSlugShared(company?.slug || rawStoreName);
 
     const registeredPhones = collectCompanyPhones(company, paymentSettings, activeSeller).map(e => e.phone);
-    const payload = JSON.stringify({
+    const publicStoreSnapshot = {
+      slug: storeSlug,
+      cleanSlug: storeSlug.replace(/[^a-z0-9]/g, ''),
       company: { ...company, name: rawStoreName, slug: storeSlug },
+      paymentSettings,
+      activeSeller,
+      products: products || [],
+      registeredPhones,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Instant 0ms same-device sync between Chrome/Safari tabs and Installed PWA (never includes password)
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('appvendas_realtime_sync');
+        bc.postMessage({
+          type: 'STORE_UPDATED',
+          slug: storeSlug,
+          cleanSlug: publicStoreSnapshot.cleanSlug,
+          companyId: company?.id,
+          companyName: rawStoreName,
+          forceClear: Boolean(opts.forceClear),
+          storeData: publicStoreSnapshot,
+          timestamp: Date.now()
+        });
+        bc.close();
+      } catch {}
+    }
+
+    const payload = JSON.stringify({
+      company: publicStoreSnapshot.company,
       paymentSettings,
       activeSeller,
       products: products || [],

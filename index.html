@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '76';
+        var APP_BUILD_VER = '77';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer && storedVer !== APP_BUILD_VER) {
@@ -65,7 +65,7 @@
       window.__clearAppCacheAndReload = function(targetVer) {
         if (window.__is_reloading_app) return;
         window.__is_reloading_app = true;
-        var nextVer = (targetVer ? String(targetVer).replace(/^v/i, '').trim() : '') || '76';
+        var nextVer = (targetVer ? String(targetVer).replace(/^v/i, '').trim() : '') || '77';
 
         try {
           if (typeof window.__closeLiveSync === 'function') {
@@ -74,9 +74,10 @@
         } catch(e) {}
 
         try {
-          // Clear session reload guards so user can always force a real-time update cleanly
+          // Record upgrade cooldown timestamp so auto-upgraders never loop while allowing manual updates anytime
+          sessionStorage.setItem('pwa_version_upgraded_ts_' + nextVer, String(Date.now()));
           Object.keys(sessionStorage).forEach(function(k) {
-            if (k.indexOf('pwa_') === 0 || k.indexOf('appvendas_update_banner') === 0) {
+            if (k.indexOf('appvendas_update_banner') === 0 || k === 'pwa_controller_reloaded') {
               sessionStorage.removeItem(k);
             }
           });
@@ -132,7 +133,10 @@
         };
 
         var versionCheckPromise = fetch('/api/version?t=' + Date.now(), { cache: 'no-store' })
-          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(r) {
+            var ct = (r.headers && r.headers.get('content-type')) || '';
+            return r.ok && ct.indexOf('application/json') !== -1 ? r.json() : null;
+          })
           .then(function(data) {
             if (data && data.version) {
               nextVer = String(data.version).replace(/^v/i, '').trim() || nextVer;

@@ -501,12 +501,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const openUpdateModal = () => setIsUpdateModalOpen(true);
   const closeUpdateModal = () => setIsUpdateModalOpen(false);
 
-  // Sync live server version on startup & when window focuses
+  // Sync live server version on startup & when window focuses/resumes
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const syncVer = () => {
       fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
-        .then(r => (r.ok ? r.json() : null))
+        .then(r => {
+          const ct = r.headers.get('content-type') || '';
+          return r.ok && ct.includes('application/json') ? r.json() : null;
+        })
         .then(data => {
           if (data?.version) {
             const cleanVer = String(data.version).replace(/^v/i, '').trim();
@@ -517,14 +520,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     syncVer();
     const onFocus = () => syncVer();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') syncVer();
+    };
     const onVerEvent = (ev: Event) => {
       const incoming = String((ev as CustomEvent<{ version?: string }>)?.detail?.version || '').replace(/^v/i, '').trim();
       if (incoming) setAppVersion(incoming);
     };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onFocus);
     window.addEventListener('app-update-available', onVerEvent);
     return () => {
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onFocus);
       window.removeEventListener('app-update-available', onVerEvent);
     };
   }, []);
@@ -2314,142 +2324,297 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, []);
 
-  // Real-Time Live Push Synchronization via Server-Sent Events (SSE)
-  // Ensures all installed PWAs and open devices receive product, stock, and price changes instantly
+  // Live Refs so SSE, BroadcastChannel, Polling & Resume listeners NEVER operate on stale closures
+  const productsRef = useRef<Product[]>(products);
+  productsRef.current = products;
+  const currentCompanyRef = useRef<CompanyAccount>(currentCompany);
+  currentCompanyRef.current = currentCompany;
+  const activeCompanyIdRef = useRef<string>(activeCompanyId);
+  activeCompanyIdRef.current = activeCompanyId;
+  const paymentSettingsRef = useRef<PaymentSettings>(paymentSettings);
+  paymentSettingsRef.current = paymentSettings;
+  const isCompanyAreaUnlockedRef = useRef<boolean>(isCompanyAreaUnlocked);
+  isCompanyAreaUnlockedRef.current = isCompanyAreaUnlocked;
+  const isAdminRef = useRef<boolean>(isAdmin);
+  isAdminRef.current = isAdmin;
+  const isMasterAdminRef = useRef<boolean>(isMasterAdmin);
+  isMasterAdminRef.current = isMasterAdmin;
+  const activeSellerRef = useRef<SellerProfile | undefined>(undefined);
+  const refreshStoreCatalogRef = useRef<(() => Promise<boolean>) | null>(null);
+  const lastSseActivityRef = useRef<number>(Date.now());
+  const forceReconnectSseRef = useRef<(() => void) | null>(null);
+
+  const applyIncomingStorePayload = (
+    storeData: any,
+    opts?: {
+      slug?: string;
+      cleanSlug?: string;
+      companyId?: string;
+      previousSlugs?: string[];
+      fromShortCode?: boolean;
+      fromPhone?: boolean;
+    }
+  ): boolean => {
+    try {
+      if (!storeData || storeData.isPlaceholder) return false;
+
+      const curParams = typeof window !== 'undefined'
+        ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&'))
+        : null;
+      const curUrlLoja = curParams?.get('loja') || curParams?.get('empresa') || pathLojaName;
+      const curUrlZap = (curParams?.get('zap') || curParams?.get('cel') || curParams?.get('celular') || curParams?.get('whatsapp') || '').replace(/\D/g, '');
+      const curUrlCanal = (curParams?.get('canal') || ssrInitialStore?.canal || '').trim();
+      const isOnRootUrl = !curUrlLoja && !pathShortCode && curUrlZap.length < 8;
+
+      if (isOnRootUrl && !hasRegisteredCompanyRef.current) {
+        return false;
+      }
+
+      const activeComp = currentCompanyRef.current;
+      const activeId = activeCompanyIdRef.current;
+      const activeNameIsPlaceholder = isPlaceholderCompanyName(activeComp?.name);
+
+      const curUrlSlug = normalizeStoreSlug(curUrlLoja || '');
+      const curUrlClean = cleanSlugAlphanumeric(curUrlSlug);
+      const ownSlug = normalizeStoreSlug(activeComp?.slug || activeComp?.name || '');
+      const ownClean = cleanSlugAlphanumeric(ownSlug);
+
+      const incomingSlug = normalizeStoreSlug(opts?.slug || storeData.slug || storeData.company?.slug || storeData.company?.name || '');
+      const incomingClean = cleanSlugAlphanumeric(opts?.cleanSlug || storeData.cleanSlug || incomingSlug);
+      const incomingCompId = opts?.companyId || storeData.company?.id || '';
+      const incomingPrevSlugs: string[] = Array.isArray(opts?.previousSlugs)
+        ? opts.previousSlugs
+        : (Array.isArray(storeData.previousSlugs) ? storeData.previousSlugs : []);
+
+      const matchesSlug = (targetNorm: string, targetClean: string) => {
+        if (!targetNorm && !targetClean) return false;
+        if (incomingSlug && targetNorm && incomingSlug === targetNorm) return true;
+        if (incomingClean && targetClean && incomingClean === targetClean) return true;
+        return incomingPrevSlugs.some(ps => {
+          const pn = normalizeStoreSlug(ps);
+          const pc = cleanSlugAlphanumeric(ps);
+          return (pn && targetNorm && pn === targetNorm) || (pc && targetClean && pc === targetClean);
+        });
+      };
+
+      const isMatch = Boolean(
+        opts?.fromShortCode ||
+        opts?.fromPhone ||
+        (curUrlZap.length >= 8 && opts?.fromPhone !== false) ||
+        (curUrlLoja && matchesSlug(curUrlSlug, curUrlClean)) ||
+        (incomingCompId && incomingCompId === activeId) ||
+        (!isOnRootUrl && curUrlLoja && storeData.company?.name && matchesSlug(normalizeStoreSlug(storeData.company.name), cleanSlugAlphanumeric(storeData.company.name))) ||
+        (isOnRootUrl && hasRegisteredCompanyRef.current && !activeNameIsPlaceholder && matchesSlug(ownSlug, ownClean))
+      );
+
+      if (!isMatch) return false;
+
+      if (Array.isArray(storeData.products) && storeData.products.length === 1 && storeData.products[0]?.name === 'Sal') {
+        return false;
+      }
+
+      if (storeData.hasPassword) {
+        setServerHasPassword(true);
+      }
+
+      const incomingProducts: Product[] | null = Array.isArray(storeData.products) ? storeData.products : null;
+      const incomingCompany = storeData.company && storeData.company.name ? storeData.company : null;
+      const resolvedCompName = incomingCompany && !isPlaceholderCompanyName(incomingCompany.name)
+        ? incomingCompany.name
+        : activeComp?.name;
+      const resolvedSlug = normalizeStoreSlug(storeData.slug || incomingCompany?.slug || resolvedCompName) || activeComp?.slug;
+
+      let resolvedSettingsForSig: PaymentSettings = paymentSettingsRef.current;
+      let resolvedSellerIdForSig = paymentSettingsRef.current.activeSellerId || 'vendedor_principal';
+
+      if (storeData.paymentSettings) {
+        const psPrev = paymentSettingsRef.current;
+        const rawIncomingName = (storeData.paymentSettings.merchantName || '').trim();
+        const isIncomingDefaultMerchant = isPlaceholderCompanyName(rawIncomingName);
+        const allowNameSync = activeNameIsPlaceholder || isMatch;
+        const nextMerchant = isIncomingDefaultMerchant
+          ? (resolvedCompName || psPrev.merchantName)
+          : (allowNameSync ? (rawIncomingName || resolvedCompName || psPrev.merchantName) : psPrev.merchantName);
+
+        const rawSellerList = Array.isArray(storeData.paymentSettings.sellers) && storeData.paymentSettings.sellers.length > 0
+          ? storeData.paymentSettings.sellers.map((s: SellerProfile) => ({
+              ...s,
+              merchantName: isPlaceholderCompanyName(s.merchantName) ? nextMerchant : s.merchantName
+            }))
+          : psPrev.sellers;
+
+        const matchedCanalSeller = curUrlCanal && Array.isArray(rawSellerList)
+          ? (rawSellerList.find((s: SellerProfile) => s.id === curUrlCanal) ||
+             (/^canal_(\d+)$/i.test(curUrlCanal) ? rawSellerList[parseInt(curUrlCanal.replace(/\D/g, ''), 10) - 1] : undefined))
+          : undefined;
+
+        const nextPs: PaymentSettings = {
+          ...psPrev,
+          ...storeData.paymentSettings,
+          ...(matchedCanalSeller ? {
+            activeSellerId: matchedCanalSeller.id,
+            merchantWhatsapp: matchedCanalSeller.whatsapp || storeData.paymentSettings.merchantWhatsapp || psPrev.merchantWhatsapp,
+            ...(matchedCanalSeller.pixKey ? { pixKey: matchedCanalSeller.pixKey } : {}),
+            ...(matchedCanalSeller.receivingBank ? { receivingBank: matchedCanalSeller.receivingBank } : {})
+          } : {}),
+          merchantName: nextMerchant,
+          sellers: rawSellerList
+        };
+        resolvedSettingsForSig = nextPs;
+        resolvedSellerIdForSig = nextPs.activeSellerId || rawSellerList?.[0]?.id || 'vendedor_principal';
+
+        setPaymentSettings(prev => (JSON.stringify(prev) === JSON.stringify(nextPs) ? prev : nextPs));
+        try {
+          localStorage.setItem(getTenantKey('payment_settings', activeId), JSON.stringify(nextPs));
+          if (incomingCompId && incomingCompId !== activeId) {
+            localStorage.setItem(getTenantKey('payment_settings', incomingCompId), JSON.stringify(nextPs));
+          }
+          if (activeId === DEFAULT_COMPANY_ID || incomingCompId === DEFAULT_COMPANY_ID) {
+            localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(nextPs));
+          }
+        } catch {}
+      }
+
+      const nextProductsForSig = incomingProducts !== null ? incomingProducts : productsRef.current;
+
+      // Update auto-sync signature BEFORE applying React state so remote updates never echo back to server
+      try {
+        lastSyncedSignatureRef.current = JSON.stringify({
+          companyId: activeComp?.id || activeId,
+          companyName: resolvedCompName,
+          paymentSettings: resolvedSettingsForSig,
+          activeSellerId: resolvedSellerIdForSig,
+          products: nextProductsForSig
+        });
+      } catch {}
+
+      if (incomingProducts !== null) {
+        setProducts(prevProducts => {
+          const prevStr = JSON.stringify(prevProducts);
+          const newStr = JSON.stringify(incomingProducts);
+          if (prevStr === newStr) return prevProducts;
+          return incomingProducts;
+        });
+        try {
+          localStorage.setItem(getTenantKey('products', activeId), JSON.stringify(incomingProducts));
+          if (incomingCompId && incomingCompId !== activeId) {
+            localStorage.setItem(getTenantKey('products', incomingCompId), JSON.stringify(incomingProducts));
+          }
+          if (activeId === DEFAULT_COMPANY_ID || incomingCompId === DEFAULT_COMPANY_ID) {
+            localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(incomingProducts));
+          }
+        } catch {}
+      }
+
+      if (incomingCompany && !isPlaceholderCompanyName(incomingCompany.name)) {
+        setCompanies(prev => {
+          const idx = prev.findIndex(c =>
+            c.id === activeId ||
+            (incomingCompId && c.id === incomingCompId) ||
+            (resolvedSlug && (normalizeStoreSlug(c.slug) === resolvedSlug || cleanSlugAlphanumeric(c.slug) === cleanSlugAlphanumeric(resolvedSlug))) ||
+            incomingPrevSlugs.some(ps => normalizeStoreSlug(c.slug) === normalizeStoreSlug(ps))
+          );
+          if (idx < 0) return prev;
+          const merged: CompanyAccount = {
+            ...prev[idx],
+            ...incomingCompany,
+            id: prev[idx].id, // NEVER overwrite local tenant ID key used by activeCompanyId
+            name: incomingCompany.name,
+            slug: resolvedSlug || prev[idx].slug
+          };
+          if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
+          const next = [...prev];
+          next[idx] = merged;
+          try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
+          return next;
+        });
+
+        try {
+          if (resolvedSlug) {
+            localStorage.setItem('appvendas_last_visited_store_slug', resolvedSlug);
+            localStorage.setItem('appvendas_last_store_slug', resolvedSlug);
+          }
+          localStorage.setItem('appvendas_last_visited_store_name', incomingCompany.name);
+        } catch {}
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[LiveSync] Apply error:', err);
+      return false;
+    }
+  };
+
+  const applyIncomingStorePayloadRef = useRef(applyIncomingStorePayload);
+  applyIncomingStorePayloadRef.current = applyIncomingStorePayload;
+
+  // Real-Time Live Push Synchronization via Server-Sent Events (SSE) + Same-Device BroadcastChannel & Storage
+  // Ensures all installed PWAs (Android/iOS/Desktop) receive product, stock, price, and company changes instantly
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
+    let watchdogInterval: any = null;
     let isDisposed = false;
 
-    const connectLiveSync = () => {
+    const handleServerVersionCheck = (rawVersion?: string) => {
+      const nextVer = String(rawVersion || '').replace(/^v/i, '').trim();
+      if (!nextVer) return;
+      setAppVersion(nextVer);
+      if (nextVer !== CLIENT_APP_VERSION) {
+        window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
+        try {
+          const tsKey = `pwa_version_upgraded_ts_${nextVer}`;
+          const lastAttempt = Number(sessionStorage.getItem(tsKey) || '0');
+          if (Date.now() - lastAttempt >= 15000 && !(window as any).__is_reloading_app) {
+            sessionStorage.setItem(tsKey, String(Date.now()));
+            if (typeof (window as any).__clearAppCacheAndReload === 'function') {
+              (window as any).__clearAppCacheAndReload(nextVer);
+            }
+          }
+        } catch {}
+      }
+    };
+
+    const connectLiveSync = (forceNew = false) => {
       if (isDisposed) return;
+      if (eventSource) {
+        if (!forceNew && eventSource.readyState === 1 && Date.now() - lastSseActivityRef.current < 22000) {
+          return;
+        }
+        try { eventSource.close(); } catch {}
+        eventSource = null;
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
       try {
+        lastSseActivityRef.current = Date.now();
         eventSource = new EventSource('/api/live-sync');
 
+        eventSource.onopen = () => {
+          lastSseActivityRef.current = Date.now();
+        };
+
         eventSource.onmessage = (e) => {
+          lastSseActivityRef.current = Date.now();
           try {
             if (!e.data) return;
             const msg = JSON.parse(e.data);
-            if (msg.type === 'CONNECTED' && msg.version) {
-              const nextVer = String(msg.version).replace(/^v/i, '').trim();
-              if (nextVer) {
-                setAppVersion(nextVer);
-              }
-              if (nextVer && nextVer !== CLIENT_APP_VERSION) {
-                window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: nextVer } }));
-                const reloadGuardKey = `pwa_version_upgraded_${nextVer}`;
-                if (!sessionStorage.getItem(reloadGuardKey)) {
-                  sessionStorage.setItem(reloadGuardKey, 'true');
-                  if (typeof (window as any).__clearAppCacheAndReload === 'function') {
-                    (window as any).__clearAppCacheAndReload(nextVer);
-                  }
-                }
-              }
-            }
-            if (msg.type === 'STORE_UPDATED' && msg.storeData) {
-              const updatedSlug = msg.slug;
-              const updatedCleanSlug = msg.cleanSlug;
-              const updatedCompId = msg.companyId;
-
-              // Strict Isolation:
-              // - Specific shared store links (/loja/:slug or /l/:code) sync ONLY to that target store's slug/id.
-              // - Root app (/) ONLY syncs when this device has registered its own company, and ONLY to that company's own slug/id!
-              const isOnRootUrl = !urlCatalogInfoRef.current.urlSlug && !pathShortCode;
-              if (isOnRootUrl && !hasRegisteredCompanyRef.current) {
-                return;
-              }
-              const activeNameIsPlaceholder = isPlaceholderCompanyName(currentCompany?.name);
-              const activeTargetSlug = normalizeStoreSlug(
-                urlCatalogInfoRef.current.urlSlug ||
-                currentCompany?.slug ||
-                currentCompany?.name ||
-                ''
-              );
-              const activeTargetClean = cleanSlugAlphanumeric(activeTargetSlug);
-
-              const isMatch = Boolean(
-                (!isOnRootUrl || hasRegisteredCompanyRef.current) && (
-                  (activeTargetSlug && (activeTargetSlug === updatedSlug || activeTargetClean === updatedCleanSlug)) ||
-                  (updatedCompId && updatedCompId === activeCompanyId) ||
-                  (currentCompany?.name && !activeNameIsPlaceholder && normalizeStoreSlug(currentCompany.name) === updatedSlug)
-                )
-              );
-
-              if (isMatch && Array.isArray(msg.storeData.products)) {
-                // Ignore obsolete single 'Sal' test payload
-                if (msg.storeData.products.length === 1 && msg.storeData.products[0]?.name === 'Sal') {
-                  return;
-                }
-                if (msg.storeData.hasPassword) {
-                  setServerHasPassword(true);
-                }
-                // Update products in real time without screen jump
-                setProducts(prevProducts => {
-                  const prevStr = JSON.stringify(prevProducts);
-                  const newStr = JSON.stringify(msg.storeData.products);
-                  if (prevStr === newStr) return prevProducts;
-                  return msg.storeData.products;
-                });
-
-                // Update company details ONLY for the matching company
-                if (msg.storeData.company && msg.storeData.company.name) {
-                  const nextCompId = msg.storeData.company.id || updatedCompId || activeCompanyId;
-                  setCompanies(prev => {
-                    const idx = prev.findIndex(c => c.id === nextCompId || c.id === activeCompanyId || normalizeStoreSlug(c.slug) === updatedSlug);
-                    if (idx < 0) return prev;
-                    const existingIsPlaceholder = isPlaceholderCompanyName(prev[idx].name);
-                    const sameSlug = normalizeStoreSlug(prev[idx].name) === updatedSlug || cleanSlugAlphanumeric(prev[idx].name) === updatedCleanSlug;
-                    const allowNameSync = existingIsPlaceholder || sameSlug;
-                    const merged = {
-                      ...prev[idx],
-                      ...msg.storeData.company,
-                      name: allowNameSync ? msg.storeData.company.name : prev[idx].name,
-                      slug: allowNameSync ? (updatedSlug || msg.storeData.company.slug || prev[idx].slug) : prev[idx].slug
-                    };
-                    if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
-                    const next = [...prev];
-                    next[idx] = merged;
-                    try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
-                    return next;
-                  });
-                }
-
-                // Update payment settings safely without returning a new object when unchanged
-                if (msg.storeData.paymentSettings) {
-                  setPaymentSettings(prev => {
-                    const allowNameSync = activeNameIsPlaceholder || normalizeStoreSlug(currentCompany?.name) === updatedSlug;
-                    const nextMerchant = ['appvendas', 'app vendas'].includes((msg.storeData.paymentSettings.merchantName || '').trim().toLowerCase())
-                      ? (msg.storeData.company?.name || prev.merchantName)
-                      : (allowNameSync ? (msg.storeData.paymentSettings.merchantName || msg.storeData.company?.name || prev.merchantName) : prev.merchantName);
-                    const nextSellers = Array.isArray(msg.storeData.paymentSettings.sellers)
-                      ? msg.storeData.paymentSettings.sellers.map((s: SellerProfile) => ({
-                          ...s,
-                          merchantName: ['appvendas', 'app vendas'].includes((s.merchantName || '').trim().toLowerCase()) ? nextMerchant : s.merchantName
-                        }))
-                      : prev.sellers;
-                    const next = { ...prev, ...msg.storeData.paymentSettings, merchantName: nextMerchant, sellers: nextSellers };
-                    return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-                  });
-                }
-
-                // Persist to tenant storage (products AND payment settings / phones)
-                try {
-                  const compId = msg.storeData.company?.id || activeCompanyId;
-                  localStorage.setItem(getTenantKey('products', compId), JSON.stringify(msg.storeData.products));
-                  localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(msg.storeData.products));
-                  if (msg.storeData.paymentSettings) {
-                    localStorage.setItem(getTenantKey('payment_settings', compId), JSON.stringify(msg.storeData.paymentSettings));
-                  }
-                  if (compId === DEFAULT_COMPANY_ID || activeCompanyId === DEFAULT_COMPANY_ID) {
-                    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(msg.storeData.products));
-                    if (msg.storeData.paymentSettings) {
-                      localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(msg.storeData.paymentSettings));
-                    }
-                  }
-                } catch {}
-              }
+            if (msg.type === 'CONNECTED') {
+              if (msg.version) handleServerVersionCheck(msg.version);
+              refreshStoreCatalogRef.current?.().catch(() => {});
+            } else if (msg.type === 'PING') {
+              if (msg.version) handleServerVersionCheck(msg.version);
+            } else if (msg.type === 'STORE_UPDATED' && msg.storeData) {
+              applyIncomingStorePayloadRef.current(msg.storeData, {
+                slug: msg.slug,
+                cleanSlug: msg.cleanSlug,
+                companyId: msg.companyId,
+                previousSlugs: msg.previousSlugs
+              });
             }
           } catch (err) {
             console.warn('[LiveSync] Parse error:', err);
@@ -2458,78 +2623,142 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         eventSource.onerror = () => {
           if (eventSource) {
-            eventSource.close();
+            try { eventSource.close(); } catch {}
             eventSource = null;
           }
           if (!isDisposed) {
-            reconnectTimeout = setTimeout(connectLiveSync, 3000);
+            reconnectTimeout = setTimeout(() => connectLiveSync(true), 2500);
           }
         };
       } catch (err) {
         console.warn('[LiveSync] Connection failed:', err);
         if (!isDisposed) {
-          reconnectTimeout = setTimeout(connectLiveSync, 5000);
+          reconnectTimeout = setTimeout(() => connectLiveSync(true), 4000);
         }
       }
     };
 
-    connectLiveSync();
+    forceReconnectSseRef.current = () => {
+      const staleOrClosed = !eventSource || eventSource.readyState !== 1 || Date.now() - lastSseActivityRef.current > 12000;
+      if (staleOrClosed) {
+        connectLiveSync(true);
+      }
+    };
+
+    connectLiveSync(true);
+
+    // Watchdog: mobile iOS/Android standalone PWAs often drop TCP silently after background sleep without firing onerror
+    watchdogInterval = setInterval(() => {
+      if (isDisposed || document.visibilityState === 'hidden') return;
+      if (!eventSource || eventSource.readyState === 2 || Date.now() - lastSseActivityRef.current > 28000) {
+        connectLiveSync(true);
+        refreshStoreCatalogRef.current?.().catch(() => {});
+      }
+    }, 10000);
+
+    // 0ms Same-Device Cross-Tab / Installed-PWA BroadcastChannel Sync
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('appvendas_realtime_sync');
+        bc.onmessage = (ev) => {
+          const msg = ev?.data;
+          if (msg?.type === 'STORE_UPDATED' && msg.storeData) {
+            applyIncomingStorePayloadRef.current(msg.storeData, {
+              slug: msg.slug,
+              cleanSlug: msg.cleanSlug,
+              companyId: msg.companyId,
+              previousSlugs: msg.previousSlugs
+            });
+          }
+        };
+      } catch {}
+    }
+
+    // Cross-context localStorage sync event when another window/tab on same origin updates tenant data
+    const onStorageSync = (ev: StorageEvent) => {
+      if (!ev.key || !ev.newValue) return;
+      const curId = activeCompanyIdRef.current;
+      const prodKey = getTenantKey('products', curId);
+      const psKey = getTenantKey('payment_settings', curId);
+      if (ev.key === prodKey || (curId === DEFAULT_COMPANY_ID && ev.key === STORAGE_KEYS.PRODUCTS)) {
+        try {
+          const parsed = JSON.parse(ev.newValue);
+          if (Array.isArray(parsed)) {
+            setProducts(prev => (JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
+          }
+        } catch {}
+      } else if (ev.key === psKey || (curId === DEFAULT_COMPANY_ID && ev.key === STORAGE_KEYS.PAYMENT_SETTINGS) || ev.key === STORAGE_COMPANIES_KEY) {
+        refreshStoreCatalogRef.current?.().catch(() => {});
+      }
+    };
+    window.addEventListener('storage', onStorageSync);
 
     (window as any).__closeLiveSync = () => {
       isDisposed = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (watchdogInterval) clearInterval(watchdogInterval);
       if (eventSource) {
         try { eventSource.close(); } catch {}
         eventSource = null;
+      }
+      if (bc) {
+        try { bc.close(); } catch {}
+        bc = null;
       }
     };
 
     return () => {
       isDisposed = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (watchdogInterval) clearInterval(watchdogInterval);
+      window.removeEventListener('storage', onStorageSync);
+      if (bc) {
+        try { bc.close(); } catch {}
+        bc = null;
+      }
       if (eventSource) {
-        eventSource.close();
+        try { eventSource.close(); } catch {}
         eventSource = null;
       }
     };
-  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId, hasRegisteredCompany]);
+  }, []);
 
-  // High-Frequency Real-Time Fallback Polling (Every 4s when tab is active)
+  // High-Frequency Real-Time Fallback Polling (Every 4s when active) + Immediate Mobile Resume Sync
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     let isDisposed = false;
     const pollCheck = async () => {
       if (isDisposed || document.visibilityState === 'hidden') return;
-      await refreshStoreCatalog();
+      await refreshStoreCatalogRef.current?.();
+    };
+
+    const wakeAndSync = () => {
+      if (isDisposed) return;
+      forceReconnectSseRef.current?.();
+      refreshStoreCatalogRef.current?.().catch(() => {});
     };
 
     const interval = setInterval(pollCheck, 4000);
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        refreshStoreCatalog();
+        wakeAndSync();
       }
     };
-    const onFocus = () => {
-      refreshStoreCatalog();
-    };
-    const onOnline = () => {
-      refreshStoreCatalog();
-    };
+    const onFocus = () => wakeAndSync();
+    const onOnline = () => wakeAndSync();
+    const onPageShow = () => wakeAndSync();
 
     // If app just completed a 1-click update, refresh catalog immediately and confirm to user
     try {
       const updatedVer = sessionStorage.getItem('appvendas_just_updated_ver');
       if (updatedVer) {
         sessionStorage.removeItem('appvendas_just_updated_ver');
-        refreshStoreCatalog().catch(() => {});
+        refreshStoreCatalogRef.current?.().catch(() => {});
         showToast('success', `✅ Aplicativo Atualizado (v${updatedVer} Oficial)!`, 'Produtos, links e recursos sincronizados em tempo real.');
       }
     } catch {}
-
-    const onPageShow = () => {
-      refreshStoreCatalog();
-    };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onFocus);
@@ -2544,7 +2773,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener('online', onOnline);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId, hasRegisteredCompany]);
+  }, []);
 
   const simulateTrialExpired = () => {
     setIsAdmin(false);
@@ -2783,6 +3012,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const found = sellers.find(s => s.id === activeSellerId);
     return found || sellers[0];
   }, [sellers, activeSellerId]);
+  activeSellerRef.current = activeSeller;
 
   // Auto-sync company store to backend ONLY when merchant has unlocked/modified data AND payload actually changed
   useEffect(() => {
@@ -3899,16 +4129,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Live Refresh for Client Store & Installed App (Strictly isolated per store/company - NEVER fetches /api/store/latest on root /)
   const refreshStoreCatalog = async (): Promise<boolean> => {
     try {
+      const liveComp = currentCompanyRef.current;
+      const liveCompId = activeCompanyIdRef.current;
+      const liveProds = productsRef.current;
+      const liveSettings = paymentSettingsRef.current;
+      const liveSeller = activeSellerRef.current;
+
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) : null;
       const urlLoja = urlParams?.get('loja') || urlParams?.get('empresa') || pathLojaName;
       const urlZap = urlParams?.get('zap') || urlParams?.get('cel') || urlParams?.get('celular') || urlParams?.get('whatsapp') || '';
       const cleanUrlZap = urlZap.replace(/\D/g, '');
       const isRootAppLaunch = !urlLoja && !pathShortCode && cleanUrlZap.length < 8;
       const ownCompanySlug = hasRegisteredCompanyRef.current
-        ? (normalizeStoreSlug(currentCompany?.slug || currentCompany?.name) || activeCompanyId || '')
+        ? (normalizeStoreSlug(liveComp?.slug || liveComp?.name) || liveCompId || '')
         : '';
 
-      if (isRootAppLaunch && (!hasRegisteredCompanyRef.current || !ownCompanySlug || isPlaceholderCompanyName(currentCompany?.name))) {
+      if (isRootAppLaunch && (!hasRegisteredCompanyRef.current || !ownCompanySlug || isPlaceholderCompanyName(liveComp?.name))) {
         return false;
       }
 
@@ -3921,17 +4157,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 ? `/api/stores/by-phone/${encodeURIComponent(cleanUrlZap)}?t=${Date.now()}`
                 : `/api/stores/${encodeURIComponent(ownCompanySlug)}?t=${Date.now()}`));
       const res = await fetch(endpoint, { cache: 'no-store' });
-      if (res.ok) {
+      const resCt = res.headers.get('content-type') || '';
+      if (res.ok && resCt.includes('application/json')) {
         const data = await res.json();
         if (!data || data.isPlaceholder) {
-          if (products && products.length > 0 && currentCompany && !isPlaceholderCompanyName(currentCompany.name) && (!urlLoja || normalizeStoreSlug(currentCompany.name) === normalizeStoreSlug(urlLoja))) {
-            syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: isRootAppLaunch }).catch(() => {});
+          if (liveProds && liveProds.length > 0 && liveComp && !isPlaceholderCompanyName(liveComp.name) && (!urlLoja || normalizeStoreSlug(liveComp.name) === normalizeStoreSlug(urlLoja))) {
+            syncStoreToServer(liveComp, liveSettings, liveSeller, liveProds, { setAsActive: isRootAppLaunch }).catch(() => {});
           }
           return false;
-        }
-
-        if (data.hasPassword) {
-          setServerHasPassword(true);
         }
 
         const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
@@ -3945,75 +4178,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           urlCatalogInfoRef.current.hasUrlProducts = false;
         }
 
-        const matchesOwnRegistered = isRootAppLaunch && hasRegisteredCompanyRef.current && (
-          data.company?.id === activeCompanyId ||
-          normalizeStoreSlug(data.slug || data.company?.name) === ownCompanySlug
-        );
-        const canUpdateCompany = Boolean(
-          matchesOwnRegistered ||
-          (urlLoja && normalizeStoreSlug(data.slug || data.company?.name) === normalizeStoreSlug(urlLoja)) ||
-          pathShortCode ||
-          cleanUrlZap.length >= 8
-        );
-
-        if (!canUpdateCompany) {
-          return false;
-        }
-
-        if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja || pathShortCode)) {
-          if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
-            return false;
-          }
-          setProducts(prev => {
-            const prevStr = JSON.stringify(prev);
-            const newStr = JSON.stringify(data.products);
-            if (prevStr === newStr) return prev;
-            return data.products;
-          });
-          const targetCompId = data.company?.id || activeCompanyId;
-          localStorage.setItem(getTenantKey('products', activeCompanyId), JSON.stringify(data.products));
-          localStorage.setItem(getTenantKey('products', targetCompId), JSON.stringify(data.products));
-          if (activeCompanyId === DEFAULT_COMPANY_ID || targetCompId === DEFAULT_COMPANY_ID) {
-            localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
-          }
-          if (data.company && data.company.name) {
-            const nextSlug = data.slug || normalizeStoreSlug(data.company.name) || data.company.slug;
-            setCompanies(prev => {
-              const idx = prev.findIndex(c => c.id === activeCompanyId || c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(nextSlug));
-              if (idx < 0) return prev;
-              const merged = { ...prev[idx], ...data.company, name: data.company.name, slug: nextSlug || prev[idx].slug };
-              if (JSON.stringify(prev[idx]) === JSON.stringify(merged)) return prev;
-              const next = [...prev];
-              next[idx] = merged;
-              try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
-              return next;
-            });
-          }
-          if (data.paymentSettings) {
-            setPaymentSettings(ps => {
-              const incomingMerchant = ['appvendas', 'app vendas'].includes((data.paymentSettings.merchantName || '').trim().toLowerCase())
-                ? (data.company?.name || currentCompany?.name || ps.merchantName)
-                : (data.paymentSettings.merchantName || data.company?.name || ps.merchantName);
-              const nextSellers = Array.isArray(data.paymentSettings.sellers)
-                ? data.paymentSettings.sellers.map((s: SellerProfile) => ({
-                    ...s,
-                    merchantName: ['appvendas', 'app vendas'].includes((s.merchantName || '').trim().toLowerCase()) ? incomingMerchant : s.merchantName
-                  }))
-                : ps.sellers;
-              const next = { ...ps, ...data.paymentSettings, merchantName: incomingMerchant, sellers: nextSellers };
-              return JSON.stringify(ps) === JSON.stringify(next) ? ps : next;
-            });
-          }
-          return true;
-        } else if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany && !isPlaceholderCompanyName(currentCompany.name)) {
-          // If server has 0 products and current device is merchant/admin, persist to server so buyers get them
-          syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: isRootAppLaunch }).catch(() => {});
-          return true;
-        }
+        return applyIncomingStorePayloadRef.current(data, {
+          slug: data.slug,
+          cleanSlug: data.cleanSlug,
+          companyId: data.company?.id,
+          previousSlugs: data.previousSlugs,
+          fromShortCode: Boolean(pathShortCode),
+          fromPhone: cleanUrlZap.length >= 8
+        });
       }
     } catch {}
     return false;
   };
+  refreshStoreCatalogRef.current = refreshStoreCatalog;
 
   // Real-Time 1-Click Update for Installed PWAs & Browsers:
   // 1) Syncs merchant changes (if any) and pulls freshest catalog immediately
@@ -4021,8 +4198,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const triggerOneClickUpdate = async (): Promise<void> => {
     showToast('info', 'Atualizando em Tempo Real...', `Sincronizando catálogo, limpando cache antigo e ativando a versão mais recente (v${appVersion})...`);
     try {
-      if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany?.name) {
-        await syncStoreToServer(currentCompany, paymentSettings, activeSeller, products).catch(() => {});
+      const liveComp = currentCompanyRef.current;
+      const liveProds = productsRef.current;
+      if ((hasMerchantMutationRef.current || isCompanyAreaUnlockedRef.current || isAdminRef.current || isMasterAdminRef.current) && liveProds && liveProds.length > 0 && liveComp?.name) {
+        await syncStoreToServer(liveComp, paymentSettingsRef.current, activeSellerRef.current, liveProds).catch(() => {});
       }
       await refreshStoreCatalog().catch(() => {});
     } catch {}
@@ -4030,7 +4209,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let latestVer = appVersion || CLIENT_APP_VERSION;
     try {
       const verRes = await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' });
-      if (verRes.ok) {
+      const verCt = verRes.headers.get('content-type') || '';
+      if (verRes.ok && verCt.includes('application/json')) {
         const verJson = await verRes.json();
         if (verJson?.version) {
           latestVer = String(verJson.version).replace(/^v/i, '').trim() || latestVer;

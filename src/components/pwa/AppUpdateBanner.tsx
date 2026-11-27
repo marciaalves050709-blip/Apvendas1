@@ -18,12 +18,9 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // 1. Check if user already dismissed banner this session for this specific version
+    let dismissedVer = '';
     try {
-      const dismissedVer = sessionStorage.getItem('appvendas_update_banner_dismissed_ver');
-      if (dismissedVer && dismissedVer !== CLIENT_BUILD_VER) {
-        setDismissed(true);
-      }
+      dismissedVer = sessionStorage.getItem('appvendas_update_banner_dismissed_ver') || '';
     } catch {}
 
     // 2. Listen to custom event ONLY when a genuinely newer version is detected on the server or SW
@@ -33,7 +30,7 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
       if (!incomingVer || incomingVer !== CLIENT_BUILD_VER) {
         if (incomingVer) setAvailableVersion(incomingVer);
         setUpdateAvailable(true);
-        setDismissed(false);
+        setDismissed(Boolean(incomingVer && dismissedVer === incomingVer));
       }
     };
 
@@ -41,14 +38,17 @@ export const AppUpdateBanner: React.FC<AppUpdateBannerProps> = ({ onOpenUpdateMo
 
     // 3. Real-time check against /api/version so installed PWAs detect updates reliably without false positives
     fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        const ct = res.headers.get('content-type') || '';
+        return res.ok && ct.includes('application/json') ? res.json() : null;
+      })
       .then((data) => {
         if (data?.version) {
           const serverVer = String(data.version).replace(/^v/i, '').trim();
           if (serverVer && serverVer !== CLIENT_BUILD_VER) {
             setAvailableVersion(serverVer);
             setUpdateAvailable(true);
-            setDismissed(false);
+            setDismissed(dismissedVer === serverVer);
           }
         }
       })

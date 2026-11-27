@@ -44,11 +44,12 @@ app.use((req, res, next) => {
 // Real-Time Live Push Synchronization Clients (Server-Sent Events)
 const liveSyncClients = new Set<express.Response>();
 
-// Heartbeat ping every 15 seconds to keep mobile 4G/WiFi connections active
+// Heartbeat ping every 15 seconds (real JSON event + comment) to keep mobile 4G/WiFi & PWA SSE streams verifiable
 setInterval(() => {
+  const pingPayload = `data: ${JSON.stringify({ type: 'PING', version: '77', timestamp: Date.now() })}\n\n`;
   for (const client of liveSyncClients) {
     try {
-      client.write(': ping\n\n');
+      client.write(pingPayload);
     } catch {
       liveSyncClients.delete(client);
     }
@@ -67,7 +68,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '76', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '77', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -280,6 +281,14 @@ app.post('/api/stores/:slug', (req, res) => {
       db[slug] ||
       db[cleanSlug] ||
       (byCompId && (byCompId.slug === slug || isRename || setAsActive === true) ? byCompId : null);
+
+    const previousSlugsSet = new Set<string>(
+      Array.isArray(existingStore?.previousSlugs) ? existingStore.previousSlugs : []
+    );
+    if (byCompId?.slug && byCompId.slug !== slug) {
+      previousSlugsSet.add(byCompId.slug);
+    }
+    const previousSlugs = Array.from(previousSlugsSet);
     
     // Safety: If incoming products is empty, preserve existing store products unless forceClear is explicitly passed
     const finalProducts = productList.length > 0 
@@ -293,6 +302,7 @@ app.post('/api/stores/:slug', (req, res) => {
     const storeDraft = {
       slug,
       cleanSlug,
+      previousSlugs,
       company: company ? { ...company, slug } : (existingStore?.company || { name: rawSlug, slug }),
       paymentSettings: paymentSettings || (existingStore?.paymentSettings || {}),
       products: finalProducts,
@@ -387,6 +397,38 @@ app.post('/api/stores/:slug', (req, res) => {
       }
     }
 
+    // If renamed, keep any previous slugs belonging strictly to this same company.id updated so installed PWAs on old slugs keep syncing
+    if (company?.id && previousSlugs.length > 0) {
+      for (const prevSlug of previousSlugs) {
+        const prevClean = cleanSlugAlphanumeric(prevSlug);
+        if (prevSlug && db[prevSlug]?.company?.id === company.id) {
+          db[prevSlug] = storeData;
+        }
+        if (prevClean && prevClean !== prevSlug && db[prevClean]?.company?.id === company.id) {
+          db[prevClean] = storeData;
+        }
+      }
+    }
+
+    // Keep short links belonging to this company/slug in sync so /l/:code installed apps receive real-time updates too
+    if (db['_shortLinks'] && typeof db['_shortLinks'] === 'object') {
+      for (const shortRec of Object.values(db['_shortLinks']) as any[]) {
+        if (!shortRec || typeof shortRec !== 'object') continue;
+        const recSlug = normalizeSlug(shortRec.slug || shortRec.storeName || '');
+        const matchesCompanyId = Boolean(company?.id && shortRec.companyId && shortRec.companyId === company.id);
+        const matchesSlug = Boolean(recSlug && (recSlug === slug || previousSlugs.includes(recSlug)));
+        if (matchesCompanyId || matchesSlug) {
+          shortRec.slug = slug;
+          shortRec.storeName = storeData.company?.name || shortRec.storeName;
+          shortRec.company = storeData.company;
+          shortRec.paymentSettings = storeData.paymentSettings;
+          shortRec.activeSeller = storeData.activeSeller;
+          shortRec.products = storeData.products;
+          shortRec.updatedAt = storeData.updatedAt;
+        }
+      }
+    }
+
     // Smart latest store pointer: tracks the canonical active store across AI Studio & Installed PWAs
     if (shouldUpdateLatest) {
       db['_latest'] = storeData;
@@ -402,6 +444,7 @@ app.post('/api/stores/:slug', (req, res) => {
       type: 'STORE_UPDATED',
       slug,
       cleanSlug,
+      previousSlugs,
       companyId: company?.id,
       companyName: company?.name || rawSlug,
       setAsActive: setAsActive === true,
@@ -498,7 +541,7 @@ app.get('/api/stores/:slug', (req, res) => {
         registeredPhones: collectStorePhones(shortRec),
         updatedAt: shortRec.updatedAt || new Date().toISOString()
       };
-      const mergedProducts = Array.isArray(liveStore?.products) && liveStore.products.length > 0
+      const mergedProducts = Array.isArray(liveStore?.products)
         ? liveStore.products
         : (Array.isArray(shortRec.products) ? shortRec.products : baseStore.products || []);
       const boundZap = String(shortRec.zap || '').replace(/\D/g, '');
@@ -789,7 +832,7 @@ app.get('/api/short/:code', (req, res) => {
     };
 
     const mergedProducts =
-      Array.isArray(liveStore?.products) && liveStore.products.length > 0
+      Array.isArray(liveStore?.products)
         ? liveStore.products
         : (Array.isArray(shortRec?.products) ? shortRec.products : baseStore.products || []);
 
@@ -1096,14 +1139,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '76',
-    versionName: 'v76.0',
+    version: '77',
+    versionName: 'v77.0',
     buildDate: new Date().toISOString(),
     features: [
+      'Sincronização e atualização em tempo real corrigida nos apps instalados (SSE com reconexão automática ao voltar para o app, cache no-store no Service Worker, BroadcastChannel e resolução por nome/slug/ID sem perda de vínculo) (v77)',
       'Instalação corrigida ao abrir pelo Instagram no Android (Chrome Intent com fallback) e no iPhone (Safari sem erro de endereço inválido), levando os dados, telefone vinculado e produtos da empresa (v76)',
       'Área de produtos 100% limpa e isolada ao abrir o link principal para cada empresa cadastrar loja, senha e celular próprios (v75)',
-      'Instalação guiada e abertura direta no Safari para iPhone/iPad por empresa e telefone vinculado (v74)',
-      'Números de telefone totalmente ocultos na interface, painéis e formulários (v73)'
+      'Instalação guiada e abertura direta no Safari para iPhone/iPad por empresa e telefone vinculado (v74)'
     ]
   });
 });

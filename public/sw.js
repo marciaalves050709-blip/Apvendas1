@@ -1,8 +1,6 @@
-// appvendas Service Worker (PWA) - Version 76 (Instagram Android/iOS Install + Multi-Company PWA)
-const CACHE_NAME = 'appvendas-pwa-v76';
+// appvendas Service Worker (PWA) - Version 77 (Real-Time Installed App Updates & Multi-Company Sync)
+const CACHE_NAME = 'appvendas-pwa-v77';
 const PRECACHE_ASSETS = [
-  '/manifest.webmanifest',
-  '/manifest.json',
   '/icon.svg',
   '/favicon.ico',
   '/apple-touch-icon.png',
@@ -41,11 +39,11 @@ self.addEventListener('activate', (event) => {
     })
     .then(() => self.clients.claim())
     .then(async () => {
-      // Notify all open client windows that the new SW version 73 is active
+      // Notify all open client windows that the new SW version 77 is active
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v76' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v77' });
         }
       } catch (e) {}
     })
@@ -62,7 +60,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Fetch router: Pure Network-First (Never blocks or freezes updates)
+// Fetch router: Pure Network-First with cache: no-store for HTML/manifests/API
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -71,6 +69,17 @@ self.addEventListener('fetch', (event) => {
 
   // Skip API calls so SSE and live mutations hit network directly
   if (url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // Bypass HTTP cache for dynamic manifests & sw.js
+  if (url.pathname === '/manifest.webmanifest' || url.pathname === '/manifest.json' || url.pathname === '/sw.js') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).catch(async () => {
+        const cached = await caches.match(event.request);
+        return cached || new Response('{}', { status: 200, headers: { 'Content-Type': 'application/manifest+json' } });
+      })
+    );
     return;
   }
 
@@ -94,42 +103,44 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Navigation requests (including /, /loja/:slug, /l/:code) - handles start_url cleanly for WebAPK installability
+  // 2. Navigation requests (including /, /loja/:slug, /l/:code) - bypass browser disk cache so installed apps always load fresh HTML
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(async () => {
-        return new Response(
-          `<!DOCTYPE html>
-          <html lang="pt-BR">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>appvendas - Conectar</title>
-            <style>
-              body { background: #0f172a; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
-              .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 24px; max-width: 400px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
-              button { background: #4f46e5; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; margin-top: 16px; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <h2>⚡ appvendas</h2>
-              <p>Conecte-se à internet para carregar as últimas atualizações.</p>
-              <button onclick="window.location.reload()">Reconectar Agora</button>
-            </div>
-          </body>
-          </html>`,
-          {
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
-            status: 200
-          }
-        );
-      })
+      fetch(event.request, { cache: 'no-store' })
+        .catch(() => fetch(event.request))
+        .catch(async () => {
+          return new Response(
+            `<!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>appvendas - Conectar</title>
+              <style>
+                body { background: #0f172a; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
+                .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 24px; max-width: 400px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+                button { background: #4f46e5; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; margin-top: 16px; font-size: 14px; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h2>⚡ appvendas</h2>
+                <p>Conecte-se à internet para carregar as últimas atualizações.</p>
+                <button onclick="window.location.reload()">Reconectar Agora</button>
+              </div>
+            </body>
+            </html>`,
+            {
+              headers: { 'Content-Type': 'text/html; charset=utf-8' },
+              status: 200
+            }
+          );
+        })
     );
     return;
   }
 
-  // 3. Network-First for static assets & manifests with cache fallback when offline
+  // 3. Network-First for static assets with cache fallback when offline
   event.respondWith(
     fetch(event.request).catch(async () => {
       const cached = await caches.match(event.request);

@@ -206,16 +206,20 @@ if (typeof window !== 'undefined') {
     lastVersionCheckMs = now;
 
     fetch(`/api/version?t=${now}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        const ct = r.headers.get('content-type') || '';
+        return r.ok && ct.includes('application/json') ? r.json() : null;
+      })
       .then((data) => {
         if (data && data.version) {
           const serverVer = String(data.version).replace(/^v/i, '').trim();
           const clientVer = String(CURRENT_SW_VERSION).replace(/^v/i, '').trim();
           if (serverVer && clientVer && serverVer !== clientVer) {
             window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: serverVer } }));
-            const reloadGuardKey = `pwa_version_upgraded_${serverVer}`;
-            if (!sessionStorage.getItem(reloadGuardKey)) {
-              sessionStorage.setItem(reloadGuardKey, 'true');
+            const reloadTsKey = `pwa_version_upgraded_ts_${serverVer}`;
+            const lastUpgradeTs = Number(sessionStorage.getItem(reloadTsKey) || '0');
+            if (!lastUpgradeTs || Date.now() - lastUpgradeTs > 15000) {
+              sessionStorage.setItem(reloadTsKey, String(Date.now()));
               console.log(`[PWA] Upgrading installed app from v${clientVer} to v${serverVer}...`);
               if (typeof (window as any).__clearAppCacheAndReload === 'function') {
                 (window as any).__clearAppCacheAndReload(serverVer);
@@ -233,7 +237,7 @@ if (typeof window !== 'undefined') {
   checkServerVersionAndUpgrade(true);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      checkServerVersionAndUpgrade();
+      checkServerVersionAndUpgrade(true);
     }
   });
   window.addEventListener('focus', () => checkServerVersionAndUpgrade());
@@ -254,6 +258,7 @@ if (typeof window !== 'undefined') {
     // AND we haven't reloaded yet in this session (prevents screen jumping loop)
     const hadPreviousController = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if ((window as any).__is_reloading_app) return;
       if (hadPreviousController && !sessionStorage.getItem('pwa_controller_reloaded')) {
         sessionStorage.setItem('pwa_controller_reloaded', 'true');
         console.log('[PWA] Controller changed -> Refreshing once to load new version');
@@ -268,9 +273,10 @@ if (typeof window !== 'undefined') {
         console.log('[PWA] Service worker active:', event.data.version);
         if (swVer && swVer !== CURRENT_SW_VERSION) {
           window.dispatchEvent(new CustomEvent('app-update-available', { detail: { version: swVer } }));
-          const reloadGuardKey = `pwa_version_upgraded_${swVer}`;
-          if (!sessionStorage.getItem(reloadGuardKey)) {
-            sessionStorage.setItem(reloadGuardKey, 'true');
+          const reloadTsKey = `pwa_version_upgraded_ts_${swVer}`;
+          const lastUpgradeTs = Number(sessionStorage.getItem(reloadTsKey) || '0');
+          if (!lastUpgradeTs || Date.now() - lastUpgradeTs > 15000) {
+            sessionStorage.setItem(reloadTsKey, String(Date.now()));
             if (typeof (window as any).__clearAppCacheAndReload === 'function') {
               (window as any).__clearAppCacheAndReload(swVer);
             }
@@ -279,7 +285,7 @@ if (typeof window !== 'undefined') {
       }
     });
 
-    navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/' })
+    navigator.serviceWorker.register(`/sw.js?v=${CURRENT_SW_VERSION}`, { scope: '/', updateViaCache: 'none' })
       .then((reg) => {
         reg.update().catch(() => {});
         if (reg.waiting) {
