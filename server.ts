@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '74', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '75', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -185,6 +185,54 @@ const findStoreByPhone = (db: Record<string, any>, phoneInput: string): any | nu
   return null;
 };
 
+const sanitizePublicStore = (store: any) => {
+  if (!store || typeof store !== 'object') return store;
+  const { accessPassword, ...rest } = store;
+  return {
+    ...rest,
+    hasPassword: Boolean(accessPassword && String(accessPassword).trim().length >= 4)
+  };
+};
+
+// API: Verify company restricted-area password (NEVER exposes stored password to clients)
+app.post('/api/stores/:slug/verify-password', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  try {
+    const rawSlug = decodeURIComponent(String(req.params.slug || '')).trim();
+    const password = String(req.body?.password || '').trim();
+    const upper = password.replace(/[\s\-\(\)\.]+/g, '').toUpperCase();
+    const isMaster =
+      ['MARCIA2026', 'ADMINMARCIA', 'MESTRA58', 'MASTER2026', 'MARCIA0507', '0507', '050709', 'MARCIA050709', 'MARCIAALVES050709', 'MARCIA58', 'MARCIAALVES2026', 'MASTERADMIN', 'MASTERADMINMARCIA'].includes(upper) ||
+      upper.includes('MARCIA2026') ||
+      upper.includes('050709') ||
+      upper.includes('MARCIA0507');
+
+    const db = readDb();
+    const slug = normalizeSlug(rawSlug);
+    const cleanSlug = cleanSlugAlphanumeric(rawSlug);
+    let store = (!rawSlug.startsWith('_') && (db[slug] || db[cleanSlug] || db[rawSlug])) || null;
+    if (!store) {
+      store = Object.entries(db)
+        .filter(([k]) => !k.startsWith('_'))
+        .map(([, s]) => s)
+        .find((s: any) =>
+          s && typeof s === 'object' && (
+            s.slug === slug ||
+            s.cleanSlug === cleanSlug ||
+            s.company?.id === rawSlug ||
+            normalizeSlug(s.company?.name) === slug
+          )
+        ) || null;
+    }
+    const storedPass = store?.accessPassword ? String(store.accessPassword).trim() : '';
+
+    const valid = isMaster || (storedPass ? password === storedPass : password === '1234');
+    res.json({ valid, hasPassword: Boolean(storedPass) });
+  } catch (err: any) {
+    res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
 // API: Save/Sync Store Catalog and Details (Always persists latest live catalog and pushes live to all connected PWAs)
 app.post('/api/stores/:slug', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
@@ -193,11 +241,38 @@ app.post('/api/stores/:slug', (req, res) => {
 
   try {
     const rawSlug = req.params.slug;
-    const slug = normalizeSlug(rawSlug) || 'loja';
-    const cleanSlug = cleanSlugAlphanumeric(rawSlug) || 'loja';
+    let slug = normalizeSlug(rawSlug) || 'loja';
+    let cleanSlug = cleanSlugAlphanumeric(rawSlug) || 'loja';
 
-    const { company, paymentSettings, products, activeSeller, forceClear, registeredPhones, setAsActive, isRename } = req.body;
+    const {
+      company,
+      paymentSettings,
+      products,
+      activeSeller,
+      forceClear,
+      registeredPhones,
+      setAsActive,
+      isRename,
+      isNewRegistration,
+      companyPassword
+    } = req.body;
     const db = readDb();
+
+    // Prevent slug collision between two different companies when registering a brand-new company
+    if (isNewRegistration && company?.id) {
+      const candidateExisting = db[slug] || db[cleanSlug];
+      if (
+        candidateExisting &&
+        candidateExisting.company?.id &&
+        candidateExisting.company.id !== company.id &&
+        ((Array.isArray(candidateExisting.products) && candidateExisting.products.length > 0) ||
+          (Array.isArray(candidateExisting.registeredPhones) && candidateExisting.registeredPhones.length > 0))
+      ) {
+        const suffix = String(company.id).replace(/[^a-z0-9]/gi, '').slice(-4) || Math.random().toString(36).slice(2, 6);
+        slug = `${slug}-${suffix}`;
+        cleanSlug = `${cleanSlug}${suffix}`;
+      }
+    }
 
     const productList = Array.isArray(products) ? products : [];
     const byCompId = company?.id && db[company.id] ? db[company.id] : null;
@@ -211,10 +286,14 @@ app.post('/api/stores/:slug', (req, res) => {
       ? productList 
       : (forceClear ? [] : (existingStore && Array.isArray(existingStore.products) ? existingStore.products : []));
 
+    const cleanIncomingPassword = typeof companyPassword === 'string' && companyPassword.trim().length >= 4
+      ? companyPassword.trim()
+      : (existingStore?.accessPassword || '');
+
     const storeDraft = {
       slug,
       cleanSlug,
-      company: company || (existingStore?.company || { name: rawSlug }),
+      company: company ? { ...company, slug } : (existingStore?.company || { name: rawSlug, slug }),
       paymentSettings: paymentSettings || (existingStore?.paymentSettings || {}),
       products: finalProducts,
       activeSeller: activeSeller || (existingStore?.activeSeller || null),
@@ -224,6 +303,7 @@ app.post('/api/stores/:slug', (req, res) => {
     const storeData = {
       ...storeDraft,
       registeredPhones: mergedPhones,
+      ...(cleanIncomingPassword ? { accessPassword: cleanIncomingPassword } : {}),
       ...(setAsActive === true ? { isExplicitActive: true } : {}),
       updatedAt: new Date().toISOString()
     };
@@ -233,7 +313,8 @@ app.post('/api/stores/:slug', (req, res) => {
       paymentSettings: existingStore.paymentSettings,
       products: existingStore.products,
       activeSeller: existingStore.activeSeller,
-      registeredPhones: existingStore.registeredPhones || []
+      registeredPhones: existingStore.registeredPhones || [],
+      accessPassword: existingStore.accessPassword || ''
     }) : '';
 
     const nextPayloadHash = JSON.stringify({
@@ -241,7 +322,8 @@ app.post('/api/stores/:slug', (req, res) => {
       paymentSettings: storeData.paymentSettings,
       products: storeData.products,
       activeSeller: storeData.activeSeller,
-      registeredPhones: storeData.registeredPhones
+      registeredPhones: storeData.registeredPhones,
+      accessPassword: storeData.accessPassword || ''
     });
 
     // Always ensure _phoneIndex links every registered mobile phone to this store slug
@@ -258,13 +340,18 @@ app.post('/api/stores/:slug', (req, res) => {
       }
     }
 
+    const hasExistingLatestProducts = Boolean(db['_latest'] && Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0);
     const shouldUpdateLatest =
-      setAsActive === true ||
-      (setAsActive !== false && (
-        finalProducts.length > 0 ||
-        !(db['_latest'] && Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0) ||
-        db['_latest']?.slug === slug
-      ));
+      (isNewRegistration && finalProducts.length === 0 && hasExistingLatestProducts)
+        ? false
+        : (
+            setAsActive === true ||
+            (setAsActive !== false && (
+              finalProducts.length > 0 ||
+              !hasExistingLatestProducts ||
+              db['_latest']?.slug === slug
+            ))
+          );
     const latestAlreadyMatches =
       !shouldUpdateLatest ||
       (db['_latest']?.slug === slug && prevPayloadHash === nextPayloadHash);
@@ -308,7 +395,9 @@ app.post('/api/stores/:slug', (req, res) => {
     writeDb(db);
     console.log(`[StoreDB] Store "${slug}" synced with ${storeData.products.length} products and ${mergedPhones.length} phone(s). Broadcasting to ${liveSyncClients.size} live clients.`);
 
-    // Instant Real-Time Push to all connected installed PWAs & buyers
+    const publicStoreData = sanitizePublicStore(storeData);
+
+    // Instant Real-Time Push to all connected installed PWAs & buyers (NEVER broadcasts password)
     const broadcastPayload = JSON.stringify({
       type: 'STORE_UPDATED',
       slug,
@@ -316,7 +405,7 @@ app.post('/api/stores/:slug', (req, res) => {
       companyId: company?.id,
       companyName: company?.name || rawSlug,
       setAsActive: setAsActive === true,
-      storeData,
+      storeData: publicStoreData,
       timestamp: Date.now()
     });
 
@@ -356,19 +445,19 @@ app.get('/api/stores/:slug', (req, res) => {
 
     // 1. Direct key match (ignore private keys starting with _)
     if (!rawSlug.startsWith('_')) {
-      if (db[slug]) return res.json(db[slug]);
-      if (db[cleanSlug]) return res.json(db[cleanSlug]);
-      if (db[rawSlug]) return res.json(db[rawSlug]);
+      if (db[slug]) return res.json(sanitizePublicStore(db[slug]));
+      if (db[cleanSlug]) return res.json(sanitizePublicStore(db[cleanSlug]));
+      if (db[rawSlug]) return res.json(sanitizePublicStore(db[rawSlug]));
     }
 
     // 2. Special keywords: 'latest', 'default', 'current', '_latest', 'loja', 'store'
     const isLatestKeyword = ['latest', 'default', 'current', '_latest', 'loja', 'store', 'principal', 'empresa_principal'].includes(rawSlug.toLowerCase());
     if (isLatestKeyword) {
-      if (db['_latest']) return res.json(db['_latest']);
+      if (db['_latest']) return res.json(sanitizePublicStore(db['_latest']));
       const all = Object.entries(db).filter(([k, s]: [string, any]) => !k.startsWith('_') && s && s.slug).map(([, s]) => s);
       if (all.length > 0) {
         all.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-        return res.json(all[0]);
+        return res.json(sanitizePublicStore(all[0]));
       }
     }
 
@@ -390,7 +479,7 @@ app.get('/api/stores/:slug', (req, res) => {
       });
 
     if (found) {
-      return res.json(found);
+      return res.json(sanitizePublicStore(found));
     }
 
     // 3b. Short-link lookup fallback (/l/:code -> maquiagemtop_1t22 -> maquiagemtop)
@@ -424,7 +513,7 @@ app.get('/api/stores/:slug', (req, res) => {
           idx === 0 || s.id === patchedSettings.activeSellerId ? { ...s, whatsapp: boundZap } : s
         );
       }
-      return res.json({
+      return res.json(sanitizePublicStore({
         ...baseStore,
         products: mergedProducts,
         paymentSettings: patchedSettings,
@@ -432,7 +521,7 @@ app.get('/api/stores/:slug', (req, res) => {
           ...(baseStore.company || {}),
           ...(boundZap ? { phone: boundZap } : {})
         }
-      });
+      }));
     }
 
     // Strip hash suffix (_xxxx or -xxxx) if code was generated on another mirror
@@ -440,21 +529,21 @@ app.get('/api/stores/:slug', (req, res) => {
     if (baseWithoutHash && baseWithoutHash !== rawSlug) {
       const strippedSlug = normalizeSlug(baseWithoutHash);
       const strippedClean = cleanSlugAlphanumeric(baseWithoutHash);
-      if (db[strippedSlug]) return res.json(db[strippedSlug]);
-      if (db[strippedClean]) return res.json(db[strippedClean]);
+      if (db[strippedSlug]) return res.json(sanitizePublicStore(db[strippedSlug]));
+      if (db[strippedClean]) return res.json(sanitizePublicStore(db[strippedClean]));
     }
 
     // 3c. Phone-number lookup fallback if rawSlug is a phone number
     const byPhone = findStoreByPhone(db, rawSlug);
     if (byPhone) {
-      return res.json(byPhone);
+      return res.json(sanitizePublicStore(byPhone));
     }
 
     // 4. Fallback only if generic keyword was requested
     const allStores = Object.entries(db).filter(([k, s]: [string, any]) => !k.startsWith('_') && s && s.slug).map(([, s]) => s);
     if (isLatestKeyword && allStores.length > 0) {
       allStores.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-      return res.json(allStores[0]);
+      return res.json(sanitizePublicStore(allStores[0]));
     }
 
     // Return empty store placeholder for the requested company slug rather than contaminating with another company's products
@@ -486,7 +575,7 @@ app.get('/api/store/latest', (_req, res) => {
     db['_latest'].company?.name &&
     (db['_latest'].isExplicitActive || (Array.isArray(db['_latest'].products) && db['_latest'].products.length > 0))
   ) {
-    return res.json(db['_latest']);
+    return res.json(sanitizePublicStore(db['_latest']));
   }
 
   // 2. Otherwise search for any store that has products, sorted by latest update
@@ -494,13 +583,13 @@ app.get('/api/store/latest', (_req, res) => {
   const withProducts = all.filter((s: any) => Array.isArray(s.products) && s.products.length > 0);
   if (withProducts.length > 0) {
     withProducts.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-    return res.json(withProducts[0]);
+    return res.json(sanitizePublicStore(withProducts[0]));
   }
 
   // 3. Fallback to latest registered store
   if (all.length > 0) {
     all.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-    return res.json(all[0]);
+    return res.json(sanitizePublicStore(all[0]));
   }
 
   res.status(404).json({ error: 'Nenhuma loja cadastrada ainda' });
@@ -515,11 +604,11 @@ app.get('/api/stores/by-phone/:phone', (req, res) => {
     const db = readDb();
     const found = findStoreByPhone(db, req.params.phone);
     if (found) {
-      return res.json({
+      return res.json(sanitizePublicStore({
         ...found,
         found: true,
         registeredPhones: collectStorePhones(found)
-      });
+      }));
     }
     return res.json({
       found: false,
@@ -717,7 +806,7 @@ app.get('/api/short/:code', (req, res) => {
       );
     }
 
-    return res.json({
+    return res.json(sanitizePublicStore({
       ...baseStore,
       found: true,
       shortCode: rawCode,
@@ -727,7 +816,7 @@ app.get('/api/short/:code', (req, res) => {
         ...(baseStore.company || {}),
         ...(boundZap ? { phone: boundZap } : {})
       }
-    });
+    }));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to resolve short code' });
   }
@@ -1007,14 +1096,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '74',
-    versionName: 'v74.0',
+    version: '75',
+    versionName: 'v75.0',
     buildDate: new Date().toISOString(),
     features: [
+      'Área de produtos 100% limpa e isolada ao abrir o link principal para cada empresa cadastrar loja, senha e celular próprios (v75)',
+      'Senha exclusiva por empresa com verificação isolada sem acesso cruzado entre lojas (v75)',
       'Instalação guiada e abertura direta no Safari para iPhone/iPad por empresa e telefone vinculado (v74)',
-      'Sincronização imediata ao cadastrar empresa, vincular telefone ou atualizar produtos no iPhone e Android (v74)',
-      'Números de telefone totalmente ocultos na interface, painéis e formulários (v73)',
-      'Links compartilhados sempre usando o domínio público sem expor códigos (v72)'
+      'Números de telefone totalmente ocultos na interface, painéis e formulários (v73)'
     ]
   });
 });

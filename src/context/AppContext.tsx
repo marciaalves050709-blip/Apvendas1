@@ -173,7 +173,15 @@ interface AppContextType {
   setCompanyName: (name: string) => void;
   currentCompany: CompanyAccount;
   companies: CompanyAccount[];
-  createCompany: (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }) => CompanyAccount;
+  hasRegisteredCompany: boolean;
+  registerMerchantWorkspace: (data: {
+    companyName: string;
+    phone: string;
+    password: string;
+    ownerName?: string;
+    logoEmoji?: string;
+  }) => CompanyAccount;
+  createCompany: (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string; password?: string }) => CompanyAccount;
   switchCompany: (companyId: string) => void;
   updateCurrentCompany: (data: Partial<CompanyAccount>) => void;
   deleteCompany: (companyId: string) => boolean;
@@ -188,8 +196,10 @@ interface AppContextType {
   isCompanyAreaUnlocked: boolean;
   setIsCompanyAreaUnlocked: (val: boolean) => void;
   companyPassword: string;
+  hasCustomCompanyPassword: boolean;
   setCompanyPassword: (pass: string) => void;
   unlockCompanyArea: (pass: string) => boolean;
+  verifyCompanyPasswordAsync: (pass: string, options?: { unlock?: boolean }) => Promise<boolean>;
   lockCompanyArea: () => void;
   isCompanyPasswordModalOpen: boolean;
   setIsCompanyPasswordModalOpen: (open: boolean) => void;
@@ -227,10 +237,33 @@ const STORAGE_KEYS = {
 const DEFAULT_COMPANY_ID = 'empresa_principal';
 const STORAGE_COMPANIES_KEY = 'appvendas_companies_list_v1';
 const STORAGE_ACTIVE_COMPANY_KEY = 'appvendas_active_company_id_v1';
+const STORAGE_COMPANY_REGISTERED_KEY = 'appvendas_company_registered_v1';
 const STORAGE_EXTENDED_TRIAL_CLIENTS_KEY = 'appvendas_extended_trial_clients_v1';
 
 export const getTenantKey = (baseKey: string, companyId: string) => {
   return `tenant_${companyId}_${baseKey}`;
+};
+
+const isPlaceholderCompanyName = (name?: string): boolean => {
+  const lower = (name || '').trim().toLowerCase();
+  return !lower || lower === 'minha loja' || lower === 'minha empresa' || lower === 'appvendas' || lower === 'app vendas' || lower === 'loja';
+};
+
+const readCompanyPasswordLocal = (compId: string): { password: string; hasCustom: boolean } => {
+  try {
+    const tenantPass = localStorage.getItem(getTenantKey('company_password', compId));
+    const tenantFlag = localStorage.getItem(getTenantKey('company_has_custom_password', compId)) === 'true';
+    if (tenantPass && tenantPass.trim().length > 0) {
+      return { password: tenantPass.trim(), hasCustom: tenantFlag || tenantPass.trim() !== '1234' };
+    }
+    if (compId === DEFAULT_COMPANY_ID) {
+      const legacyPass = localStorage.getItem('appvendas_company_password');
+      if (legacyPass && legacyPass.trim().length > 0) {
+        return { password: legacyPass.trim(), hasCustom: legacyPass.trim() !== '1234' };
+      }
+    }
+  } catch {}
+  return { password: '1234', hasCustom: false };
 };
 
 export const ADMIN_CONFIG = {
@@ -496,6 +529,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
+  // Track whether this device has explicitly registered/owns a company (or opened a shared store URL)
+  const initialHasRegisteredCompany = (() => {
+    if (rawUrlStore || pathShortCode) return true;
+    const urlPhoneCheck = (initialUrlParams?.get('zap') || initialUrlParams?.get('cel') || initialUrlParams?.get('celular') || '').replace(/\D/g, '');
+    if (urlPhoneCheck.length >= 8) return true;
+    try {
+      const adminParam = initialUrlParams?.get('admin')?.toLowerCase() || initialUrlParams?.get('chave')?.toLowerCase() || initialUrlParams?.get('key')?.toLowerCase();
+      if (adminParam === 'marcia2026' || adminParam === '0507') return true;
+      if (localStorage.getItem(STORAGE_COMPANY_REGISTERED_KEY) === 'true') return true;
+      if (localStorage.getItem('appvendas_is_admin') === 'true') return true;
+      const savedCompaniesRaw = localStorage.getItem(STORAGE_COMPANIES_KEY);
+      if (savedCompaniesRaw) {
+        const parsed = JSON.parse(savedCompaniesRaw);
+        if (Array.isArray(parsed) && parsed.some((c: any) => !isPlaceholderCompanyName(c?.name) || (c?.phone && String(c.phone).replace(/\D/g, '').length >= 8))) {
+          return true;
+        }
+      }
+      const legacySettingsRaw = localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS);
+      if (legacySettingsRaw) {
+        const ps = JSON.parse(legacySettingsRaw);
+        if (!isPlaceholderCompanyName(ps?.merchantName) || (ps?.merchantWhatsapp && String(ps.merchantWhatsapp).replace(/\D/g, '').length >= 8)) {
+          return true;
+        }
+      }
+      const savedActive = localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY) || DEFAULT_COMPANY_ID;
+      const tenantProductsRaw = localStorage.getItem(getTenantKey('products', savedActive));
+      if (tenantProductsRaw) {
+        const tp = JSON.parse(tenantProductsRaw);
+        if (Array.isArray(tp) && tp.length > 0 && savedActive !== DEFAULT_COMPANY_ID) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  })();
+
+  const [hasRegisteredCompany, setHasRegisteredCompany] = useState<boolean>(initialHasRegisteredCompany);
+  const hasRegisteredCompanyRef = useRef<boolean>(initialHasRegisteredCompany);
+  useEffect(() => {
+    hasRegisteredCompanyRef.current = hasRegisteredCompany;
+  }, [hasRegisteredCompany]);
+
   // Confidential Company Management Area (starts LOCKED so clients never see company costs, POS, sales or suppliers)
   const [isCompanyAreaUnlocked, setIsCompanyAreaUnlocked] = useState<boolean>(() => {
     try {
@@ -505,13 +580,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const [companyPassword, setCompanyPasswordState] = useState<string>(() => {
+  const initialActiveIdHint = (() => {
     try {
-      return localStorage.getItem('appvendas_company_password') || '1234';
+      return initialUrlParams?.get('id') || initialUrlParams?.get('empresa') || localStorage.getItem(STORAGE_ACTIVE_COMPANY_KEY) || DEFAULT_COMPANY_ID;
     } catch {
-      return '1234';
+      return DEFAULT_COMPANY_ID;
     }
-  });
+  })();
+  const initialPassInfo = readCompanyPasswordLocal(initialActiveIdHint);
+  const [companyPassword, setCompanyPasswordState] = useState<string>(initialPassInfo.password);
+  const [localHasCustomPassword, setLocalHasCustomPassword] = useState<boolean>(initialPassInfo.hasCustom);
+  const [serverHasPassword, setServerHasPassword] = useState<boolean>(() => Boolean(ssrInitialStore?.hasPassword));
+  const hasCustomCompanyPassword = localHasCustomPassword || serverHasPassword;
 
   const [isCompanyPasswordModalOpen, setIsCompanyPasswordModalOpen] = useState(false);
   const [targetTabAfterUnlock, setTargetTabAfterUnlock] = useState<ActiveTab | null>(null);
@@ -520,9 +600,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const clean = pass.trim();
     if (!clean) return;
     setCompanyPasswordState(clean);
+    setLocalHasCustomPassword(true);
+    setServerHasPassword(true);
     try {
-      localStorage.setItem('appvendas_company_password', clean);
+      localStorage.setItem(getTenantKey('company_password', activeCompanyId), clean);
+      localStorage.setItem(getTenantKey('company_has_custom_password', activeCompanyId), 'true');
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem('appvendas_company_password', clean);
+      }
     } catch {}
+    if (currentCompany?.name && !isPlaceholderCompanyName(currentCompany.name)) {
+      syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, {
+        companyPassword: clean
+      }).catch(() => {});
+    }
   };
 
   const openCompanyAreaUnlock = (redirectTab?: ActiveTab) => {
@@ -530,31 +621,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsCompanyPasswordModalOpen(true);
   };
 
-  const unlockCompanyArea = (pass: string): boolean => {
-    const trimmed = (pass || '').trim();
-    const isMaster = checkIsMasterPassword(trimmed);
-    const isDirectMatch = trimmed === companyPassword;
-    const isDefaultFallback = trimmed === '1234';
-
-    if (isMaster || isDirectMatch || isDefaultFallback) {
-      setIsCompanyAreaUnlocked(true);
+  const applyUnlockSuccess = (isMaster: boolean, skipModalClose = false) => {
+    setIsCompanyAreaUnlocked(true);
+    try {
+      sessionStorage.setItem('appvendas_company_unlocked', 'true');
+    } catch {}
+    if (isMaster) {
+      setIsAdmin(true);
       try {
-        sessionStorage.setItem('appvendas_company_unlocked', 'true');
+        localStorage.setItem('appvendas_is_admin', 'true');
+        sessionStorage.setItem('appvendas_admin_session', 'active');
       } catch {}
-      if (isMaster) {
-        setIsAdmin(true);
-        try {
-          localStorage.setItem('appvendas_is_admin', 'true');
-          sessionStorage.setItem('appvendas_admin_session', 'active');
-        } catch {}
-      }
+    }
+    if (!skipModalClose) {
       setIsCompanyPasswordModalOpen(false);
       if (targetTabAfterUnlock) {
         setActiveTabState(targetTabAfterUnlock);
         setTargetTabAfterUnlock(null);
       }
+    }
+  };
+
+  const unlockCompanyArea = (pass: string): boolean => {
+    const trimmed = (pass || '').trim();
+    const isMaster = checkIsMasterPassword(trimmed);
+    const isDirectMatch = trimmed === companyPassword && (localHasCustomPassword || !serverHasPassword);
+    const isDefaultFallback = !hasCustomCompanyPassword && trimmed === '1234';
+
+    if (isMaster || isDirectMatch || isDefaultFallback) {
+      applyUnlockSuccess(isMaster);
       return true;
     }
+    return false;
+  };
+
+  const verifyCompanyPasswordAsync = async (pass: string, options?: { unlock?: boolean }): Promise<boolean> => {
+    const trimmed = (pass || '').trim();
+    if (!trimmed) return false;
+    const shouldUnlock = options?.unlock !== false;
+    const isMaster = checkIsMasterPassword(trimmed);
+    const isDirectMatch = trimmed === companyPassword && (localHasCustomPassword || !serverHasPassword);
+    const isDefaultFallback = !hasCustomCompanyPassword && trimmed === '1234';
+
+    if (isMaster || isDirectMatch || isDefaultFallback) {
+      if (shouldUnlock) applyUnlockSuccess(isMaster);
+      return true;
+    }
+
+    const storeKey = normalizeStoreSlug(currentCompany?.slug || currentCompany?.name) || activeCompanyId;
+    if (!storeKey) return false;
+
+    try {
+      const res = await fetch(`/api/stores/${encodeURIComponent(storeKey)}/verify-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: trimmed })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.valid) {
+          if (!isMaster) {
+            setCompanyPasswordState(trimmed);
+            setLocalHasCustomPassword(Boolean(data.hasPassword) || trimmed !== '1234');
+            setServerHasPassword(Boolean(data.hasPassword));
+            try {
+              localStorage.setItem(getTenantKey('company_password', activeCompanyId), trimmed);
+              if (data.hasPassword || trimmed !== '1234') {
+                localStorage.setItem(getTenantKey('company_has_custom_password', activeCompanyId), 'true');
+              }
+            } catch {}
+          }
+          if (shouldUnlock) applyUnlockSuccess(isMaster);
+          return true;
+        }
+      }
+    } catch {}
     return false;
   };
 
@@ -919,44 +1060,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(tenantSaved);
         if (Array.isArray(parsed)) {
           if (parsed.length === 1 && parsed[0]?.name === 'Sal') {
-            return activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore ? INITIAL_PRODUCTS : [];
+            return [];
           }
           return parsed;
         }
       }
-      if (activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore) {
+      if (activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore && initialHasRegisteredCompany) {
         const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
               if (parsed.length === 0 || (parsed.length === 1 && parsed[0]?.name === 'Sal')) {
-                return INITIAL_PRODUCTS;
+                return [];
               }
               return parsed;
             }
           } catch {}
         }
-        return INITIAL_PRODUCTS;
       }
       return [];
     } catch {
-      return activeCompanyId === DEFAULT_COMPANY_ID && !rawUrlStore ? INITIAL_PRODUCTS : [];
+      return [];
     }
   });
 
-  // Sales state (isolated per company)
+  // Sales state (isolated per company - brand new visitors start clean)
   const [sales, setSales] = useState<Sale[]>(() => {
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('sales', activeCompanyId));
       if (tenantSaved) return JSON.parse(tenantSaved);
-      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+      if (activeCompanyId === DEFAULT_COMPANY_ID && initialHasRegisteredCompany) {
         const saved = localStorage.getItem(STORAGE_KEYS.SALES);
-        return saved ? JSON.parse(saved) : INITIAL_SALES;
+        return saved ? JSON.parse(saved) : [];
       }
       return [];
     } catch {
-      return INITIAL_SALES;
+      return [];
     }
   });
 
@@ -965,13 +1105,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('movements', activeCompanyId));
       if (tenantSaved) return JSON.parse(tenantSaved);
-      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+      if (activeCompanyId === DEFAULT_COMPANY_ID && initialHasRegisteredCompany) {
         const saved = localStorage.getItem(STORAGE_KEYS.MOVEMENTS);
-        return saved ? JSON.parse(saved) : INITIAL_MOVEMENTS;
+        return saved ? JSON.parse(saved) : [];
       }
       return [];
     } catch {
-      return INITIAL_MOVEMENTS;
+      return [];
     }
   });
 
@@ -980,13 +1120,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('customers', activeCompanyId));
       if (tenantSaved) return JSON.parse(tenantSaved);
-      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+      if (activeCompanyId === DEFAULT_COMPANY_ID && initialHasRegisteredCompany) {
         const saved = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-        return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
+        return saved ? JSON.parse(saved) : [];
       }
       return [];
     } catch {
-      return INITIAL_CUSTOMERS;
+      return [];
     }
   });
 
@@ -995,13 +1135,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const tenantSaved = localStorage.getItem(getTenantKey('suppliers', activeCompanyId));
       if (tenantSaved) return JSON.parse(tenantSaved);
-      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+      if (activeCompanyId === DEFAULT_COMPANY_ID && initialHasRegisteredCompany) {
         const saved = localStorage.getItem(STORAGE_KEYS.SUPPLIERS);
-        return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
+        return saved ? JSON.parse(saved) : [];
       }
       return [];
     } catch {
-      return INITIAL_SUPPLIERS;
+      return [];
     }
   });
 
@@ -1973,13 +2113,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const urlPhoneDigits = (params.get('cel') || params.get('celular') || params.get('zap') || '').replace(/\D/g, '');
       const isRootAppLaunch = !targetUrlSlug && !urlCompId && !pathShortCode && urlPhoneDigits.length < 8;
+      const ownCompanySlug = hasRegisteredCompanyRef.current
+        ? (normalizeStoreSlug(currentCompany?.slug || currentCompany?.name) || activeCompanyId || '')
+        : '';
+
+      // ISOLATION RULE: If opening root URL (https://www.apvendas1.com.br/) without an explicit store URL or locally registered company,
+      // stay 100% clean (products = []) so the visitor can register their own company, password, phone and products!
+      if (isRootAppLaunch && (!hasRegisteredCompanyRef.current || !ownCompanySlug || isPlaceholderCompanyName(currentCompany?.name))) {
+        return;
+      }
+
       const fetchEndpoint = pathShortCode
         ? `/api/short/${encodeURIComponent(pathShortCode)}?t=${Date.now()}`
         : targetUrlSlug || urlCompId
           ? `/api/stores/${encodeURIComponent(targetUrlSlug || urlCompId || '')}?t=${Date.now()}`
           : urlPhoneDigits.length >= 8
             ? `/api/stores/by-phone/${encodeURIComponent(urlPhoneDigits)}?t=${Date.now()}`
-            : `/api/store/latest?t=${Date.now()}`;
+            : `/api/stores/${encodeURIComponent(ownCompanySlug)}?t=${Date.now()}`;
 
       // 2. Fetch store catalog and settings from backend API (respecting newer ?p= URL products)
       fetch(fetchEndpoint, { cache: 'no-store' })
@@ -2007,6 +2157,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }, activeSeller, urlParsedProducts).catch(() => {});
             }
             return;
+          }
+
+          if (data.hasPassword) {
+            setServerHasPassword(true);
           }
 
           const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
@@ -2051,7 +2205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
               return;
             }
-            if (data.products.length > 0 || targetUrlSlug || pathShortCode || isRootAppLaunch) {
+            if (data.products.length > 0 || targetUrlSlug || pathShortCode) {
               setProducts(prev => {
                 const prevStr = JSON.stringify(prev);
                 const newStr = JSON.stringify(data.products);
@@ -2069,14 +2223,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
 
           const isDefaultName = (n?: string) => !n || n === 'Minha Loja' || n === 'Minha Empresa' || n === 'appvendas' || n === 'App vendas' || n === 'App Vendas';
-          const incomingMatchesCurrent = Boolean(targetUrlSlug || urlCompId || pathShortCode || isRootAppLaunch);
+          const matchesOwnRegistered = isRootAppLaunch && hasRegisteredCompanyRef.current && (
+            data.company?.id === activeCompanyId ||
+            normalizeStoreSlug(data.slug || data.company?.name) === ownCompanySlug
+          );
+          const incomingMatchesCurrent = Boolean(targetUrlSlug || urlCompId || pathShortCode || matchesOwnRegistered);
 
           if (data.company && data.company.name && !data.isPlaceholder && incomingMatchesCurrent) {
             const targetCompId = data.company.id || urlCompId || activeCompanyId;
             const resolvedCompName = incomingName || data.company.name;
             const resolvedCompSlug = data.slug || normalizeStoreSlug(resolvedCompName) || data.company.slug;
             setCompanies(prev => {
-              const idx = prev.findIndex(c => c.id === targetCompId || (isRootAppLaunch && prev.length === 1) || normalizeStoreSlug(c.slug) === normalizeStoreSlug(resolvedCompSlug));
+              const idx = prev.findIndex(c => c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(resolvedCompSlug));
               if (idx >= 0) {
                 const merged = {
                   ...prev[idx],
@@ -2182,33 +2340,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const updatedCleanSlug = msg.cleanSlug;
               const updatedCompId = msg.companyId;
 
-              // Check if this update applies to this window:
-              // - Root app (/ without specific /loja/ or /l/ in URL) tracks any setAsActive update OR matching store so AI Studio & Installed App stay 100% synced!
-              // - Specific shared store links (/loja/:slug or /l/:code) stay locked ONLY to that store's slug.
+              // Strict Isolation:
+              // - Specific shared store links (/loja/:slug or /l/:code) sync ONLY to that target store's slug/id.
+              // - Root app (/) ONLY syncs when this device has registered its own company, and ONLY to that company's own slug/id!
               const isOnRootUrl = !urlCatalogInfoRef.current.urlSlug && !pathShortCode;
-              const activeNameIsPlaceholder = !currentCompany?.name || ['minha loja', 'minha empresa', 'appvendas', 'app vendas'].includes(currentCompany.name.trim().toLowerCase());
+              if (isOnRootUrl && !hasRegisteredCompanyRef.current) {
+                return;
+              }
+              const activeNameIsPlaceholder = isPlaceholderCompanyName(currentCompany?.name);
               const activeTargetSlug = normalizeStoreSlug(
                 urlCatalogInfoRef.current.urlSlug ||
-                currentCompany?.slug || 
-                currentCompany?.name || 
-                localStorage.getItem('appvendas_last_visited_store_slug') || 
+                currentCompany?.slug ||
+                currentCompany?.name ||
                 ''
               );
               const activeTargetClean = cleanSlugAlphanumeric(activeTargetSlug);
 
-              const isMatch = 
-                (isOnRootUrl && (msg.setAsActive === true || !activeTargetSlug || activeTargetSlug === 'latest')) ||
-                !activeTargetSlug ||
-                activeTargetSlug === 'latest' ||
-                activeTargetSlug === updatedSlug ||
-                activeTargetClean === updatedCleanSlug ||
-                (activeNameIsPlaceholder && updatedCompId && updatedCompId === activeCompanyId) ||
-                (currentCompany?.name && normalizeStoreSlug(currentCompany.name) === updatedSlug);
+              const isMatch = Boolean(
+                (!isOnRootUrl || hasRegisteredCompanyRef.current) && (
+                  (activeTargetSlug && (activeTargetSlug === updatedSlug || activeTargetClean === updatedCleanSlug)) ||
+                  (updatedCompId && updatedCompId === activeCompanyId) ||
+                  (currentCompany?.name && !activeNameIsPlaceholder && normalizeStoreSlug(currentCompany.name) === updatedSlug)
+                )
+              );
 
               if (isMatch && Array.isArray(msg.storeData.products)) {
                 // Ignore obsolete single 'Sal' test payload
                 if (msg.storeData.products.length === 1 && msg.storeData.products[0]?.name === 'Sal') {
                   return;
+                }
+                if (msg.storeData.hasPassword) {
+                  setServerHasPassword(true);
                 }
                 // Update products in real time without screen jump
                 setProducts(prevProducts => {
@@ -2218,23 +2380,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   return msg.storeData.products;
                 });
 
-                // Update company details so AI Studio and Installed App ALWAYS show the exact same company name
+                // Update company details ONLY for the matching company
                 if (msg.storeData.company && msg.storeData.company.name) {
                   const nextCompId = msg.storeData.company.id || updatedCompId || activeCompanyId;
-                  if (isOnRootUrl && msg.setAsActive === true && nextCompId && nextCompId !== activeCompanyId) {
-                    setActiveCompanyId(nextCompId);
-                    try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, nextCompId); } catch {}
-                  }
                   setCompanies(prev => {
                     const idx = prev.findIndex(c => c.id === nextCompId || c.id === activeCompanyId || normalizeStoreSlug(c.slug) === updatedSlug);
-                    if (idx < 0) {
-                      const next = [...prev, { ...msg.storeData.company, id: nextCompId, slug: updatedSlug || msg.storeData.company.slug }];
-                      try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
-                      return next;
-                    }
-                    const existingIsPlaceholder = !prev[idx].name || ['minha loja', 'minha empresa', 'appvendas', 'app vendas'].includes(prev[idx].name.trim().toLowerCase());
+                    if (idx < 0) return prev;
+                    const existingIsPlaceholder = isPlaceholderCompanyName(prev[idx].name);
                     const sameSlug = normalizeStoreSlug(prev[idx].name) === updatedSlug || cleanSlugAlphanumeric(prev[idx].name) === updatedCleanSlug;
-                    const allowNameSync = isOnRootUrl || existingIsPlaceholder || sameSlug;
+                    const allowNameSync = existingIsPlaceholder || sameSlug;
                     const merged = {
                       ...prev[idx],
                       ...msg.storeData.company,
@@ -2247,19 +2401,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
                     return next;
                   });
-                  if (isOnRootUrl && updatedSlug) {
-                    try {
-                      localStorage.setItem('appvendas_last_visited_store_slug', updatedSlug);
-                      localStorage.setItem('appvendas_last_store_slug', updatedSlug);
-                      localStorage.setItem('appvendas_last_visited_store_name', msg.storeData.company.name);
-                    } catch {}
-                  }
                 }
 
                 // Update payment settings safely without returning a new object when unchanged
                 if (msg.storeData.paymentSettings) {
                   setPaymentSettings(prev => {
-                    const allowNameSync = isOnRootUrl || activeNameIsPlaceholder || normalizeStoreSlug(currentCompany?.name) === updatedSlug;
+                    const allowNameSync = activeNameIsPlaceholder || normalizeStoreSlug(currentCompany?.name) === updatedSlug;
                     const nextMerchant = ['appvendas', 'app vendas'].includes((msg.storeData.paymentSettings.merchantName || '').trim().toLowerCase())
                       ? (msg.storeData.company?.name || prev.merchantName)
                       : (allowNameSync ? (msg.storeData.paymentSettings.merchantName || msg.storeData.company?.name || prev.merchantName) : prev.merchantName);
@@ -2332,7 +2479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         eventSource = null;
       }
     };
-  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId]);
+  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId, hasRegisteredCompany]);
 
   // High-Frequency Real-Time Fallback Polling (Every 4s when tab is active)
   useEffect(() => {
@@ -2384,7 +2531,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener('online', onOnline);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId]);
+  }, [currentCompany?.slug, currentCompany?.name, activeCompanyId, hasRegisteredCompany]);
 
   const simulateTrialExpired = () => {
     setIsAdmin(false);
@@ -2428,13 +2575,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [companies]);
 
-  // Persist active company ID
+  // Persist active company ID and reload per-company password
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, activeCompanyId);
     } catch {
       // ignore
     }
+    const info = readCompanyPasswordLocal(activeCompanyId);
+    setCompanyPasswordState(info.password);
+    setLocalHasCustomPassword(info.hasCustom);
   }, [activeCompanyId]);
 
   // Sync document title, PWA Web App Manifest, and iOS home screen title with current company & channel
@@ -2825,6 +2975,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : paymentSettings;
 
     if (data.name || cleanPhoneUpdate !== undefined) {
+      if ((cleanNameUpdate && !isPlaceholderCompanyName(cleanNameUpdate)) || (cleanPhoneUpdate && cleanPhoneUpdate.replace(/\D/g, '').length >= 8)) {
+        hasRegisteredCompanyRef.current = true;
+        setHasRegisteredCompany(true);
+        try { localStorage.setItem(STORAGE_COMPANY_REGISTERED_KEY, 'true'); } catch {}
+      }
       if (updatedSlug) {
         try {
           localStorage.setItem('appvendas_last_visited_store_slug', updatedSlug);
@@ -2841,8 +2996,142 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncStoreToServer(updatedCompObj, nextSettings, activeSeller, products, { setAsActive: true, isRename: Boolean(cleanNameUpdate) }).catch(() => {});
   };
 
-  const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }): CompanyAccount => {
+  const registerMerchantWorkspace = (data: {
+    companyName: string;
+    phone: string;
+    password: string;
+    ownerName?: string;
+    logoEmoji?: string;
+  }): CompanyAccount => {
     hasMerchantMutationRef.current = true;
+    hasRegisteredCompanyRef.current = true;
+    setHasRegisteredCompany(true);
+
+    const cleanName = data.companyName.trim() || 'Minha Loja';
+    const cleanPhone = data.phone.trim();
+    const cleanPass = data.password.trim();
+    const cleanOwner = data.ownerName?.trim() || 'Lojista';
+    const cleanEmoji = data.logoEmoji || '🏪';
+
+    if (checkIsAdminCredentials(cleanOwner, cleanPhone)) {
+      checkAndApplyAdminCredentials(cleanOwner, cleanPhone);
+    }
+
+    const existingPlaceholderOnly =
+      companies.length === 1 &&
+      companies[0].id === DEFAULT_COMPANY_ID &&
+      isPlaceholderCompanyName(companies[0].name) &&
+      products.length === 0;
+
+    const newId = existingPlaceholderOnly
+      ? `empresa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+      : `empresa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const baseSlug = normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-');
+
+    const newComp: CompanyAccount = {
+      id: newId,
+      name: cleanName,
+      slug: baseSlug,
+      ownerName: cleanOwner,
+      phone: cleanPhone,
+      category: 'Comércio & Varejo',
+      logoEmoji: cleanEmoji,
+      createdAt: new Date().toISOString()
+    };
+
+    const initialSeller: SellerProfile = {
+      id: 'vendedor_principal',
+      name: cleanOwner !== 'Lojista' ? cleanOwner : 'Atendente',
+      whatsapp: cleanPhone,
+      pixKey: '',
+      pixKeyType: 'PHONE',
+      merchantName: cleanName,
+      merchantCity: 'Barcarena PA',
+      receivingBank: 'NUBANK',
+      isDefault: true,
+    };
+
+    const initialTenantSettings: PaymentSettings = {
+      ...DEFAULT_PAYMENT_SETTINGS,
+      merchantName: cleanName,
+      merchantWhatsapp: cleanPhone,
+      sellers: [initialSeller],
+      activeSellerId: initialSeller.id,
+    };
+
+    const updatedCompanies = existingPlaceholderOnly ? [newComp] : [...companies, newComp];
+    try {
+      localStorage.setItem(STORAGE_COMPANY_REGISTERED_KEY, 'true');
+      localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(updatedCompanies));
+      localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, newId);
+      localStorage.setItem(getTenantKey('products', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('sales', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('movements', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('customers', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('suppliers', newId), JSON.stringify([]));
+      localStorage.setItem(getTenantKey('payment_settings', newId), JSON.stringify(initialTenantSettings));
+      if (cleanPass.length >= 4) {
+        localStorage.setItem(getTenantKey('company_password', newId), cleanPass);
+        localStorage.setItem(getTenantKey('company_has_custom_password', newId), 'true');
+      }
+      if (baseSlug) {
+        localStorage.setItem('appvendas_last_visited_store_slug', baseSlug);
+        localStorage.setItem('appvendas_last_store_slug', baseSlug);
+        localStorage.setItem('appvendas_last_visited_store_name', cleanName);
+      }
+      sessionStorage.setItem('appvendas_company_unlocked', 'true');
+    } catch {}
+
+    urlCatalogInfoRef.current = { hasUrlProducts: false, hasExplicitVersion: false, urlVersion: 0, urlSlug: '' };
+    setCompanies(updatedCompanies);
+    setActiveCompanyId(newId);
+    setProducts([]);
+    setSales([]);
+    setMovements([]);
+    setCustomers([]);
+    setSuppliers([]);
+    setPaymentSettings(initialTenantSettings);
+    setCart([]);
+
+    if (cleanPass.length >= 4) {
+      setCompanyPasswordState(cleanPass);
+      setLocalHasCustomPassword(true);
+      setServerHasPassword(true);
+    }
+
+    setIsCompanyAreaUnlocked(true);
+    setActiveTabState('quick-add-product');
+
+    syncStoreToServer(newComp, initialTenantSettings, initialSeller, [], {
+      forceClear: true,
+      setAsActive: true,
+      isNewRegistration: true,
+      companyPassword: cleanPass,
+      onResolvedSlug: (resolvedSlug) => {
+        if (resolvedSlug && resolvedSlug !== newComp.slug) {
+          setCompanies(prev => {
+            const next = prev.map(c => (c.id === newId ? { ...c, slug: resolvedSlug } : c));
+            try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
+            return next;
+          });
+          try {
+            localStorage.setItem('appvendas_last_visited_store_slug', resolvedSlug);
+            localStorage.setItem('appvendas_last_store_slug', resolvedSlug);
+          } catch {}
+        }
+      }
+    }).catch(() => {});
+
+    if (typeof document !== 'undefined') {
+      document.title = `${cleanName} - Gestão & Vendas`;
+    }
+    return newComp;
+  };
+
+  const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string; password?: string }): CompanyAccount => {
+    hasMerchantMutationRef.current = true;
+    hasRegisteredCompanyRef.current = true;
+    setHasRegisteredCompany(true);
     // If ownerName or phone matches Márcia Alves, auto-apply master admin
     if (checkIsAdminCredentials(companyData.ownerName, companyData.phone)) {
       checkAndApplyAdminCredentials(companyData.ownerName, companyData.phone);
@@ -2850,6 +3139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const newId = `empresa_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const cleanPhone = companyData.phone?.trim() || '';
+    const cleanPass = companyData.password?.trim() || '';
     const newComp: CompanyAccount = {
       id: newId,
       name: companyData.name.trim(),
@@ -2883,6 +3173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updatedCompanies = [...companies, newComp];
     try {
+      localStorage.setItem(STORAGE_COMPANY_REGISTERED_KEY, 'true');
       localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(updatedCompanies));
       localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, newId);
       localStorage.setItem(getTenantKey('products', newId), JSON.stringify([]));
@@ -2891,12 +3182,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(getTenantKey('customers', newId), JSON.stringify([]));
       localStorage.setItem(getTenantKey('suppliers', newId), JSON.stringify([]));
       localStorage.setItem(getTenantKey('payment_settings', newId), JSON.stringify(initialTenantSettings));
+      if (cleanPass.length >= 4) {
+        localStorage.setItem(getTenantKey('company_password', newId), cleanPass);
+        localStorage.setItem(getTenantKey('company_has_custom_password', newId), 'true');
+      }
     } catch {
       // ignore
     }
 
     setCompanies(updatedCompanies);
     setActiveCompanyId(newId);
+
+    if (cleanPass.length >= 4) {
+      setCompanyPasswordState(cleanPass);
+      setLocalHasCustomPassword(true);
+      setServerHasPassword(true);
+    } else {
+      setCompanyPasswordState('1234');
+      setLocalHasCustomPassword(false);
+      setServerHasPassword(false);
+    }
 
     // Update active store slug so background sync tracks the new company (never old store)
     urlCatalogInfoRef.current = { hasUrlProducts: false, hasExplicitVersion: false, urlVersion: 0, urlSlug: '' };
@@ -2918,8 +3223,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPaymentSettings(initialTenantSettings);
     setCart([]);
 
-    // Register new company cleanly on the server as active store with its own seller/phone
-    syncStoreToServer(newComp, initialTenantSettings, initialSeller, [], { forceClear: true, setAsActive: true }).catch(() => {});
+    // Register new company cleanly on the server as active store with its own seller/phone & password
+    syncStoreToServer(newComp, initialTenantSettings, initialSeller, [], {
+      forceClear: true,
+      setAsActive: true,
+      isNewRegistration: true,
+      ...(cleanPass.length >= 4 ? { companyPassword: cleanPass } : {}),
+      onResolvedSlug: (resolvedSlug) => {
+        if (resolvedSlug && resolvedSlug !== newComp.slug) {
+          setCompanies(prev => {
+            const next = prev.map(c => (c.id === newId ? { ...c, slug: resolvedSlug } : c));
+            try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
+            return next;
+          });
+          try {
+            localStorage.setItem('appvendas_last_visited_store_slug', resolvedSlug);
+            localStorage.setItem('appvendas_last_store_slug', resolvedSlug);
+          } catch {}
+        }
+      }
+    }).catch(() => {});
 
     if (typeof document !== 'undefined') {
       document.title = `${newComp.name} - Gestão & Vendas`;
@@ -2934,6 +3257,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     hasMerchantMutationRef.current = true;
     setActiveCompanyId(companyId);
+
+    // Load per-company password and lock restricted area unless Master Admin
+    const nextPassInfo = readCompanyPasswordLocal(companyId);
+    setCompanyPasswordState(nextPassInfo.password);
+    setLocalHasCustomPassword(nextPassInfo.hasCustom);
+    setServerHasPassword(false);
+    if (!isAdmin && !isMasterAdmin) {
+      setIsCompanyAreaUnlocked(false);
+      try {
+        sessionStorage.removeItem('appvendas_company_unlocked');
+      } catch {}
+    }
 
     // Update active store slug & clear URL catalog lock when user switches company manually
     urlCatalogInfoRef.current = { hasUrlProducts: false, hasExplicitVersion: false, urlVersion: 0, urlSlug: '' };
@@ -2955,11 +3290,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    const loadedProds = loadTenant<Product[]>('products', companyId === DEFAULT_COMPANY_ID ? INITIAL_PRODUCTS : []);
-    const loadedSales = loadTenant<Sale[]>('sales', companyId === DEFAULT_COMPANY_ID ? INITIAL_SALES : []);
-    const loadedMoves = loadTenant<StockMovement[]>('movements', companyId === DEFAULT_COMPANY_ID ? INITIAL_MOVEMENTS : []);
-    const loadedCusts = loadTenant<Customer[]>('customers', companyId === DEFAULT_COMPANY_ID ? INITIAL_CUSTOMERS : []);
-    const loadedSupps = loadTenant<Supplier[]>('suppliers', companyId === DEFAULT_COMPANY_ID ? INITIAL_SUPPLIERS : []);
+    const loadedProds = loadTenant<Product[]>('products', []);
+    const loadedSales = loadTenant<Sale[]>('sales', []);
+    const loadedMoves = loadTenant<StockMovement[]>('movements', []);
+    const loadedCusts = loadTenant<Customer[]>('customers', []);
+    const loadedSupps = loadTenant<Supplier[]>('suppliers', []);
     const loadedSettings = loadTenant<PaymentSettings>('payment_settings', {
       ...DEFAULT_PAYMENT_SETTINGS,
       merchantName: target.name,
@@ -3006,6 +3341,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(getTenantKey('customers', companyId));
       localStorage.removeItem(getTenantKey('suppliers', companyId));
       localStorage.removeItem(getTenantKey('payment_settings', companyId));
+      localStorage.removeItem(getTenantKey('company_password', companyId));
+      localStorage.removeItem(getTenantKey('company_has_custom_password', companyId));
     } catch {
       // ignore
     }
@@ -3546,7 +3883,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Live Refresh for Client Store & Installed App (Guarantees freshest products & unified company name on demand with zero screen jumping)
+  // Live Refresh for Client Store & Installed App (Strictly isolated per store/company - NEVER fetches /api/store/latest on root /)
   const refreshStoreCatalog = async (): Promise<boolean> => {
     try {
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams((window.location.search || '').replace(/%26/gi, '&')) : null;
@@ -3554,6 +3891,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const urlZap = urlParams?.get('zap') || urlParams?.get('cel') || urlParams?.get('celular') || urlParams?.get('whatsapp') || '';
       const cleanUrlZap = urlZap.replace(/\D/g, '');
       const isRootAppLaunch = !urlLoja && !pathShortCode && cleanUrlZap.length < 8;
+      const ownCompanySlug = hasRegisteredCompanyRef.current
+        ? (normalizeStoreSlug(currentCompany?.slug || currentCompany?.name) || activeCompanyId || '')
+        : '';
+
+      if (isRootAppLaunch && (!hasRegisteredCompanyRef.current || !ownCompanySlug || isPlaceholderCompanyName(currentCompany?.name))) {
+        return false;
+      }
+
       const targetQuery = urlLoja ? normalizeStoreSlug(urlLoja) : '';
       const endpoint = pathShortCode
         ? `/api/short/${encodeURIComponent(pathShortCode)}?t=${Date.now()}`
@@ -3561,15 +3906,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? `/api/stores/${encodeURIComponent(targetQuery)}?t=${Date.now()}`
             : (cleanUrlZap.length >= 8
                 ? `/api/stores/by-phone/${encodeURIComponent(cleanUrlZap)}?t=${Date.now()}`
-                : `/api/store/latest?t=${Date.now()}`));
+                : `/api/stores/${encodeURIComponent(ownCompanySlug)}?t=${Date.now()}`));
       const res = await fetch(endpoint, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (!data || data.isPlaceholder) {
-          if (products && products.length > 0 && currentCompany && (!urlLoja || normalizeStoreSlug(currentCompany.name) === normalizeStoreSlug(urlLoja))) {
+          if (products && products.length > 0 && currentCompany && !isPlaceholderCompanyName(currentCompany.name) && (!urlLoja || normalizeStoreSlug(currentCompany.name) === normalizeStoreSlug(urlLoja))) {
             syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: isRootAppLaunch }).catch(() => {});
           }
           return false;
+        }
+
+        if (data.hasPassword) {
+          setServerHasPassword(true);
         }
 
         const serverMs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
@@ -3583,7 +3932,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           urlCatalogInfoRef.current.hasUrlProducts = false;
         }
 
-        if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja || isRootAppLaunch)) {
+        const matchesOwnRegistered = isRootAppLaunch && hasRegisteredCompanyRef.current && (
+          data.company?.id === activeCompanyId ||
+          normalizeStoreSlug(data.slug || data.company?.name) === ownCompanySlug
+        );
+        const canUpdateCompany = Boolean(
+          matchesOwnRegistered ||
+          (urlLoja && normalizeStoreSlug(data.slug || data.company?.name) === normalizeStoreSlug(urlLoja)) ||
+          pathShortCode ||
+          cleanUrlZap.length >= 8
+        );
+
+        if (!canUpdateCompany) {
+          return false;
+        }
+
+        if (Array.isArray(data.products) && (data.products.length > 0 || urlInfo.hasUrlProducts || urlLoja || pathShortCode)) {
           if (data.products.length === 1 && data.products[0]?.name === 'Sal') {
             return false;
           }
@@ -3599,8 +3963,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (activeCompanyId === DEFAULT_COMPANY_ID || targetCompId === DEFAULT_COMPANY_ID) {
             localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
           }
-          const canUpdateCompany = isRootAppLaunch || !urlLoja || normalizeStoreSlug(data.slug || data.company?.name) === normalizeStoreSlug(urlLoja);
-          if (data.company && data.company.name && canUpdateCompany) {
+          if (data.company && data.company.name) {
             const nextSlug = data.slug || normalizeStoreSlug(data.company.name) || data.company.slug;
             setCompanies(prev => {
               const idx = prev.findIndex(c => c.id === activeCompanyId || c.id === targetCompId || normalizeStoreSlug(c.slug) === normalizeStoreSlug(nextSlug));
@@ -3612,12 +3975,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               try { localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(next)); } catch {}
               return next;
             });
-            if (isRootAppLaunch && targetCompId && targetCompId !== activeCompanyId) {
-              setActiveCompanyId(targetCompId);
-              try { localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, targetCompId); } catch {}
-            }
           }
-          if (data.paymentSettings && canUpdateCompany) {
+          if (data.paymentSettings) {
             setPaymentSettings(ps => {
               const incomingMerchant = ['appvendas', 'app vendas'].includes((data.paymentSettings.merchantName || '').trim().toLowerCase())
                 ? (data.company?.name || currentCompany?.name || ps.merchantName)
@@ -3633,7 +3992,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
           return true;
-        } else if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany) {
+        } else if ((hasMerchantMutationRef.current || isCompanyAreaUnlocked || isAdmin || isMasterAdmin) && products && products.length > 0 && currentCompany && !isPlaceholderCompanyName(currentCompany.name)) {
           // If server has 0 products and current device is merchant/admin, persist to server so buyers get them
           syncStoreToServer(currentCompany, paymentSettings, activeSeller, products, { setAsActive: isRootAppLaunch }).catch(() => {});
           return true;
@@ -3944,6 +4303,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCompanyName,
         currentCompany,
         companies,
+        hasRegisteredCompany,
+        registerMerchantWorkspace,
         createCompany,
         switchCompany,
         updateCurrentCompany,
@@ -3958,8 +4319,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isCompanyAreaUnlocked,
         setIsCompanyAreaUnlocked,
         companyPassword,
+        hasCustomCompanyPassword,
         setCompanyPassword,
         unlockCompanyArea,
+        verifyCompanyPasswordAsync,
         lockCompanyArea,
         isCompanyPasswordModalOpen,
         setIsCompanyPasswordModalOpen,

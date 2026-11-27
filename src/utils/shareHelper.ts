@@ -307,7 +307,7 @@ export async function syncStoreToServer(
   paymentSettings?: PaymentSettings,
   activeSeller?: SellerProfile,
   products?: Product[],
-  forceClearOrOpts?: boolean | { forceClear?: boolean; setAsActive?: boolean; isRename?: boolean }
+  forceClearOrOpts?: boolean | { forceClear?: boolean; setAsActive?: boolean; isRename?: boolean; isNewRegistration?: boolean; companyPassword?: string; onResolvedSlug?: (slug: string) => void }
 ): Promise<boolean> {
   try {
     const opts = typeof forceClearOrOpts === 'object' && forceClearOrOpts !== null
@@ -332,7 +332,9 @@ export async function syncStoreToServer(
       registeredPhones,
       forceClear: Boolean(opts.forceClear),
       ...(opts.setAsActive !== undefined ? { setAsActive: opts.setAsActive } : {}),
-      ...(opts.isRename ? { isRename: true } : {})
+      ...(opts.isRename ? { isRename: true } : {}),
+      ...(opts.isNewRegistration ? { isNewRegistration: true } : {}),
+      ...(opts.companyPassword && opts.companyPassword.trim().length >= 4 ? { companyPassword: opts.companyPassword.trim() } : {})
     });
 
     const res = await fetch(`/api/stores/${encodeURIComponent(storeSlug)}`, {
@@ -341,10 +343,23 @@ export async function syncStoreToServer(
       body: payload
     });
 
+    let resolvedSlug = storeSlug;
+    if (res.ok) {
+      try {
+        const json = await res.json();
+        if (json?.slug && typeof json.slug === 'string') {
+          resolvedSlug = json.slug;
+          if (opts.onResolvedSlug) {
+            opts.onResolvedSlug(json.slug);
+          }
+        }
+      } catch {}
+    }
+
     // If running inside AI Studio dev container, mirror catalog to shared preview container in background
     if (typeof window !== 'undefined' && window.location.origin.includes('ais-dev-')) {
       const preOrigin = window.location.origin.replace('ais-dev-', 'ais-pre-');
-      fetch(`${preOrigin}/api/stores/${encodeURIComponent(storeSlug)}`, {
+      fetch(`${preOrigin}/api/stores/${encodeURIComponent(resolvedSlug)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload

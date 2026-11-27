@@ -54,7 +54,9 @@ import {
   Unlock,
   Share2,
   Link2,
-  RefreshCw
+  RefreshCw,
+  Building2,
+  KeyRound
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import confetti from 'canvas-confetti';
@@ -114,8 +116,29 @@ export const ClientStoreView: React.FC = () => {
     openUpdateModal,
     refreshStoreCatalog,
     triggerOneClickUpdate,
-    appVersion
+    appVersion,
+    hasRegisteredCompany,
+    registerMerchantWorkspace
   } = useApp();
+
+  // Detect if current URL explicitly targets a shared store (/loja/:slug, /l/:code, ?loja=, ?zap=)
+  const isSharedStoreUrl = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const p = window.location.pathname || '';
+    if (p.startsWith('/loja/') || p.startsWith('/l/')) return true;
+    const sp = new URLSearchParams((window.location.search || '').replace(/%26/gi, '&'));
+    const z = (sp.get('zap') || sp.get('cel') || sp.get('celular') || '').replace(/\D/g, '');
+    return Boolean(sp.get('loja') || sp.get('nome') || sp.get('empresa') || sp.get('company') || z.length >= 8);
+  }, []);
+
+  const showCleanOnboarding = !hasRegisteredCompany && !isSharedStoreUrl && products.length === 0;
+
+  // Clean Onboarding Form State (para novos celulares vindos do link oficial https://www.apvendas1.com.br/)
+  const [regCompanyName, setRegCompanyName] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regError, setRegError] = useState('');
 
   // Client Session State
   const [clientUser, setClientUser] = useState<ClientUser>(() => {
@@ -602,7 +625,9 @@ export const ClientStoreView: React.FC = () => {
     if (isCompanyAreaUnlocked) {
       lockCompanyArea();
     }
-    refreshStoreCatalog().catch(() => {});
+    if (hasRegisteredCompany || isSharedStoreUrl) {
+      refreshStoreCatalog().catch(() => {});
+    }
     const onFocus = () => {
       refreshStoreCatalog().catch(() => {});
     };
@@ -747,6 +772,7 @@ export const ClientStoreView: React.FC = () => {
       </header>
 
       {/* PAINEL VISÍVEL NA ÁREA DO CLIENTE: ENTREGA, PAGAMENTO E ENVIAR PEDIDO PRO WHATSAPP */}
+      {!showCleanOnboarding && (
       <div className="bg-white border-b-2 border-emerald-200/90 p-3 sm:p-4 shrink-0 shadow-xs space-y-3 w-full max-w-full overflow-x-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           
@@ -929,8 +955,10 @@ export const ClientStoreView: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Search & Category Filter Section */}
+      {!showCleanOnboarding && (
       <div className="p-3 bg-white border-b border-slate-200 shrink-0 space-y-2.5">
         {/* Search Input */}
         <div className="relative">
@@ -968,18 +996,194 @@ export const ClientStoreView: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* Main Catalog Grid */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 pb-28">
         <div className="max-w-6xl mx-auto">
-          {filteredProducts.length === 0 ? (
+          {showCleanOnboarding ? (
+            <div className="max-w-lg mx-auto my-2 sm:my-6 bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+              <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white p-5 sm:p-6">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[10px] font-black uppercase tracking-wider mb-3">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Área de Produtos Limpa & Isolada</span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-black tracking-tight text-white">
+                  Cadastre Sua Empresa para Começar
+                </h2>
+                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                  Cada número de celular tem sua loja 100% separada. Nenhuma empresa vê os produtos de outra empresa.
+                </p>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setRegError('');
+                  const cleanName = regCompanyName.trim();
+                  const phoneDigits = regPhone.replace(/\D/g, '');
+                  const cleanPass = regPassword.trim();
+
+                  if (cleanName.length < 2) {
+                    setRegError('Digite o nome da sua empresa ou loja.');
+                    return;
+                  }
+                  if (phoneDigits.length < 8) {
+                    setRegError('Digite seu número de celular/WhatsApp com DDD (mínimo 8 dígitos).');
+                    return;
+                  }
+                  if (cleanPass.length < 4) {
+                    setRegError('Crie uma senha exclusiva com no mínimo 4 dígitos/caracteres.');
+                    return;
+                  }
+                  if (cleanPass !== regConfirmPassword.trim()) {
+                    setRegError('A confirmação da senha não confere.');
+                    return;
+                  }
+
+                  const created = registerMerchantWorkspace({
+                    companyName: cleanName,
+                    phone: phoneDigits,
+                    password: cleanPass
+                  });
+                  showToast(
+                    'success',
+                    'Empresa Cadastrada!',
+                    `"${created.name}" criada com área limpa. Cadastre agora seus próprios produtos!`
+                  );
+                }}
+                className="p-5 sm:p-6 space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Nome da Sua Empresa / Loja *</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Ex: Loja da Maria, Studio Beleza, Mercadinho..."
+                    value={regCompanyName}
+                    onChange={e => {
+                      setRegCompanyName(e.target.value);
+                      if (regError) setRegError('');
+                    }}
+                    className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 rounded-xl text-sm font-bold text-slate-900 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Seu Número de Celular / WhatsApp *</span>
+                    </span>
+                    {regPhone.replace(/\D/g, '').length >= 8 && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                        🔒 Protegido
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="tel"
+                    autoComplete="off"
+                    required
+                    placeholder="****************"
+                    value={regPhone}
+                    onChange={e => {
+                      setRegPhone(e.target.value);
+                      if (regError) setRegError('');
+                    }}
+                    className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 rounded-xl text-sm font-mono font-bold text-slate-900 outline-none tracking-widest"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    🔒 Número oculto na tela por segurança. Usado para receber seus pedidos no WhatsApp.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Sua Senha Exclusiva *</span>
+                    </label>
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      minLength={4}
+                      placeholder="Mínimo 4 dígitos"
+                      value={regPassword}
+                      onChange={e => {
+                        setRegPassword(e.target.value);
+                        if (regError) setRegError('');
+                      }}
+                      className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 rounded-xl text-sm font-mono font-bold text-slate-900 outline-none tracking-widest"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Confirmar Senha *
+                    </label>
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      minLength={4}
+                      placeholder="Repita sua senha"
+                      value={regConfirmPassword}
+                      onChange={e => {
+                        setRegConfirmPassword(e.target.value);
+                        if (regError) setRegError('');
+                      }}
+                      className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 rounded-xl text-sm font-mono font-bold text-slate-900 outline-none tracking-widest"
+                    />
+                  </div>
+                </div>
+
+                {regError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">
+                    {regError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Criar Minha Loja Limpa & Cadastrar Produtos</span>
+                </button>
+
+                <div className="pt-2 border-t border-slate-100 text-center">
+                  <button
+                    type="button"
+                    onClick={() => openCompanyAreaUnlock('quick-add-product')}
+                    className="text-xs font-bold text-slate-600 hover:text-indigo-700 underline cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Já cadastrei minha empresa neste aparelho • Entrar</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-6">
               <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
-                🔍
+                {search ? '🔍' : '📦'}
               </div>
-              <h3 className="font-bold text-slate-800 text-sm">Nenhum produto encontrado</h3>
+              <h3 className="font-bold text-slate-800 text-sm">
+                {search ? 'Nenhum produto encontrado' : 'Sua área de produtos está limpa'}
+              </h3>
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                Tente buscar por outro termo digitando no campo de pesquisa acima.
+                {search
+                  ? 'Tente buscar por outro termo digitando no campo de pesquisa acima.'
+                  : hasRegisteredCompany && !isSharedStoreUrl
+                  ? 'Cadastre seus produtos agora para começar a vender e compartilhar seu link exclusivo.'
+                  : 'Nenhum produto disponível nesta loja no momento.'}
               </p>
               {search ? (
                 <button
@@ -990,15 +1194,33 @@ export const ClientStoreView: React.FC = () => {
                   Limpar Busca
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleRefreshCatalog}
-                  disabled={isRefreshingCatalog}
-                  className="mt-4 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md cursor-pointer inline-flex items-center gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
-                  <span>{isRefreshingCatalog ? 'Sincronizando...' : 'Carregar Produtos da Loja'}</span>
-                </button>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {hasRegisteredCompany && !isSharedStoreUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isCompanyAreaUnlocked) {
+                          setActiveTab('quick-add-product');
+                        } else {
+                          openCompanyAreaUnlock('quick-add-product');
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md cursor-pointer inline-flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Cadastrar Meus Produtos</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleRefreshCatalog}
+                    disabled={isRefreshingCatalog}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshingCatalog ? 'Sincronizando...' : 'Carregar Produtos da Loja'}</span>
+                  </button>
+                </div>
               )}
             </div>
           ) : (

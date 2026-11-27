@@ -32,7 +32,7 @@
     <script>
       // Automatic version check and auto-migration for installed apps and returning users
       (function() {
-        var APP_BUILD_VER = '74';
+        var APP_BUILD_VER = '75';
         try {
           var storedVer = localStorage.getItem('appvendas_client_build_ver');
           if (storedVer && storedVer !== APP_BUILD_VER) {
@@ -65,7 +65,7 @@
       window.__clearAppCacheAndReload = function(targetVer) {
         if (window.__is_reloading_app) return;
         window.__is_reloading_app = true;
-        var nextVer = (targetVer ? String(targetVer).replace(/^v/i, '').trim() : '') || '74';
+        var nextVer = (targetVer ? String(targetVer).replace(/^v/i, '').trim() : '') || '75';
 
         try {
           if (typeof window.__closeLiveSync === 'function') {

@@ -54,7 +54,8 @@ export const CompanySettingsModal: React.FC = () => {
     checkAndApplyAdminCredentials,
     openAdminPasswordModal,
     setClientTestMode,
-    companyPassword,
+    verifyCompanyPasswordAsync,
+    hasCustomCompanyPassword,
     setCompanyPassword,
     openShareModal
   } = useApp();
@@ -75,6 +76,7 @@ export const CompanySettingsModal: React.FC = () => {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newOwnerName, setNewOwnerName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newCreatePassword, setNewCreatePassword] = useState('');
   const [newCategory, setNewCategory] = useState('Comércio & Varejo');
   const [newEmoji, setNewEmoji] = useState('🏪');
 
@@ -175,25 +177,33 @@ export const CompanySettingsModal: React.FC = () => {
       return;
     }
 
+    const cleanCreatePass = newCreatePassword.trim();
+    if (cleanCreatePass.length < 4) {
+      showToast('error', 'Senha Obrigatória', 'Defina uma senha exclusiva de pelo menos 4 dígitos para a nova empresa.');
+      return;
+    }
+
     const created = createCompany({
       name: trimmed,
       ownerName: newOwnerName.trim() || 'Lojista',
       phone: newPhone.trim(),
       category: newCategory,
-      logoEmoji: newEmoji
+      logoEmoji: newEmoji,
+      password: cleanCreatePass
     });
 
     // Reset create fields
     setNewCompanyName('');
     setNewOwnerName('');
     setNewPhone('');
+    setNewCreatePassword('');
 
     // Switch to edit tab with new company data
     setName(created.name);
     setOwnerName(created.ownerName);
     setSelectedEmoji(created.logoEmoji || '🏪');
     setTab('edit');
-    showToast('success', 'Nova Empresa Criada!', `Você agora está gerenciando "${created.name}". Todos os dados são 100% isolados.`);
+    showToast('success', 'Nova Empresa Criada!', `Você agora está gerenciando "${created.name}". Todos os dados e senha são 100% isolados.`);
   };
 
   // Copy Store Link for specific company
@@ -206,17 +216,20 @@ export const CompanySettingsModal: React.FC = () => {
   };
 
   // Handle Save Company Password
-  const handleSaveCompanyPassword = (e: React.FormEvent) => {
+  const handleSaveCompanyPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
 
     const currTrimmed = currentCompanyPass.trim();
     const isMaster = checkIsMasterPassword(currTrimmed);
-    const isCurrentMatch = currTrimmed === companyPassword;
-    const isDefaultFallback = currTrimmed === '1234';
+    const isValidCurrent = isMaster || await verifyCompanyPasswordAsync(currTrimmed, { unlock: false });
 
-    if (!isMaster && !isCurrentMatch && !isDefaultFallback) {
-      setPasswordError('Senha atual incorreta! Digite a senha atual (padrão inicial 1234) ou a Senha Mestra.');
+    if (!isValidCurrent) {
+      setPasswordError(
+        hasCustomCompanyPassword
+          ? 'Senha atual incorreta! Digite a senha atual desta empresa.'
+          : 'Senha atual incorreta! Digite a senha atual (padrão inicial 1234).'
+      );
       return;
     }
 
@@ -899,6 +912,25 @@ export const CompanySettingsModal: React.FC = () => {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Senha Exclusiva da Nova Empresa *</span>
+                  <span className="text-[10px] text-emerald-700 font-bold">Mínimo 4 dígitos</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={4}
+                  placeholder="****************"
+                  value={newCreatePassword}
+                  onChange={e => setNewCreatePassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 outline-none focus:bg-white focus:border-emerald-600 tracking-widest"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  🔒 Garante que nenhuma outra empresa acesse os produtos, vendas ou custos desta loja.
+                </p>
+              </div>
+
               <div className="pt-2">
                 <button
                   type="submit"
@@ -923,7 +955,9 @@ export const CompanySettingsModal: React.FC = () => {
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                   <span>Senha Atual da Empresa *</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Padrão inicial: 1234</span>
+                  {!hasCustomCompanyPassword && (
+                    <span className="text-[10px] text-slate-400 font-mono">Padrão inicial: 1234</span>
+                  )}
                 </label>
                 <input
                   type="password"

@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 74 (iOS & Android Multi-Company Installable + Live Network-First)
-const CACHE_NAME = 'appvendas-pwa-v74';
+// appvendas Service Worker (PWA) - Version 75 (Isolated Clean Store Onboarding + Multi-Company PWA)
+const CACHE_NAME = 'appvendas-pwa-v75';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -45,7 +45,7 @@ self.addEventListener('activate', (event) => {
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v74' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v75' });
         }
       } catch (e) {}
     })

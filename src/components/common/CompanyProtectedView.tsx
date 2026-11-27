@@ -23,8 +23,8 @@ interface CompanyProtectedViewProps {
 
 export const CompanyProtectedView: React.FC<CompanyProtectedViewProps> = ({ tab }) => {
   const { 
-    unlockCompanyArea, 
-    companyPassword, 
+    verifyCompanyPasswordAsync,
+    hasCustomCompanyPassword,
     setActiveTab, 
     setIsCompanyPasswordModalOpen,
     showToast,
@@ -89,7 +89,7 @@ export const CompanyProtectedView: React.FC<CompanyProtectedViewProps> = ({ tab 
 
   const info = getTabInfo();
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -99,13 +99,17 @@ export const CompanyProtectedView: React.FC<CompanyProtectedViewProps> = ({ tab 
       return;
     }
 
-    const success = unlockCompanyArea(clean);
+    const success = await verifyCompanyPasswordAsync(clean, { unlock: true });
     if (success) {
       showToast('success', 'Acesso Liberado!', `Acesso autorizado a "${info.title}".`);
       setInputPass('');
       setErrorMsg('');
     } else {
-      setErrorMsg('Senha incorreta! Dica: a senha inicial padrão é 1234 (ou sua Senha Mestra).');
+      setErrorMsg(
+        hasCustomCompanyPassword
+          ? 'Senha incorreta! Digite a senha exclusiva cadastrada para esta empresa.'
+          : 'Senha incorreta! Dica: a senha inicial padrão é 1234 (ou sua Senha Mestra).'
+      );
     }
   };
 
@@ -158,9 +162,13 @@ export const CompanyProtectedView: React.FC<CompanyProtectedViewProps> = ({ tab 
               <p className="text-xs text-rose-600 font-bold mt-1.5 text-center">
                 {errorMsg}
               </p>
-            ) : (
+            ) : !hasCustomCompanyPassword ? (
               <p className="text-[11px] text-slate-400 text-center mt-1.5">
                 Senha padrão inicial: <strong className="text-slate-600 font-mono">1234</strong>
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-400 text-center mt-1.5">
+                Acesso protegido pela senha exclusiva da empresa
               </p>
             )}
           </div>

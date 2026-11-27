@@ -6,8 +6,8 @@ export const CompanyPasswordModal: React.FC = () => {
   const {
     isCompanyPasswordModalOpen,
     setIsCompanyPasswordModalOpen,
-    unlockCompanyArea,
-    companyPassword,
+    verifyCompanyPasswordAsync,
+    hasCustomCompanyPassword,
     setCompanyPassword,
     showToast
   } = useApp();
@@ -27,7 +27,7 @@ export const CompanyPasswordModal: React.FC = () => {
 
   if (!isCompanyPasswordModalOpen) return null;
 
-  const handleUnlockSubmit = (e: React.FormEvent) => {
+  const handleUnlockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -37,27 +37,34 @@ export const CompanyPasswordModal: React.FC = () => {
       return;
     }
 
-    const success = unlockCompanyArea(trimmed);
+    const success = await verifyCompanyPasswordAsync(trimmed, { unlock: true });
     if (success) {
       setInputPassword('');
       setErrorMessage('');
       setModalMode('unlock');
     } else {
-      setErrorMessage('Senha incorreta! Dica: a senha inicial é 1234 (ou sua Senha Mestra).');
+      setErrorMessage(
+        hasCustomCompanyPassword
+          ? 'Senha incorreta! Digite a senha exclusiva cadastrada para esta empresa.'
+          : 'Senha incorreta! Dica: a senha inicial é 1234 (ou sua Senha Mestra).'
+      );
     }
   };
 
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setChangeError('');
 
     const currTrimmed = currentPassInput.trim();
     const isMaster = checkIsMasterPassword(currTrimmed);
-    const isCurrentMatch = currTrimmed === companyPassword;
-    const isDefaultFallback = currTrimmed === '1234';
+    const isValidCurrent = isMaster || await verifyCompanyPasswordAsync(currTrimmed, { unlock: false });
 
-    if (!isMaster && !isCurrentMatch && !isDefaultFallback) {
-      setChangeError('Senha atual incorreta! Digite a senha atual (ou a senha mestra MARCIA2026).');
+    if (!isValidCurrent) {
+      setChangeError(
+        hasCustomCompanyPassword
+          ? 'Senha atual incorreta! Digite a senha atual desta empresa.'
+          : 'Senha atual incorreta! Digite a senha atual (padrão inicial: 1234).'
+      );
       return;
     }
 
@@ -79,9 +86,8 @@ export const CompanyPasswordModal: React.FC = () => {
 
     setCompanyPassword(cleanNew);
     showToast('success', 'Senha da Empresa Alterada!', 'Nova senha gravada com sucesso.');
-    
-    // Automatically unlock with the new password
-    unlockCompanyArea(cleanNew);
+
+    await verifyCompanyPasswordAsync(cleanNew, { unlock: true });
 
     setCurrentPassInput('');
     setNewPassInput('');
@@ -183,7 +189,9 @@ export const CompanyPasswordModal: React.FC = () => {
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                 <span>Senha da Empresa</span>
-                <span className="text-[10px] text-slate-500 font-mono">Padrão: 1234</span>
+                {!hasCustomCompanyPassword && (
+                  <span className="text-[10px] text-slate-500 font-mono">Padrão: 1234</span>
+                )}
               </label>
               <input
                 type="password"
@@ -242,7 +250,9 @@ export const CompanyPasswordModal: React.FC = () => {
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Senha Atual *</span>
-                <span className="text-[10px] text-slate-400 font-normal">Padrão: 1234</span>
+                {!hasCustomCompanyPassword && (
+                  <span className="text-[10px] text-slate-400 font-normal">Padrão: 1234</span>
+                )}
               </label>
               <input
                 type="password"
