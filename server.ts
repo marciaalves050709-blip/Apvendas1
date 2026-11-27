@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '73', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '74', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -1007,14 +1007,14 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '73',
-    versionName: 'v73.0',
+    version: '74',
+    versionName: 'v74.0',
     buildDate: new Date().toISOString(),
     features: [
+      'Instalação guiada e abertura direta no Safari para iPhone/iPad por empresa e telefone vinculado (v74)',
+      'Sincronização imediata ao cadastrar empresa, vincular telefone ou atualizar produtos no iPhone e Android (v74)',
       'Números de telefone totalmente ocultos na interface, painéis e formulários (v73)',
-      'Instalação de PWA própria para cada empresa e cada canal/telefone vinculado sem erros (v73)',
-      'Links compartilhados sempre usando o domínio público sem expor códigos (v72)',
-      'Sincronização em tempo real entre AI Studio e Apps Instalados'
+      'Links compartilhados sempre usando o domínio público sem expor códigos (v72)'
     ]
   });
 });

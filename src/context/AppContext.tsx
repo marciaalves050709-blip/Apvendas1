@@ -734,6 +734,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const rawBanco = initialUrlParams?.get('banco') || ssrInitialStore?.paymentSettings?.receivingBank;
       const urlBanco: BankProvider | undefined = rawBanco ? (rawBanco as BankProvider) : undefined;
       const urlNome = initialUrlParams?.get('nome') || ssrInitialStore?.company?.name || (initialUrlParams?.get('loja') ? decodeURIComponent(initialUrlParams.get('loja')!).replace(/[-_]/g, ' ') : undefined);
+      const urlCanalInit = (initialUrlParams?.get('canal') || ssrInitialStore?.canal || '').trim();
 
       const normalizeSettings = (parsed: Partial<PaymentSettings>): PaymentSettings => {
         const normCity = sanitizeMerchantCity(parsed.merchantCity);
@@ -743,40 +744,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? currentCompany.name
           : parsed.merchantName);
 
-        const normSellers: SellerProfile[] = (parsed.sellers && parsed.sellers.length > 0)
-          ? parsed.sellers.map((s: SellerProfile) => ({ 
-              ...s, 
-              name: (s.name === 'Márcia Alves' || s.name === 'Marcia Alves') ? 'Atendente' : s.name,
-              merchantName: (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'Márcia Alves' || s.merchantName === 'appvendas' || s.merchantName === 'App vendas' || s.merchantName === 'App Vendas') ? normMerchant : (s.merchantName || normMerchant),
-              pixKey: urlPix || s.pixKey || normKey,
-              whatsapp: urlZap || s.whatsapp || normWhatsapp,
-              merchantCity: sanitizeMerchantCity(s.merchantCity),
-              receivingBank: urlBanco || s.receivingBank || 'NUBANK'
-            }))
-          : [
-              {
-                id: 'vendedor_principal',
-                name: 'Atendente',
-                whatsapp: normWhatsapp,
-                pixKey: normKey,
-                pixKeyType: parsed.pixKeyType || 'PHONE',
-                merchantName: normMerchant,
-                merchantCity: normCity,
-                receivingBank: urlBanco || parsed.receivingBank || 'NUBANK',
-                isDefault: true,
-              }
-            ];
+        const baseSellers = (parsed.sellers && parsed.sellers.length > 0)
+          ? parsed.sellers
+          : (ssrInitialStore?.paymentSettings?.sellers && ssrInitialStore.paymentSettings.sellers.length > 0
+              ? ssrInitialStore.paymentSettings.sellers
+              : [
+                  {
+                    id: 'vendedor_principal',
+                    name: 'Atendente',
+                    whatsapp: normWhatsapp,
+                    pixKey: normKey,
+                    pixKeyType: parsed.pixKeyType || 'PHONE',
+                    merchantName: normMerchant,
+                    merchantCity: normCity,
+                    receivingBank: urlBanco || parsed.receivingBank || 'NUBANK',
+                    isDefault: true,
+                  }
+                ]);
+
+        const matchedCanalSeller = urlCanalInit && Array.isArray(baseSellers)
+          ? (baseSellers.find((s: SellerProfile) => s.id === urlCanalInit) ||
+             (/^canal_(\d+)$/i.test(urlCanalInit) ? baseSellers[parseInt(urlCanalInit.replace(/\D/g, ''), 10) - 1] : undefined))
+          : undefined;
+        const resolvedActiveId = matchedCanalSeller?.id || ssrInitialStore?.paymentSettings?.activeSellerId || parsed.activeSellerId || baseSellers[0]?.id || 'vendedor_principal';
+
+        const normSellers: SellerProfile[] = baseSellers.map((s: SellerProfile) => {
+          const isSelectedSeller = s.id === resolvedActiveId;
+          return {
+            ...s,
+            name: (s.name === 'Márcia Alves' || s.name === 'Marcia Alves') ? 'Atendente' : s.name,
+            merchantName: (s.merchantName === 'MARCIA ALVES' || s.merchantName === 'Márcia Alves' || s.merchantName === 'appvendas' || s.merchantName === 'App vendas' || s.merchantName === 'App Vendas') ? normMerchant : (s.merchantName || normMerchant),
+            pixKey: s.pixKey || (isSelectedSeller ? normKey : ''),
+            whatsapp: s.whatsapp || (isSelectedSeller ? normWhatsapp : ''),
+            merchantCity: sanitizeMerchantCity(s.merchantCity),
+            receivingBank: s.receivingBank || (isSelectedSeller ? (urlBanco || 'NUBANK') : 'NUBANK')
+          };
+        });
 
         return {
           ...DEFAULT_PAYMENT_SETTINGS,
           ...parsed,
-          pixKey: normKey,
-          merchantWhatsapp: normWhatsapp,
+          pixKey: matchedCanalSeller?.pixKey || normKey,
+          merchantWhatsapp: matchedCanalSeller?.whatsapp || normWhatsapp,
           merchantCity: normCity,
           merchantName: normMerchant,
-          receivingBank: urlBanco || parsed.receivingBank || 'NUBANK',
+          receivingBank: matchedCanalSeller?.receivingBank || urlBanco || parsed.receivingBank || 'NUBANK',
           sellers: normSellers,
-          activeSellerId: parsed.activeSellerId || normSellers[0]?.id || 'vendedor_principal',
+          activeSellerId: resolvedActiveId,
         };
       };
 
@@ -2353,9 +2367,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch {}
 
+    const onPageShow = () => {
+      refreshStoreCatalog();
+    };
+
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
+    window.addEventListener('pageshow', onPageShow);
 
     return () => {
       isDisposed = true;
@@ -2363,6 +2382,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('pageshow', onPageShow);
     };
   }, [currentCompany?.slug, currentCompany?.name, activeCompanyId]);
 
@@ -2533,10 +2553,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updatePaymentSettings = (newSettings: Partial<PaymentSettings>) => {
     hasMerchantMutationRef.current = true;
-    setPaymentSettings(prev => ({ ...prev, ...newSettings }));
+    const nextSettings: PaymentSettings = { ...paymentSettings, ...newSettings };
+    setPaymentSettings(nextSettings);
+    try {
+      localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(nextSettings));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(nextSettings));
+      }
+    } catch {}
+
+    let syncedCompany = currentCompany;
     if ((newSettings.merchantName && newSettings.merchantName.trim()) || newSettings.merchantWhatsapp !== undefined) {
       const cleanName = newSettings.merchantName?.trim();
       const cleanPhone = newSettings.merchantWhatsapp !== undefined ? newSettings.merchantWhatsapp.trim() : undefined;
+      syncedCompany = {
+        ...currentCompany,
+        ...(cleanName ? { name: cleanName, slug: normalizeStoreSlug(cleanName) || cleanName.toLowerCase().replace(/\s+/g, '-') } : {}),
+        ...(cleanPhone !== undefined ? { phone: cleanPhone } : {})
+      };
       setCompanies(prev => {
         const next = prev.map(c => c.id === activeCompanyId ? {
           ...c,
@@ -2552,6 +2586,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         document.title = `${cleanName} - Gestão & Vendas`;
       }
     }
+
+    const activeSel = nextSettings.sellers?.find(s => s.id === nextSettings.activeSellerId) || nextSettings.sellers?.[0] || activeSeller;
+    syncStoreToServer(syncedCompany, nextSettings, activeSel, products, { setAsActive: true }).catch(() => {});
     showToast('success', 'Configurações Salvas', 'Preferências salvas com sucesso.');
   };
 
@@ -2609,8 +2646,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = sellers.find(s => s.id === id);
     if (target) {
       hasMerchantMutationRef.current = true;
-      setPaymentSettings(prev => ({
-        ...prev,
+      const nextSettings: PaymentSettings = {
+        ...paymentSettings,
         activeSellerId: id,
         pixKey: target.pixKey,
         pixKeyType: target.pixKeyType,
@@ -2618,7 +2655,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         merchantName: target.merchantName || target.name,
         merchantCity: target.merchantCity || 'Barcarena PA',
         receivingBank: target.receivingBank || 'NUBANK',
-      }));
+      };
+      setPaymentSettings(nextSettings);
+      try {
+        localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(nextSettings));
+      } catch {}
+      syncStoreToServer(currentCompany, nextSettings, target, products, { setAsActive: true }).catch(() => {});
     }
   };
 
@@ -2631,10 +2673,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       merchantCity: newSellerData.merchantCity || 'Barcarena PA',
     };
     const updatedSellers = [...sellers, newSeller];
-    setPaymentSettings(prev => ({
-      ...prev,
+    const nextSettings: PaymentSettings = {
+      ...paymentSettings,
       sellers: updatedSellers,
-    }));
+    };
+    setPaymentSettings(nextSettings);
+    try {
+      localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(nextSettings));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(nextSettings));
+      }
+    } catch {}
+    syncStoreToServer(currentCompany, nextSettings, activeSeller, products, { setAsActive: true }).catch(() => {});
     return newSeller;
   };
 
@@ -2648,19 +2698,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const isCurrentActive = activeSellerId === id;
-    setPaymentSettings(prev => {
-      const patch: Partial<PaymentSettings> = { sellers: updatedSellers };
-      if (isCurrentActive) {
-        if (data.pixKey) patch.pixKey = data.pixKey;
-        if (data.pixKeyType) patch.pixKeyType = data.pixKeyType;
-        if (data.whatsapp) patch.merchantWhatsapp = data.whatsapp;
-        if (data.name) patch.merchantName = data.merchantName || data.name;
-        if (data.merchantName) patch.merchantName = data.merchantName;
-        if (data.merchantCity) patch.merchantCity = data.merchantCity;
-        if (data.receivingBank) patch.receivingBank = data.receivingBank;
+    const patch: Partial<PaymentSettings> = { sellers: updatedSellers };
+    if (isCurrentActive) {
+      if (data.pixKey) patch.pixKey = data.pixKey;
+      if (data.pixKeyType) patch.pixKeyType = data.pixKeyType;
+      if (data.whatsapp) patch.merchantWhatsapp = data.whatsapp;
+      if (data.name) patch.merchantName = data.merchantName || data.name;
+      if (data.merchantName) patch.merchantName = data.merchantName;
+      if (data.merchantCity) patch.merchantCity = data.merchantCity;
+      if (data.receivingBank) patch.receivingBank = data.receivingBank;
+    }
+    const nextSettings: PaymentSettings = { ...paymentSettings, ...patch };
+    setPaymentSettings(nextSettings);
+    try {
+      localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(nextSettings));
+      if (activeCompanyId === DEFAULT_COMPANY_ID) {
+        localStorage.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, JSON.stringify(nextSettings));
       }
-      return { ...prev, ...patch };
-    });
+    } catch {}
+    const nextActiveSel = updatedSellers.find(s => s.id === (nextSettings.activeSellerId || activeSellerId)) || updatedSellers[0];
+    syncStoreToServer(currentCompany, nextSettings, nextActiveSel, products, { setAsActive: true }).catch(() => {});
   };
 
   const deleteSeller = (id: string): boolean => {
@@ -2673,8 +2730,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newActiveId = activeSellerId === id ? filtered[0].id : activeSellerId;
     const newActiveSeller = filtered.find(s => s.id === newActiveId) || filtered[0];
 
-    setPaymentSettings(prev => ({
-      ...prev,
+    const nextSettings: PaymentSettings = {
+      ...paymentSettings,
       sellers: filtered,
       activeSellerId: newActiveId,
       pixKey: newActiveSeller.pixKey,
@@ -2683,7 +2740,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       merchantName: newActiveSeller.merchantName || newActiveSeller.name,
       merchantCity: newActiveSeller.merchantCity || 'Barcarena PA',
       receivingBank: newActiveSeller.receivingBank || 'NUBANK',
-    }));
+    };
+    setPaymentSettings(nextSettings);
+    try {
+      localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(nextSettings));
+    } catch {}
+    syncStoreToServer(currentCompany, nextSettings, newActiveSeller, products, { setAsActive: true }).catch(() => {});
     return true;
   };
 
@@ -2780,6 +2842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createCompany = (companyData: { name: string; ownerName?: string; phone?: string; category?: string; logoEmoji?: string }): CompanyAccount => {
+    hasMerchantMutationRef.current = true;
     // If ownerName or phone matches Márcia Alves, auto-apply master admin
     if (checkIsAdminCredentials(companyData.ownerName, companyData.phone)) {
       checkAndApplyAdminCredentials(companyData.ownerName, companyData.phone);
@@ -2818,7 +2881,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeSellerId: initialSeller.id,
     };
 
+    const updatedCompanies = [...companies, newComp];
     try {
+      localStorage.setItem(STORAGE_COMPANIES_KEY, JSON.stringify(updatedCompanies));
+      localStorage.setItem(STORAGE_ACTIVE_COMPANY_KEY, newId);
       localStorage.setItem(getTenantKey('products', newId), JSON.stringify([]));
       localStorage.setItem(getTenantKey('sales', newId), JSON.stringify([]));
       localStorage.setItem(getTenantKey('movements', newId), JSON.stringify([]));
@@ -2829,7 +2895,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // ignore
     }
 
-    setCompanies(prev => [...prev, newComp]);
+    setCompanies(updatedCompanies);
     setActiveCompanyId(newId);
 
     // Update active store slug so background sync tracks the new company (never old store)
@@ -2839,6 +2905,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         localStorage.setItem('appvendas_last_visited_store_slug', newNormSlug);
         localStorage.setItem('appvendas_last_store_slug', newNormSlug);
+        localStorage.setItem('appvendas_last_visited_store_name', newComp.name);
       } catch {}
     }
 

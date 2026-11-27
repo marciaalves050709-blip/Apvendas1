@@ -1,5 +1,5 @@
-// appvendas Service Worker (PWA) - Version 73 (Multi-Company Installable & Live Network-First)
-const CACHE_NAME = 'appvendas-pwa-v73';
+// appvendas Service Worker (PWA) - Version 74 (iOS & Android Multi-Company Installable + Live Network-First)
+const CACHE_NAME = 'appvendas-pwa-v74';
 const PRECACHE_ASSETS = [
   '/manifest.webmanifest',
   '/manifest.json',
@@ -45,7 +45,7 @@ self.addEventListener('activate', (event) => {
       try {
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of allClients) {
-          client.postMessage({ type: 'SW_ACTIVATED', version: 'v73' });
+          client.postMessage({ type: 'SW_ACTIVATED', version: 'v74' });
         }
       } catch (e) {}
     })
@@ -97,7 +97,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Navigation requests (including /, /loja/:slug, /l/:code) - handles start_url cleanly for WebAPK installability
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request.url, { credentials: 'same-origin', cache: 'no-store' }).catch(async () => {
+      fetch(event.request).catch(async () => {
         return new Response(
           `<!DOCTYPE html>
           <html lang="pt-BR">

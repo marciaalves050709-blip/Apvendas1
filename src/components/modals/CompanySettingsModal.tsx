@@ -84,6 +84,24 @@ export const CompanySettingsModal: React.FC = () => {
   const [confirmCompanyPass, setConfirmCompanyPass] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  React.useEffect(() => {
+    if (isCompanyModalOpen) {
+      setName(currentCompany?.name || paymentSettings.merchantName || 'Minha Loja');
+      setOwnerName(
+        currentCompany?.ownerName &&
+        currentCompany?.ownerName !== 'Meu Usuário' &&
+        currentCompany?.ownerName !== 'Administrador'
+          ? currentCompany.ownerName
+          : 'Lojista'
+      );
+      setPhone(paymentSettings.merchantWhatsapp || currentCompany?.phone || '');
+      setCity(paymentSettings.merchantCity || 'Barcarena PA');
+      setPixKey(paymentSettings.pixKey || '');
+      setPixKeyType(paymentSettings.pixKeyType || 'CNPJ');
+      setSelectedEmoji(currentCompany?.logoEmoji || '🏪');
+    }
+  }, [isCompanyModalOpen, currentCompany?.id]);
+
   const isMarciaCredentials = useMemo(() => {
     const cleanName = (ownerName || '').toLowerCase().replace(/[\s\.]+/g, '');
     const cleanPhone = (phone || '').replace(/\D/g, '');
@@ -106,21 +124,35 @@ export const CompanySettingsModal: React.FC = () => {
       return;
     }
 
+    const cleanPhone = phone.trim();
+    const cleanPix = pixKey.trim();
+    const cleanCity = city.trim() || 'Barcarena PA';
+    const updatedSellers = Array.isArray(paymentSettings.sellers)
+      ? paymentSettings.sellers.map((s, idx) => ({
+          ...s,
+          merchantName: trimmed,
+          merchantCity: cleanCity,
+          ...((s.id === paymentSettings.activeSellerId || idx === 0) && cleanPhone ? { whatsapp: cleanPhone } : {}),
+          ...((s.id === paymentSettings.activeSellerId || idx === 0) && cleanPix ? { pixKey: cleanPix, pixKeyType } : {}),
+        }))
+      : paymentSettings.sellers;
+
     // Update Company metadata
     updateCurrentCompany({
       name: trimmed,
       ownerName: ownerName.trim() || 'Lojista',
-      phone: phone.trim(),
+      phone: cleanPhone,
       logoEmoji: selectedEmoji
     });
 
     // Update payment settings which drive receipts, WhatsApp and catalog headers
     updatePaymentSettings({
       merchantName: trimmed,
-      merchantWhatsapp: phone.trim(),
-      merchantCity: city.trim(),
-      pixKey: pixKey.trim(),
-      pixKeyType
+      merchantWhatsapp: cleanPhone,
+      merchantCity: cleanCity,
+      pixKey: cleanPix,
+      pixKeyType,
+      sellers: updatedSellers
     });
 
     showToast('success', 'Empresa Atualizada!', `O nome "${trimmed}" agora aparece em todo o aplicativo.`);

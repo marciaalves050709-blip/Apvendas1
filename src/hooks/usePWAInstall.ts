@@ -29,6 +29,8 @@ export function setGlobalPrompt(prompt: BeforeInstallPromptEvent | null) {
   promptSubscribers.forEach((cb) => cb(prompt));
 }
 
+export type IOSBrowserType = 'safari' | 'chrome' | 'edge' | 'firefox' | 'in_app' | 'other';
+
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(() => {
     if (globalPrompt) return globalPrompt;
@@ -40,6 +42,7 @@ export function usePWAInstall() {
 
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [iosBrowser, setIosBrowser] = useState<IOSBrowserType>('other');
   const [isAndroid, setIsAndroid] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIframe, setIsIframe] = useState(false);
@@ -64,13 +67,30 @@ export function usePWAInstall() {
 
     checkStandalone();
 
-    // 3. Detect device type & in-app browsers
+    // 3. Detect device type & in-app browsers accurately (including iOS WebViews & third-party iOS browsers)
     if (typeof window !== 'undefined' && window.navigator) {
       const ua = window.navigator.userAgent.toLowerCase();
       const isIOSDevice = /iphone|ipad|ipod/.test(ua) || (ua.includes('macintosh') && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1);
+      const isWebView = /fban|fbav|fb_iab|instagram|whatsapp|micromessenger|tiktok|bytedance|line\/|telegram|twitter|linkedinapp|snapchat|pinterest|gsa\//.test(ua);
       setIsIOS(isIOSDevice);
       setIsAndroid(/android/.test(ua));
-      setIsInAppBrowser(/fban|fbav|instagram|whatsapp|micromessenger|tiktok|line\//.test(ua));
+      setIsInAppBrowser(isWebView);
+
+      if (isIOSDevice) {
+        if (isWebView) {
+          setIosBrowser('in_app');
+        } else if (/crios\//.test(ua)) {
+          setIosBrowser('chrome');
+        } else if (/edgios\//.test(ua)) {
+          setIosBrowser('edge');
+        } else if (/fxios\//.test(ua)) {
+          setIosBrowser('firefox');
+        } else if (/safari\//.test(ua) && !/crios|fxios|edgios|opios/.test(ua)) {
+          setIosBrowser('safari');
+        } else {
+          setIosBrowser('other');
+        }
+      }
     }
 
     // 4. Subscribe to prompt updates
@@ -177,6 +197,7 @@ export function usePWAInstall() {
     isInstalled,
     isStandalone,
     isIOS,
+    iosBrowser,
     isAndroid,
     isIframe,
     isInAppBrowser,

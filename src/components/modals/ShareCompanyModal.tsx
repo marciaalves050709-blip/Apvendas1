@@ -411,7 +411,14 @@ export const ShareCompanyModal: React.FC<ShareCompanyModalProps> = ({
 
   // 2. Native Mobile Web Share API (Instagram, Facebook, Telegram, Messenger, WhatsApp)
   const handleNativeShare = async () => {
-    const finalUrl = await resolveFreshShareUrl();
+    if (effectiveCompany) {
+      void syncStoreToServer(effectiveCompany, effectiveSettings, sellerForSelectedPhone, effectiveProducts, {
+        setAsActive: effectiveCompany.id === currentCompany?.id
+      }).catch(() => false);
+    }
+
+    const unsafeActive = !activeUrl || activeUrl.includes('da.gd') || activeUrl.includes('ais-pre-') || activeUrl.includes('ais-dev-') || activeUrl.includes('?p=') || activeUrl.includes('&p=');
+    const finalUrl = unsafeActive ? cleanUrl : activeUrl;
     const emoji = effectiveCompany?.logoEmoji || '🏪';
     const compName = effectiveCompany?.name || 'Loja Virtual';
 
