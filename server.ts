@@ -1284,7 +1284,7 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
 // Both serve 200 OK HTML directly on /, /loja/:slug, and /l/:slug (eliminates SW redirect errors & enables instant social previews)
 if (!isProduction) {
   const vite = await createViteServer({
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, allowedHosts: true },
     appType: 'spa',
   });
   app.get(['/', '/loja/:slug', '/l/:slug'], async (req, res, next) => {
