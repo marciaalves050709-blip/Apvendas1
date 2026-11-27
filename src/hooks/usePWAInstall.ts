@@ -71,7 +71,7 @@ export function usePWAInstall() {
     if (typeof window !== 'undefined' && window.navigator) {
       const ua = window.navigator.userAgent.toLowerCase();
       const isIOSDevice = /iphone|ipad|ipod/.test(ua) || (ua.includes('macintosh') && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1);
-      const isWebView = /fban|fbav|fb_iab|instagram|whatsapp|micromessenger|tiktok|bytedance|line\/|telegram|twitter|linkedinapp|snapchat|pinterest|gsa\//.test(ua);
+      const isWebView = /fban|fbav|fb_iab|instagram|whatsapp|micromessenger|tiktok|bytedance|barcelona|threads|line\/|telegram|twitter|linkedinapp|snapchat|pinterest|gsa\/|; wv\b|\bwv\)/.test(ua);
       setIsIOS(isIOSDevice);
       setIsAndroid(/android/.test(ua));
       setIsInAppBrowser(isWebView);
@@ -129,10 +129,30 @@ export function usePWAInstall() {
     };
   }, []);
 
+  const buildAndroidChromeIntentUrl = (targetUrl?: string) => {
+    const fullUrl = new URL(targetUrl || window.location.href, window.location.origin);
+    fullUrl.searchParams.set('install', '1');
+    const fallbackEncoded = encodeURIComponent(fullUrl.toString());
+    return `intent://${fullUrl.host}${fullUrl.pathname}${fullUrl.search}#Intent;scheme=https;package=com.android.chrome;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url=${fallbackEncoded};end`;
+  };
+
+  const openAndroidChromeIntent = (targetUrl?: string) => {
+    try {
+      const intentUri = buildAndroidChromeIntentUrl(targetUrl);
+      window.location.href = intentUri;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const openDirectInstallInBrowser = (targetUrl?: string) => {
     try {
       const url = new URL(targetUrl || window.location.href, window.location.origin);
       url.searchParams.set('install', '1');
+      if (isInAppBrowser && isAndroid) {
+        return openAndroidChromeIntent(url.toString());
+      }
       const win = window.open(url.toString(), '_blank', 'noopener,noreferrer');
       return Boolean(win);
     } catch {
@@ -144,7 +164,7 @@ export function usePWAInstall() {
    * Fast, non-blocking install action:
    * - Immediately triggers native install prompt on Android/Desktop.
    * - On iPhone/iPad, opens the guided iOS Safari instructions.
-   * - Uses Android Chrome Intent to escape restrictive webviews (WhatsApp/Instagram).
+   * - Uses Android Chrome Intent with S.browser_fallback_url to escape Instagram/WhatsApp webviews.
    */
   const install = async (targetUrl?: string): Promise<InstallResult> => {
     if (isStandalone && !targetUrl) {
@@ -175,16 +195,10 @@ export function usePWAInstall() {
       }
     }
 
-    // 3. If inside an in-app browser on Android (e.g. WhatsApp, Instagram, Telegram)
+    // 3. If inside an in-app browser on Android (e.g. Instagram, WhatsApp, Telegram)
     if (isInAppBrowser && isAndroid) {
-      try {
-        const fullUrl = new URL(targetUrl || window.location.href, window.location.origin);
-        fullUrl.searchParams.set('install', '1');
-        const chromeIntent = `intent://${fullUrl.host}${fullUrl.pathname}${fullUrl.search}#Intent;scheme=https;package=com.android.chrome;end`;
-        window.location.href = chromeIntent;
+      if (openAndroidChromeIntent(targetUrl)) {
         return { success: true, action: 'android_intent' };
-      } catch {
-        // fallback to modal
       }
     }
 
@@ -203,5 +217,6 @@ export function usePWAInstall() {
     isInAppBrowser,
     install,
     openDirectInstallInBrowser,
+    openAndroidChromeIntent,
   };
 }

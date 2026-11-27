@@ -68,14 +68,7 @@ export function buildStoreCleanUrl(
   const origin = getPublicShareOrigin();
 
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
-  const storeSlug = rawStoreName
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .trim() || 'loja';
+  const storeSlug = normalizeStoreSlugShared(company?.slug || rawStoreName);
 
   return `${origin}/loja/${encodeURIComponent(storeSlug)}`;
 }
@@ -212,20 +205,13 @@ export function buildStoreShareUrl(
   const origin = getPublicShareOrigin();
 
   const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
-  const pathSlug = rawStoreName
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .trim() || 'loja';
+  const pathSlug = normalizeStoreSlugShared(company?.slug || rawStoreName);
   const storeSlug = rawStoreName
     .replace(/\s+/g, '-')
     .replace(/[^a-zA-Z0-9\-_áéíóúÁÉÍÓÚãõÃÕâêîôûÂÊÎÔÛçÇ]/g, '') || 'loja';
 
   const url = new URL(`/loja/${encodeURIComponent(pathSlug)}`, origin);
-  url.searchParams.set('loja', storeSlug);
+  url.searchParams.set('loja', pathSlug);
   url.searchParams.set('nome', rawStoreName);
   url.searchParams.set('tab', 'client-store');
   url.searchParams.set('empresa', company?.id || 'empresa_principal');
@@ -307,21 +293,16 @@ export async function syncStoreToServer(
   paymentSettings?: PaymentSettings,
   activeSeller?: SellerProfile,
   products?: Product[],
-  forceClearOrOpts?: boolean | { forceClear?: boolean; setAsActive?: boolean; isRename?: boolean; isNewRegistration?: boolean; companyPassword?: string; onResolvedSlug?: (slug: string) => void }
+  forceClearOrOpts?: boolean | { forceClear?: boolean; setAsActive?: boolean; isRename?: boolean; isNewRegistration?: boolean; companyPassword?: string; keepalive?: boolean; onResolvedSlug?: (slug: string) => void }
 ): Promise<boolean> {
   try {
     const opts = typeof forceClearOrOpts === 'object' && forceClearOrOpts !== null
       ? forceClearOrOpts
       : { forceClear: Boolean(forceClearOrOpts) };
     const rawStoreName = (company?.name || paymentSettings?.merchantName || 'Minha Loja').trim();
-    const storeSlug = rawStoreName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .trim() || 'loja';
+    const storeSlug = opts.isRename
+      ? normalizeStoreSlugShared(rawStoreName)
+      : normalizeStoreSlugShared(company?.slug || rawStoreName);
 
     const registeredPhones = collectCompanyPhones(company, paymentSettings, activeSeller).map(e => e.phone);
     const payload = JSON.stringify({
@@ -337,14 +318,17 @@ export async function syncStoreToServer(
       ...(opts.companyPassword && opts.companyPassword.trim().length >= 4 ? { companyPassword: opts.companyPassword.trim() } : {})
     });
 
+    const canKeepalive = Boolean(opts.keepalive && payload.length < 60000);
     const res = await fetch(`/api/stores/${encodeURIComponent(storeSlug)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: payload
+      body: payload,
+      ...(canKeepalive ? { keepalive: true } : {})
     });
 
     let resolvedSlug = storeSlug;
-    if (res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
       try {
         const json = await res.json();
         if (json?.slug && typeof json.slug === 'string') {

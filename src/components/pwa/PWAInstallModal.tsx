@@ -48,10 +48,11 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     isIframe, 
     isInAppBrowser, 
     install,
-    openDirectInstallInBrowser 
+    openDirectInstallInBrowser,
+    openAndroidChromeIntent
   } = usePWAInstall();
 
-  const { companies, currentCompany, paymentSettings, activeSeller, products, showToast } = useApp();
+  const { companies, currentCompany, paymentSettings, activeSeller, products, hasRegisteredCompany, showToast } = useApp();
 
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(currentCompany?.id || 'empresa_principal');
   const [selectedPhone, setSelectedPhone] = useState<string>('');
@@ -152,19 +153,23 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     [targetCompany?.slug, targetCompany?.name]
   );
 
+  const isGenericSelected = ['Minha Loja', 'Minha Empresa', 'appvendas', 'Loja'].includes((targetCompany?.name || '').trim()) && !hasRegisteredCompany;
+
   // Clean URL per company + linked channel for external sharing (public origin, NEVER exposes phone numbers)
   const directInstallPageUrl = useMemo(() => {
     const origin = getPublicShareOrigin();
+    if (isGenericSelected) return `${origin}/`;
     const canalQuery = selectedChannel?.channelKey ? `?canal=${encodeURIComponent(selectedChannel.channelKey)}` : '';
     return `${origin}/loja/${encodeURIComponent(targetSlug)}${canalQuery}`;
-  }, [targetSlug, selectedChannel?.channelKey]);
+  }, [isGenericSelected, targetSlug, selectedChannel?.channelKey]);
 
   // Device-local install URL (uses active browser origin so newly created companies/products & Safari/iOS Web Clips always hit the live backend)
   const deviceInstallPageUrl = useMemo(() => {
     const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : getPublicShareOrigin();
+    if (isGenericSelected) return `${origin}/`;
     const canalQuery = selectedChannel?.channelKey ? `?canal=${encodeURIComponent(selectedChannel.channelKey)}` : '';
     return `${origin}/loja/${encodeURIComponent(targetSlug)}${canalQuery}`;
-  }, [targetSlug, selectedChannel?.channelKey]);
+  }, [isGenericSelected, targetSlug, selectedChannel?.channelKey]);
 
   const deviceInstallActionUrl = useMemo(() => {
     return `${deviceInstallPageUrl}${deviceInstallPageUrl.includes('?') ? '&' : '?'}install=1`;
@@ -203,23 +208,26 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
       }
     }
 
-    syncStoreToServer(targetCompany, targetSettings, targetSeller, targetProducts, { setAsActive: false }).catch(() => {});
+    if (!isGenericSelected) {
+      syncStoreToServer(targetCompany, targetSettings, targetSeller, targetProducts, { setAsActive: false }).catch(() => {});
 
-    shortenUrl(fullStoreShareUrl, targetCompany?.name || 'loja', {
-      company: targetCompany,
-      paymentSettings: targetSettings,
-      activeSeller: targetSeller,
-      products: targetProducts,
-      zap: selectedChannel?.phone || targetSeller?.whatsapp || targetSettings?.merchantWhatsapp || targetCompany?.phone
-    }).then((short) => {
-      if (!cancelled && short && !short.includes('?p=')) {
-        setCompanyStoreUrl(short);
-      }
-    }).catch(() => {});
+      shortenUrl(fullStoreShareUrl, targetCompany?.name || 'loja', {
+        company: targetCompany,
+        paymentSettings: targetSettings,
+        activeSeller: targetSeller,
+        products: targetProducts,
+        zap: selectedChannel?.phone || targetSeller?.whatsapp || targetSettings?.merchantWhatsapp || targetCompany?.phone
+      }).then((short) => {
+        if (!cancelled && short && !short.includes('?p=')) {
+          setCompanyStoreUrl(short);
+        }
+      }).catch(() => {});
+    }
 
     return () => { cancelled = true; };
   }, [
     isOpen,
+    isGenericSelected,
     targetCompany,
     targetSettings,
     targetSeller,
@@ -263,8 +271,11 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   };
 
   const currentPathMatchesCompany =
-    typeof window !== 'undefined' &&
-    window.location.pathname.toLowerCase().includes(`/loja/${targetSlug.toLowerCase()}`);
+    typeof window !== 'undefined' && (
+      isGenericSelected
+        ? window.location.pathname === '/'
+        : window.location.pathname.toLowerCase().includes(`/loja/${targetSlug.toLowerCase()}`)
+    );
   const currentSearch = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const currentCanal = currentSearch?.get('canal') || '';
   const targetCanal = selectedChannel?.channelKey || '';
@@ -272,7 +283,18 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   const needsPagePreparationOnIOS = isIframe || isInAppBrowser || iosBrowser === 'firefox' || !sameCompanyAndChannel;
 
   const triggerSyncBackground = () => {
-    void syncStoreToServer(targetCompany, targetSettings, targetSeller, targetProducts, { setAsActive: false });
+    if (isGenericSelected) return;
+    void syncStoreToServer(targetCompany, targetSettings, targetSeller, targetProducts, { setAsActive: false, keepalive: true });
+  };
+
+  const handleCopyInstallLink = async () => {
+    triggerSyncBackground();
+    const ok = await copyTextToClipboard(deviceInstallPageUrl || companyStoreUrl);
+    if (ok) {
+      setCopiedLink(true);
+      showToast('success', 'Link Copiado!', `Abra no ${isIOS ? 'Safari' : 'Chrome'} e cole para instalar "${displayBrandName}".`);
+      setTimeout(() => setCopiedLink(false), 3000);
+    }
   };
 
   const handleDirectInstall = async () => {
@@ -281,17 +303,35 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     setTimeout(() => setIsTriggering(false), 400);
 
     try {
-      // Fire store sync in background WITHOUT awaiting before window.open so Safari/mobile popup blocker never blocks the tap!
+      // Persist store + linked phone + products with keepalive BEFORE redirecting browsers
       triggerSyncBackground();
 
-      // Inside AI Studio preview iframe or installing a different company/channel -> open its own dedicated tab synchronously
-      if (isIframe || !sameCompanyAndChannel) {
+      // 1. Inside Instagram / Facebook / WhatsApp WebView on Android:
+      // NEVER trap the user in window.open()! Route straight to Android Chrome via Intent (with browser fallback URL).
+      if (isAndroid && isInAppBrowser) {
+        const launched = openAndroidChromeIntent(deviceInstallPageUrl);
+        if (launched) {
+          setInstallFeedback(
+            'Abrindo no Google Chrome... Se o Instagram não redirecionar automaticamente, toque nos 3 pontinhos (⋮) no alto da tela e escolha "Abrir no navegador" (ou copie o link abaixo).'
+          );
+          return;
+        }
+      }
+
+      // 2. Inside AI Studio preview iframe -> open dedicated browser tab synchronously
+      if (isIframe) {
         const opened = openDirectInstallInBrowser(deviceInstallPageUrl);
         if (opened) {
-          setInstallFeedback(`Abrimos a página oficial de "${displayBrandName}" em uma nova aba. Toque em "Instalar Aplicativo Agora" ou nos 3 pontinhos (⋮) -> "Instalar aplicativo" para criar o ícone exclusivo!`);
+          setInstallFeedback(`Abrimos a página oficial de "${displayBrandName}" em uma nova aba. Toque em "Instalar" ou nos 3 pontinhos (⋮) -> "Instalar aplicativo"!`);
           showToast('success', 'Abrindo Instalador da Empresa', `Instalador de "${displayBrandName}" aberto em nova aba.`);
           return;
         }
+      }
+
+      // 3. On Android Chrome when currently on / (root) after registering a company -> navigate to /loja/:slug so Chrome reads that company's dedicated manifest
+      if (isAndroid && !isInAppBrowser && !sameCompanyAndChannel && !isGenericSelected && typeof window !== 'undefined') {
+        window.location.href = deviceInstallActionUrl;
+        return;
       }
 
       const res = await install(deviceInstallPageUrl);
@@ -314,7 +354,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
           : 'Clique no ícone de instalação na barra de endereços do navegador (canto superior direito) ou em "Abrir Página de Instalação em Nova Aba" para instalar.'
       );
     } catch {
-      setInstallFeedback('Use o botão "Abrir Página de Instalação em Nova Aba" ou toque nos 3 pontinhos (⋮) do navegador -> "Instalar aplicativo".');
+      setInstallFeedback('Use o botão "Copiar Link" abaixo e abra no Chrome/Safari, ou toque nos 3 pontinhos (⋮) -> "Instalar aplicativo".');
     }
   };
 
@@ -423,6 +463,26 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
             </div>
           )}
 
+          {/* Warning if merchant hasn't registered their company yet */}
+          {!hasRegisteredCompany && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-950 space-y-2">
+              <div className="font-black text-amber-900 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Cadastre sua empresa antes ou após abrir no navegador</span>
+              </div>
+              <p className="text-[11px] text-amber-900 leading-relaxed">
+                Você pode cadastrar sua empresa, celular, senha e produtos agora para que o app instalado já abra direto com sua loja!
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-[11px] cursor-pointer transition-colors"
+              >
+                Cadastrar Minha Empresa e Produtos Primeiro
+              </button>
+            </div>
+          )}
+
           {/* Feedback alert when browser requires manual menu step or opened new tab */}
           {installFeedback && (
             <div className="p-3 bg-indigo-50 border-2 border-indigo-300 rounded-2xl text-xs text-indigo-950 font-semibold leading-relaxed animate-scale-up">
@@ -454,19 +514,55 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
               {/* 1. Android Flow */}
               {isAndroid ? (
                 <div className="space-y-3">
-                  <button
-                    type="button"
-                    disabled={isTriggering}
-                    onClick={handleDirectInstall}
-                    className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-70"
-                  >
-                    <DownloadCloud className="w-5 h-5 text-emerald-200" />
-                    <span>Instalar {displayBrandName} Agora</span>
-                  </button>
+                  {isInAppBrowser && (
+                    <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-2xl text-amber-950 text-xs space-y-2.5 text-left">
+                      <div className="flex items-center gap-2 font-black text-amber-900">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Você abriu pelo Instagram / App</span>
+                      </div>
+                      <p className="text-[11px] text-amber-900 leading-relaxed">
+                        O navegador interno do Instagram não permite instalar apps direto. Toque abaixo para abrir <strong>{displayBrandName}</strong> no Google Chrome com sua loja e produtos sincronizados:
+                      </p>
+                      <button
+                        type="button"
+                        disabled={isTriggering}
+                        onClick={handleDirectInstall}
+                        className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-70"
+                      >
+                        <ExternalLink className="w-4 h-4 text-emerald-200" />
+                        <span>Abrir no Chrome e Instalar {displayBrandName}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopyInstallLink}
+                        className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        <span>{copiedLink ? 'Link Copiado! Cole no Chrome' : 'Copiar Link da Loja para o Chrome'}</span>
+                      </button>
+                      <div className="pt-1 text-[11px] text-amber-900 space-y-1">
+                        <div><strong>Ou pelo menu do Instagram:</strong></div>
+                        <div>1. Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito.</div>
+                        <div>2. Toque em <strong>"Abrir no navegador"</strong> ou <strong>"Abrir no Chrome"</strong>.</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isInAppBrowser && (
+                    <button
+                      type="button"
+                      disabled={isTriggering}
+                      onClick={handleDirectInstall}
+                      className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-70"
+                    >
+                      <DownloadCloud className="w-5 h-5 text-emerald-200" />
+                      <span>Instalar {displayBrandName} Agora</span>
+                    </button>
+                  )}
 
                   <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2">
                     <span className="font-black text-slate-900 block text-xs">
-                      Ou instale pelo navegador em 3 passos:
+                      {isInAppBrowser ? 'Depois de abrir no Chrome, instale em 3 passos:' : 'Ou instale pelo Chrome em 3 passos:'}
                     </span>
                     <div className="space-y-1.5 text-slate-700 text-[11px]">
                       <div className="flex items-center gap-2">
@@ -479,13 +575,13 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">3</span>
-                        <span>Confirme em <strong>"Instalar"</strong>. O ícone da loja aparecerá no celular!</span>
+                        <span>Confirme em <strong>"Instalar"</strong>. O ícone de <strong>{displayBrandName}</strong> aparecerá no celular!</span>
                       </div>
                     </div>
                   </div>
                 </div>
               ) : isIOS ? (
-                /* 2. iOS Safari & Chrome iOS Flow */
+                /* 2. iOS Safari & Instagram iOS Flow (ZERO x-safari- broken scheme) */
                 <div className="space-y-3">
                   {(isInAppBrowser || iosBrowser === 'firefox') && (
                     <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-2xl text-amber-950 text-xs space-y-2.5 text-left">
@@ -494,25 +590,37 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                         <span>Abra no Safari para instalar no iPhone</span>
                       </div>
                       <p className="text-[11px] text-amber-900 leading-relaxed">
-                        Dentro do WhatsApp, Instagram, Google ou Firefox no iPhone a Apple não permite adicionar à Tela de Início. Abra a loja de <strong>"{displayBrandName}"</strong> diretamente no Safari:
+                        Dentro do Instagram, WhatsApp ou Facebook no iPhone a Apple bloqueia a instalação direta. Abra <strong>"{displayBrandName}"</strong> no Safari seguindo os 2 passos abaixo (sem erro!):
                       </p>
+                      <div className="bg-white/90 border border-amber-200 rounded-xl p-2.5 space-y-1.5 text-[11px] text-slate-800">
+                        <div className="flex items-start gap-2">
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center text-[10px] shrink-0">1</span>
+                          <span>Toque nos <strong>3 pontinhos (•••)</strong> no canto superior direito ou no ícone <strong>Compartilhar [↑]</strong> embaixo.</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black flex items-center justify-center text-[10px] shrink-0">2</span>
+                          <span>Toque em <strong>"Abrir no navegador externo"</strong> ou <strong>"Abrir no Safari"</strong>.</span>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 gap-2">
-                        <a
-                          href={`x-safari-${deviceInstallActionUrl}`}
-                          onClick={triggerSyncBackground}
-                          className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          <span>Abrir Direto no Safari (iPhone)</span>
-                        </a>
                         <button
                           type="button"
-                          onClick={handleCopyLink}
-                          className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                          onClick={handleCopyInstallLink}
+                          className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                         >
                           {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                          <span>{copiedLink ? 'Link Copiado! Cole no Safari' : 'Copiar Link para colar no Safari'}</span>
+                          <span>{copiedLink ? 'Link Copiado! Agora cole no Safari' : `Copiar Link de "${displayBrandName}" para o Safari`}</span>
                         </button>
+                        <a
+                          href={deviceInstallActionUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={triggerSyncBackground}
+                          className="w-full py-2 px-3 bg-white hover:bg-amber-100 border border-amber-300 text-amber-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Abrir Página em Nova Aba</span>
+                        </a>
                       </div>
                     </div>
                   )}
@@ -553,9 +661,9 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                         : `Instalar ${displayBrandName} no Safari (iPhone)`}
                     </h4>
                     <p className="text-[10px] text-blue-100">
-                      {sameCompanyAndChannel && !isIframe
+                      {sameCompanyAndChannel && !isIframe && !isInAppBrowser
                         ? 'Página oficial da empresa pronta na barra do navegador!'
-                        : 'Após abrir a página oficial acima, siga os 3 toques abaixo:'}
+                        : 'Já no Safari, siga os 3 toques abaixo:'}
                     </p>
                   </div>
 

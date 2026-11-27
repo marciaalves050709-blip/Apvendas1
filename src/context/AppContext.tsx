@@ -1949,6 +1949,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             window.dispatchEvent(new CustomEvent('open-pwa-install-modal'));
           }, 450);
         }
+        try {
+          const cleanedInstallUrl = new URL(window.location.href);
+          cleanedInstallUrl.searchParams.delete('install');
+          window.history.replaceState({}, '', cleanedInstallUrl.pathname + (cleanedInstallUrl.search || '') + (cleanedInstallUrl.hash || ''));
+        } catch {}
       }
 
       // Persist active store slug so installed apps opened from home screen load the right store
@@ -2133,7 +2138,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 2. Fetch store catalog and settings from backend API (respecting newer ?p= URL products)
       fetch(fetchEndpoint, { cache: 'no-store' })
-        .then(res => res.ok ? res.json() : null)
+        .then(res => {
+          const ct = res.headers.get('content-type') || '';
+          return res.ok && ct.includes('application/json') ? res.json() : null;
+        })
         .then(data => {
           if (!data || data.isPlaceholder) {
             // If server doesn't have this store yet and URL brought products, seed the server right away
@@ -2269,6 +2277,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
           if (data.paymentSettings && incomingMatchesCurrent) {
+            const targetCompId = data.company?.id || urlCompId || activeCompanyId;
             setPaymentSettings(ps => {
               const rawSellerList = Array.isArray(data.paymentSettings.sellers)
                 ? data.paymentSettings.sellers.map((s: SellerProfile) => ({
@@ -2293,6 +2302,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 merchantName: resolvedMerchant,
                 sellers: rawSellerList
               };
+              try {
+                localStorage.setItem(getTenantKey('payment_settings', targetCompId), JSON.stringify(next));
+                localStorage.setItem(getTenantKey('payment_settings', activeCompanyId), JSON.stringify(next));
+              } catch {}
               return JSON.stringify(ps) === JSON.stringify(next) ? ps : next;
             });
           }

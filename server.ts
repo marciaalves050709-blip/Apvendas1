@@ -67,7 +67,7 @@ app.get('/api/live-sync', (req, res) => {
   liveSyncClients.add(res);
 
   // Send initial connection packet with current server version for installed PWA auto-update detection
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '75', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', version: '76', timestamp: Date.now(), clientsCount: liveSyncClients.size })}\n\n`);
 
   req.on('close', () => {
     liveSyncClients.delete(res);
@@ -1096,12 +1096,12 @@ app.get('/api/version', (_req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.json({
-    version: '75',
-    versionName: 'v75.0',
+    version: '76',
+    versionName: 'v76.0',
     buildDate: new Date().toISOString(),
     features: [
+      'Instalação corrigida ao abrir pelo Instagram no Android (Chrome Intent com fallback) e no iPhone (Safari sem erro de endereço inválido), levando os dados, telefone vinculado e produtos da empresa (v76)',
       'Área de produtos 100% limpa e isolada ao abrir o link principal para cada empresa cadastrar loja, senha e celular próprios (v75)',
-      'Senha exclusiva por empresa com verificação isolada sem acesso cruzado entre lojas (v75)',
       'Instalação guiada e abertura direta no Safari para iPhone/iPad por empresa e telefone vinculado (v74)',
       'Números de telefone totalmente ocultos na interface, painéis e formulários (v73)'
     ]
@@ -1353,6 +1353,7 @@ const injectStoreMeta = (html: string, req: express.Request): string => {
         },
         paymentSettings: baseSettings,
         products: resolvedProducts,
+        hasPassword: Boolean(dbStore?.accessPassword && String(dbStore.accessPassword).trim().length >= 4),
         zap: boundZap,
         canal: rawCanal || undefined
       };
